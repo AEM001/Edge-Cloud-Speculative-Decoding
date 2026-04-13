@@ -5,9 +5,10 @@ import sys
 from pathlib import Path
 from datasets import load_dataset
 
-# HF Token - set explicitly since bashrc export may not propagate
-HF_TOKEN = os.environ.get("HF_TOKEN", "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")
-os.environ["HF_TOKEN"] = HF_TOKEN
+# HF Token - use from environment variable
+HF_TOKEN = os.environ.get("HF_TOKEN")
+if HF_TOKEN:
+    os.environ["HF_TOKEN"] = HF_TOKEN
 
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
