@@ -1,8 +1,8 @@
-"""Main entry point for speculative decoding edge node."""
+"""Main entry point for speculative decoding edge node on Ubuntu 3060."""
 import logging
 from config import MODEL_NAME, MODEL_PATH, MAX_DRAFT_TOKENS, TEMPERATURE, TOP_P, VERBOSE
 from model_manager import ModelManager
-from draft_generator import DraftGenerator
+from client.draft_generator import DraftGenerator
 from protocol import DraftRequest
 
 def setup_logging():
@@ -18,12 +18,13 @@ def main():
     setup_logging()
     logger = logging.getLogger(__name__)
     
-    logger.info("=== MLX Speculative Decoding Edge Node ===")
+    logger.info("=== PyTorch Speculative Decoding Edge Node (Ubuntu 3060) ===")
     
-    # Initialize model manager with custom storage
+    # Initialize model manager with custom storage and quantization
     manager = ModelManager(
         model_name=MODEL_NAME,
-        model_path=MODEL_PATH
+        model_path=MODEL_PATH,
+        quantization=True  # Enable 4-bit quantization
     )
     
     # Load model to specified path
