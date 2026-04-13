@@ -1,0 +1,682 @@
+2026-04-14 00:43:13,066 - INFO - ================================================================================
+2026-04-14 00:43:13,066 - INFO - Comprehensive Benchmark: Easy vs Hard Prompts
+2026-04-14 00:43:13,066 - INFO - Methods: Direct, K=2, K=4
+2026-04-14 00:43:13,066 - INFO - Total tests: 10 prompts × 3 methods = 30 tests
+2026-04-14 00:43:13,066 - INFO - ================================================================================
+2026-04-14 00:43:13,066 - INFO - 
+[Setup] Loading draft model...
+2026-04-14 00:43:13,066 - INFO - Model storage path: /home/albert/models/Qwen--Qwen2.5-3B-Instruct
+2026-04-14 00:43:13,066 - INFO - Loading model from local path: /home/albert/models/Qwen--Qwen2.5-3B-Instruct
+`torch_dtype` is deprecated! Use `dtype` instead!
+2026-04-14 00:43:13,650 - INFO - We will use 90% of the memory on device 0 for storing the model, and 10% for the buffer to avoid OOM. You can set `max_memory` in to a higher value to use more memory (at your own risk).
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:00<00:00,  2.50it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00,  3.12it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00,  3.01it/s]
+2026-04-14 00:43:14,336 - INFO - Model loaded successfully from /home/albert/models/Qwen--Qwen2.5-3B-Instruct on cuda:0
+2026-04-14 00:43:14,336 - INFO - HTTPCloudClient initialized with server: http://localhost:6006
+2026-04-14 00:43:14,511 - INFO - Successfully connected to cloud server
+2026-04-14 00:43:14,512 - INFO - Server info: {'status': 'healthy', 'model_info': {'model_name': 'Qwen/Qwen2.5-7B-Instruct-AWQ', 'gpu_memory_utilization': 0.9, 'quantization': 'awq'}}
+2026-04-14 00:43:14,512 - INFO - EdgeClient initialized with max_new_tokens=128, temperature=0.8
+2026-04-14 00:43:14,512 - INFO - [Setup] Ready!
+
+2026-04-14 00:43:14,512 - INFO - 
+================================================================================
+2026-04-14 00:43:14,512 - INFO - Testing EASY PROMPTS (5 tests × 3 methods)
+2026-04-14 00:43:14,512 - INFO - ================================================================================
+2026-04-14 00:43:14,512 - INFO - 
+[EASY Prompt 1] Length: 290 chars
+2026-04-14 00:43:14,512 - INFO -   [1/30] Direct...
+2026-04-14 00:43:20,266 - INFO -       ✓ 128 tokens, 5754ms, 22.24 tok/s
+2026-04-14 00:43:20,766 - INFO -   [2/30] Speculative K=2...
+2026-04-14 00:43:20,768 - INFO - Starting generation for request 08d32836-f0f7-4d5c-88c9-433ceca56415 with policy StaticK2
+2026-04-14 00:43:20,768 - INFO - Prompt: "Doctor, I wanted to talk to you about my health regimen. I try to be very conscious of the amount of liquids I consume. I typically drink eight cups of water a day, but I'll cut down to six or seven if I'm feeling bloated. My go-to drink is unsweetened green tea, which I enjoy hot or iced...."
+2026-04-14 00:43:20,768 - INFO - Prompt tokens: 72
+The attention mask is not set and cannot be inferred from input because pad token is same as eos token. As a consequence, you may observe unexpected behavior. Please pass your input's `attention_mask` to obtain reliable results.
+2026-04-14 00:43:55,117 - INFO - Generation complete: 128 tokens in 102 rounds
+2026-04-14 00:43:55,118 - INFO - Acceptance ratio: 17.16%
+2026-04-14 00:43:55,118 - INFO - Total latency: 34350.94ms
+2026-04-14 00:43:55,118 - INFO -       ✓ 128 tokens, 34351ms, 3.73 tok/s
+2026-04-14 00:43:55,118 - INFO -         Rounds: 102, Acceptance: 17.2%
+2026-04-14 00:43:55,618 - INFO -   [3/30] Speculative K=4...
+2026-04-14 00:43:55,618 - INFO - Starting generation for request 859e39e4-e0a1-451e-91c6-ac4a170097b5 with policy StaticK4
+2026-04-14 00:43:55,618 - INFO - Prompt: "Doctor, I wanted to talk to you about my health regimen. I try to be very conscious of the amount of liquids I consume. I typically drink eight cups of water a day, but I'll cut down to six or seven if I'm feeling bloated. My go-to drink is unsweetened green tea, which I enjoy hot or iced...."
+2026-04-14 00:43:55,618 - INFO - Prompt tokens: 72
+2026-04-14 00:44:25,980 - INFO - Generation complete: 129 tokens in 78 rounds
+2026-04-14 00:44:25,981 - INFO - Acceptance ratio: 18.59%
+2026-04-14 00:44:25,981 - INFO - Total latency: 30362.59ms
+2026-04-14 00:44:25,981 - INFO -       ✓ 129 tokens, 30363ms, 4.25 tok/s
+2026-04-14 00:44:25,981 - INFO -         Rounds: 78, Acceptance: 18.6%
+2026-04-14 00:44:26,481 - INFO - 
+[EASY Prompt 2] Length: 288 chars
+2026-04-14 00:44:26,481 - INFO -   [4/30] Direct...
+2026-04-14 00:44:32,257 - INFO -       ✓ 128 tokens, 5776ms, 22.16 tok/s
+2026-04-14 00:44:32,757 - INFO -   [5/30] Speculative K=2...
+2026-04-14 00:44:32,758 - INFO - Starting generation for request 13caa587-21ae-4919-a3c4-b5731b5b48e9 with policy StaticK2
+2026-04-14 00:44:32,758 - INFO - Prompt: 'walked down the street, clutching his newly-written declaration of independence. He felt a sense of pride as he thought about what this document meant - freedom from oppression and the ability to govern himself. He knew that this was only the beginning, but he was hopeful for the future....'
+2026-04-14 00:44:32,758 - INFO - Prompt tokens: 57
+2026-04-14 00:44:58,234 - INFO - Generation complete: 128 tokens in 78 rounds
+2026-04-14 00:44:58,234 - INFO - Acceptance ratio: 57.05%
+2026-04-14 00:44:58,234 - INFO - Total latency: 25476.42ms
+2026-04-14 00:44:58,234 - INFO -       ✓ 128 tokens, 25477ms, 5.02 tok/s
+2026-04-14 00:44:58,234 - INFO -         Rounds: 78, Acceptance: 57.1%
+2026-04-14 00:44:58,734 - INFO -   [6/30] Speculative K=4...
+2026-04-14 00:44:58,735 - INFO - Starting generation for request f302bdd3-9480-41cc-9c7e-a26968735385 with policy StaticK4
+2026-04-14 00:44:58,735 - INFO - Prompt: 'walked down the street, clutching his newly-written declaration of independence. He felt a sense of pride as he thought about what this document meant - freedom from oppression and the ability to govern himself. He knew that this was only the beginning, but he was hopeful for the future....'
+2026-04-14 00:44:58,735 - INFO - Prompt tokens: 57
+2026-04-14 00:45:14,325 - INFO - Generation complete: 129 tokens in 41 rounds
+2026-04-14 00:45:14,326 - INFO - Acceptance ratio: 69.51%
+2026-04-14 00:45:14,326 - INFO - Total latency: 15591.32ms
+2026-04-14 00:45:14,326 - INFO -       ✓ 129 tokens, 15591ms, 8.27 tok/s
+2026-04-14 00:45:14,326 - INFO -         Rounds: 41, Acceptance: 69.5%
+2026-04-14 00:45:14,826 - INFO - 
+[EASY Prompt 3] Length: 292 chars
+2026-04-14 00:45:14,826 - INFO -   [7/30] Direct...
+2026-04-14 00:45:20,616 - INFO -       ✓ 128 tokens, 5790ms, 22.11 tok/s
+2026-04-14 00:45:21,116 - INFO -   [8/30] Speculative K=2...
+2026-04-14 00:45:21,117 - INFO - Starting generation for request f98f3ca7-0224-410b-93e6-ffdcb704e042 with policy StaticK2
+2026-04-14 00:45:21,117 - INFO - Prompt: "Doctor, I wanted to talk to you about something that's been on my mind lately. I've never wanted kids and I've been perfectly happy with my decision. However, I've been getting a lot of pressure from friends and family to start a family. It's getting overwhelming and I don't know what to do...."
+2026-04-14 00:45:21,117 - INFO - Prompt tokens: 65
+2026-04-14 00:45:31,535 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:31,847 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:32,169 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:32,487 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:32,808 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:33,125 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:33,440 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:33,756 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:34,072 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:34,392 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:34,706 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:35,027 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:35,349 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:35,669 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:35,983 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:36,307 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:36,619 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:36,931 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:37,268 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:37,608 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:37,945 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:38,284 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:38,621 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:38,961 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:39,294 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:39,634 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:39,975 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:40,318 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:40,659 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:41,001 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:41,335 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:41,636 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:41,964 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:42,300 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:42,628 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:42,969 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:43,301 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:43,630 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:43,958 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:44,286 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:44,612 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:44,946 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:45,276 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:45,604 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:45,933 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:46,260 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:46,594 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:46,933 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:47,266 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:47,567 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:47,916 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:48,254 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:48,587 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:48,919 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:49,253 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:49,601 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:49,937 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:50,277 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:50,619 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:50,961 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:51,304 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:51,642 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:51,985 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:52,326 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:52,629 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:52,931 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:53,271 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:53,606 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:53,949 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:54,287 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:54,619 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:54,955 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:55,298 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:55,640 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:55,987 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:56,330 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:56,676 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:57,018 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:57,360 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:57,710 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:58,019 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:45:58,261 - INFO - Generation complete: 128 tokens in 114 rounds
+2026-04-14 00:45:58,261 - INFO - Acceptance ratio: 14.29%
+2026-04-14 00:45:58,261 - INFO - Total latency: 37145.12ms
+2026-04-14 00:45:58,262 - INFO -       ✓ 128 tokens, 37145ms, 3.45 tok/s
+2026-04-14 00:45:58,262 - INFO -         Rounds: 114, Acceptance: 14.3%
+2026-04-14 00:45:58,762 - INFO -   [9/30] Speculative K=4...
+2026-04-14 00:45:58,762 - INFO - Starting generation for request a01fdcc0-e25a-44d0-8a0b-0144ebecc175 with policy StaticK4
+2026-04-14 00:45:58,762 - INFO - Prompt: "Doctor, I wanted to talk to you about something that's been on my mind lately. I've never wanted kids and I've been perfectly happy with my decision. However, I've been getting a lot of pressure from friends and family to start a family. It's getting overwhelming and I don't know what to do...."
+2026-04-14 00:45:58,762 - INFO - Prompt tokens: 65
+2026-04-14 00:46:26,378 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:26,765 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:27,153 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:27,554 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:27,956 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:28,356 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:28,747 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:29,326 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:29,843 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:30,529 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:31,104 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:31,642 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:32,291 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:32,688 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:33,082 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:33,477 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:33,872 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:34,269 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:34,677 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:35,072 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:35,469 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:35,870 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:36,275 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:36,671 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:46:37,063 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:37,456 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:37,847 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:38,228 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:38,611 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:39,003 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:39,404 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:39,801 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:40,196 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:40,769 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:41,546 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:42,162 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:42,804 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:43,428 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:43,933 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:44,336 - WARNING - Generated only 1 tokens, expected 4
+2026-04-14 00:46:44,734 - WARNING - Generated only 1 tokens, expected 4
+2026-04-14 00:46:45,131 - WARNING - Generated only 1 tokens, expected 4
+2026-04-14 00:46:45,522 - WARNING - Generated only 1 tokens, expected 4
+2026-04-14 00:46:45,923 - WARNING - Generated only 1 tokens, expected 4
+2026-04-14 00:46:46,329 - WARNING - Generated only 1 tokens, expected 4
+2026-04-14 00:46:46,737 - WARNING - Generated only 1 tokens, expected 4
+2026-04-14 00:46:47,140 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:47,550 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:47,955 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:46:48,207 - INFO - Generation complete: 128 tokens in 122 rounds
+2026-04-14 00:46:48,207 - INFO - Acceptance ratio: 1.47%
+2026-04-14 00:46:48,207 - INFO - Total latency: 49445.21ms
+2026-04-14 00:46:48,207 - INFO -       ✓ 128 tokens, 49445ms, 2.59 tok/s
+2026-04-14 00:46:48,207 - INFO -         Rounds: 122, Acceptance: 1.5%
+2026-04-14 00:46:48,707 - INFO - 
+[EASY Prompt 4] Length: 300 chars
+2026-04-14 00:46:48,707 - INFO -   [10/30] Direct...
+2026-04-14 00:46:54,492 - INFO -       ✓ 128 tokens, 5784ms, 22.13 tok/s
+2026-04-14 00:46:54,992 - INFO -   [11/30] Speculative K=2...
+2026-04-14 00:46:54,993 - INFO - Starting generation for request 54608205-e63f-4f63-a64f-f80b0a5a336a with policy StaticK2
+2026-04-14 00:46:54,993 - INFO - Prompt: "I've been struggling with something lately. As a high school student, I've been trying to fit in with the popular girls. I've been pretending to like the things they like and acting a certain way to gain their acceptance. But I've realized that I don't even like the person I've become because of it...."
+2026-04-14 00:46:54,993 - INFO - Prompt tokens: 65
+2026-04-14 00:47:05,275 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:05,791 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:06,268 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:06,739 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:07,267 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:07,834 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:08,149 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:08,468 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:08,784 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:09,107 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:09,423 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:09,740 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:10,060 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:10,373 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:10,698 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:11,012 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:11,351 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:11,674 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:11,993 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:12,309 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:12,632 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:12,952 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:13,272 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:13,591 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:13,912 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:14,236 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:14,555 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:14,898 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:15,240 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:15,812 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:16,318 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:16,856 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:17,334 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:17,747 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:18,281 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:18,791 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:19,239 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:19,589 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:19,938 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:20,292 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:20,634 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:20,968 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:21,311 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:21,645 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:21,989 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:22,331 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:22,674 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:23,010 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:23,346 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:23,693 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:24,044 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:24,394 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:24,692 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:25,007 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:25,345 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:25,687 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:26,033 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:47:26,370 - WARNING - Generated only 0 tokens, expected 2
+2026-04-14 00:47:26,551 - WARNING - No progress in round 88, stopping
+2026-04-14 00:47:26,551 - INFO - Generation complete: 95 tokens in 88 rounds
+2026-04-14 00:47:26,551 - INFO - Acceptance ratio: 8.55%
+2026-04-14 00:47:26,551 - INFO - Total latency: 31559.06ms
+2026-04-14 00:47:26,551 - INFO -       ✓ 95 tokens, 31559ms, 3.01 tok/s
+2026-04-14 00:47:26,551 - INFO -         Rounds: 88, Acceptance: 8.5%
+2026-04-14 00:47:27,051 - INFO -   [12/30] Speculative K=4...
+2026-04-14 00:47:27,052 - INFO - Starting generation for request e112f074-843c-42dd-89dd-ceceeef6b8c2 with policy StaticK4
+2026-04-14 00:47:27,052 - INFO - Prompt: "I've been struggling with something lately. As a high school student, I've been trying to fit in with the popular girls. I've been pretending to like the things they like and acting a certain way to gain their acceptance. But I've realized that I don't even like the person I've become because of it...."
+2026-04-14 00:47:27,052 - INFO - Prompt tokens: 65
+2026-04-14 00:47:30,895 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:47:31,261 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:47:31,639 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:47:32,025 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:47:32,397 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:32,762 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:33,129 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:33,510 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:33,880 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:34,246 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:34,613 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:34,981 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:35,351 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:35,717 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:36,051 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:36,429 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:37,016 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:37,539 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:38,060 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:38,601 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:39,078 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:39,601 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:40,102 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:40,479 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:40,863 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:41,235 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:41,606 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:41,939 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:42,308 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:42,685 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:43,060 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:43,436 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:43,808 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:44,185 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:44,559 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:44,931 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:45,302 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:45,683 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:46,055 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:46,431 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:46,811 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:47,188 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:47,568 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:47,947 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:48,328 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:47:48,703 - WARNING - Generated only 1 tokens, expected 4
+2026-04-14 00:47:49,073 - WARNING - Generated only 1 tokens, expected 4
+2026-04-14 00:47:49,445 - WARNING - Generated only 1 tokens, expected 4
+2026-04-14 00:47:49,812 - WARNING - Generated only 0 tokens, expected 4
+2026-04-14 00:47:50,008 - WARNING - No progress in round 59, stopping
+2026-04-14 00:47:50,008 - INFO - Generation complete: 61 tokens in 59 rounds
+2026-04-14 00:47:50,008 - INFO - Acceptance ratio: 2.19%
+2026-04-14 00:47:50,008 - INFO - Total latency: 22956.36ms
+2026-04-14 00:47:50,008 - INFO -       ✓ 61 tokens, 22956ms, 2.66 tok/s
+2026-04-14 00:47:50,008 - INFO -         Rounds: 59, Acceptance: 2.2%
+2026-04-14 00:47:50,508 - INFO - 
+[EASY Prompt 5] Length: 290 chars
+2026-04-14 00:47:50,508 - INFO -   [13/30] Direct...
+2026-04-14 00:47:56,284 - INFO -       ✓ 128 tokens, 5776ms, 22.16 tok/s
+2026-04-14 00:47:56,785 - INFO -   [14/30] Speculative K=2...
+2026-04-14 00:47:56,785 - INFO - Starting generation for request 5ffb7647-e4ac-4619-ae6f-7f13399fedb6 with policy StaticK2
+2026-04-14 00:47:56,785 - INFO - Prompt: "Boss, I wanted to mention something. After our last conversation, I realized that I should give you the benefit of the doubt. I assumed that you were having a bad day and didn't mean what you said. And you know what? It worked! The next time we talked, you seemed much happier and positive...."
+2026-04-14 00:47:56,785 - INFO - Prompt tokens: 64
+2026-04-14 00:48:27,885 - INFO - Generation complete: 128 tokens in 83 rounds
+2026-04-14 00:48:27,885 - INFO - Acceptance ratio: 50.60%
+2026-04-14 00:48:27,885 - INFO - Total latency: 31100.09ms
+2026-04-14 00:48:27,885 - INFO -       ✓ 128 tokens, 31100ms, 4.12 tok/s
+2026-04-14 00:48:27,885 - INFO -         Rounds: 83, Acceptance: 50.6%
+2026-04-14 00:48:28,385 - INFO -   [15/30] Speculative K=4...
+2026-04-14 00:48:28,385 - INFO - Starting generation for request 78f234f1-97c3-4191-909f-50aca05c96ff with policy StaticK4
+2026-04-14 00:48:28,386 - INFO - Prompt: "Boss, I wanted to mention something. After our last conversation, I realized that I should give you the benefit of the doubt. I assumed that you were having a bad day and didn't mean what you said. And you know what? It worked! The next time we talked, you seemed much happier and positive...."
+2026-04-14 00:48:28,386 - INFO - Prompt tokens: 64
+2026-04-14 00:48:58,196 - INFO - Generation complete: 129 tokens in 70 rounds
+2026-04-14 00:48:58,196 - INFO - Acceptance ratio: 24.64%
+2026-04-14 00:48:58,196 - INFO - Total latency: 29811.14ms
+2026-04-14 00:48:58,196 - INFO -       ✓ 129 tokens, 29811ms, 4.33 tok/s
+2026-04-14 00:48:58,197 - INFO -         Rounds: 70, Acceptance: 24.6%
+2026-04-14 00:48:58,697 - INFO - 
+================================================================================
+2026-04-14 00:48:58,697 - INFO - Testing HARD PROMPTS (5 tests × 3 methods)
+2026-04-14 00:48:58,697 - INFO - ================================================================================
+2026-04-14 00:48:58,697 - INFO - 
+[HARD Prompt 1] Length: 491 chars
+2026-04-14 00:48:58,697 - INFO -   [16/30] Direct...
+2026-04-14 00:49:00,981 - INFO -       ✓ 48 tokens, 2284ms, 21.02 tok/s
+2026-04-14 00:49:01,481 - INFO -   [17/30] Speculative K=2...
+2026-04-14 00:49:01,482 - INFO - Starting generation for request 28542ba8-3273-4713-935a-56f0c3f022c4 with policy StaticK2
+2026-04-14 00:49:01,482 - INFO - Prompt: 'Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a positive integer n. Output its binary notation. Input The only line of input data contains an integer n ...'
+2026-04-14 00:49:01,482 - INFO - Prompt tokens: 55
+2026-04-14 00:49:07,813 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:49:08,186 - WARNING - Generated only 0 tokens, expected 2
+2026-04-14 00:49:08,369 - WARNING - No progress in round 18, stopping
+2026-04-14 00:49:08,370 - INFO - Generation complete: 25 tokens in 18 rounds
+2026-04-14 00:49:08,370 - INFO - Acceptance ratio: 39.39%
+2026-04-14 00:49:08,370 - INFO - Total latency: 6888.62ms
+2026-04-14 00:49:08,370 - INFO -       ✓ 25 tokens, 6889ms, 3.63 tok/s
+2026-04-14 00:49:08,370 - INFO -         Rounds: 18, Acceptance: 39.4%
+2026-04-14 00:49:08,870 - INFO -   [18/30] Speculative K=4...
+2026-04-14 00:49:08,870 - INFO - Starting generation for request 00c006ed-606b-4e1b-a0d1-113eba334862 with policy StaticK4
+2026-04-14 00:49:08,870 - INFO - Prompt: 'Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a positive integer n. Output its binary notation. Input The only line of input data contains an integer n ...'
+2026-04-14 00:49:08,870 - INFO - Prompt tokens: 55
+2026-04-14 00:49:31,045 - INFO - Generation complete: 129 tokens in 55 rounds
+2026-04-14 00:49:31,045 - INFO - Acceptance ratio: 44.09%
+2026-04-14 00:49:31,045 - INFO - Total latency: 22174.86ms
+2026-04-14 00:49:31,045 - INFO -       ✓ 129 tokens, 22175ms, 5.82 tok/s
+2026-04-14 00:49:31,045 - INFO -         Rounds: 55, Acceptance: 44.1%
+2026-04-14 00:49:31,545 - INFO - 
+[HARD Prompt 2] Length: 508 chars
+2026-04-14 00:49:31,545 - INFO -   [19/30] Direct...
+2026-04-14 00:49:37,328 - INFO -       ✓ 128 tokens, 5783ms, 22.13 tok/s
+2026-04-14 00:49:37,828 - INFO -   [20/30] Speculative K=2...
+2026-04-14 00:49:37,829 - INFO - Starting generation for request 975895d7-869b-4602-9a4a-b44888eefd35 with policy StaticK2
+2026-04-14 00:49:37,829 - INFO - Prompt: "Return your final response within \\boxed{}. Distinct lines $\\ell$ and $m$ lie in the $xy$-plane. They intersect at the origin. Point $P(-1, 4)$ is reflected about line $\\ell$ to point $P'$, and then $P'$ is reflected about line $m$ to point $P''$. The equation of line $\\ell$ is $5x - y = 0$, and the..."
+2026-04-14 00:49:37,829 - INFO - Prompt tokens: 93
+2026-04-14 00:49:48,372 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:49:48,719 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:49:49,058 - WARNING - Generated only 0 tokens, expected 2
+2026-04-14 00:49:49,231 - WARNING - No progress in round 31, stopping
+2026-04-14 00:49:49,231 - INFO - Generation complete: 48 tokens in 31 rounds
+2026-04-14 00:49:49,231 - INFO - Acceptance ratio: 56.90%
+2026-04-14 00:49:49,231 - INFO - Total latency: 11402.73ms
+2026-04-14 00:49:49,231 - INFO -       ✓ 48 tokens, 11403ms, 4.21 tok/s
+2026-04-14 00:49:49,231 - INFO -         Rounds: 31, Acceptance: 56.9%
+2026-04-14 00:49:49,731 - INFO -   [21/30] Speculative K=4...
+2026-04-14 00:49:49,732 - INFO - Starting generation for request f58978a0-2d66-4c22-aeb0-e6298b0a1211 with policy StaticK4
+2026-04-14 00:49:49,732 - INFO - Prompt: "Return your final response within \\boxed{}. Distinct lines $\\ell$ and $m$ lie in the $xy$-plane. They intersect at the origin. Point $P(-1, 4)$ is reflected about line $\\ell$ to point $P'$, and then $P'$ is reflected about line $m$ to point $P''$. The equation of line $\\ell$ is $5x - y = 0$, and the..."
+2026-04-14 00:49:49,732 - INFO - Prompt tokens: 93
+2026-04-14 00:49:50,250 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:49:50,643 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:49:51,010 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:49:51,390 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:49:51,761 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:49:52,139 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:49:52,518 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:49:52,893 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:49:53,269 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:49:53,646 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:49:54,023 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:49:54,404 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:49:54,774 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:49:55,314 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:49:55,936 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:49:56,473 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:49:57,005 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:49:57,426 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:49:57,899 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:49:58,418 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:49:58,914 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:49:59,295 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:49:59,666 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:50:00,053 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:50:00,425 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:50:00,805 - WARNING - Generated only 1 tokens, expected 4
+2026-04-14 00:50:01,177 - WARNING - Generated only 0 tokens, expected 4
+2026-04-14 00:50:01,359 - WARNING - No progress in round 28, stopping
+2026-04-14 00:50:01,359 - INFO - Generation complete: 27 tokens in 28 rounds
+2026-04-14 00:50:01,359 - INFO - Acceptance ratio: 0.00%
+2026-04-14 00:50:01,359 - INFO - Total latency: 11627.38ms
+2026-04-14 00:50:01,359 - INFO -       ✓ 27 tokens, 11627ms, 2.32 tok/s
+2026-04-14 00:50:01,359 - INFO -         Rounds: 28, Acceptance: 0.0%
+2026-04-14 00:50:01,859 - INFO - 
+[HARD Prompt 3] Length: 502 chars
+2026-04-14 00:50:01,859 - INFO -   [22/30] Direct...
+2026-04-14 00:50:07,745 - INFO -       ✓ 128 tokens, 5886ms, 21.75 tok/s
+2026-04-14 00:50:08,245 - INFO -   [23/30] Speculative K=2...
+2026-04-14 00:50:08,246 - INFO - Starting generation for request 3793dd0f-d0b1-455a-9e3e-6dc832815c77 with policy StaticK2
+2026-04-14 00:50:08,246 - INFO - Prompt: "Return your final response within \\boxed{}. Roy's cat eats $\\frac{1}{3}$ of a can of cat food every morning and $\\frac{1}{4}$ of a can of cat food every evening. Before feeding his cat on Monday morning, Roy opened a box containing $6$ cans of cat food. On what day of the week did the cat finish eat..."
+2026-04-14 00:50:08,246 - INFO - Prompt tokens: 77
+2026-04-14 00:50:19,215 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:19,494 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:19,817 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:20,139 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:20,463 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:20,743 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:21,082 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:21,419 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:21,759 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:22,063 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:22,409 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:22,758 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:23,097 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:23,439 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:23,792 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:24,137 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:24,561 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:25,084 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:25,594 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:26,112 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:26,520 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:26,999 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:27,525 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:28,022 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:28,359 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:28,697 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:29,039 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:29,385 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:29,681 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:30,023 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:30,361 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:30,703 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:31,041 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:31,337 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:31,677 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:31,987 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:32,326 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:32,668 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:33,004 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:33,341 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:33,676 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:34,011 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:34,348 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:34,688 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:35,026 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:35,367 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:35,882 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:36,406 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:36,914 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:37,389 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:37,799 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:38,333 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:38,859 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:39,236 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:39,600 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:39,934 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:40,274 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:40,613 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:40,953 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:41,294 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:41,637 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:41,987 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:42,338 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:42,692 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:43,043 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:43,350 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:43,697 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:44,047 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:44,411 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:44,762 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:45,098 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:45,460 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:45,823 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:46,182 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:46,621 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:47,156 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:47,673 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:48,202 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:48,621 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:49,353 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:49,878 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:50:50,207 - INFO - Generation complete: 128 tokens in 110 rounds
+2026-04-14 00:50:50,207 - INFO - Acceptance ratio: 20.14%
+2026-04-14 00:50:50,207 - INFO - Total latency: 41962.07ms
+2026-04-14 00:50:50,207 - INFO -       ✓ 128 tokens, 41962ms, 3.05 tok/s
+2026-04-14 00:50:50,207 - INFO -         Rounds: 110, Acceptance: 20.1%
+2026-04-14 00:50:50,708 - INFO -   [24/30] Speculative K=4...
+2026-04-14 00:50:50,708 - INFO - Starting generation for request 31e4002f-c151-4cf6-8ceb-90646aa89fb2 with policy StaticK4
+2026-04-14 00:50:50,708 - INFO - Prompt: "Return your final response within \\boxed{}. Roy's cat eats $\\frac{1}{3}$ of a can of cat food every morning and $\\frac{1}{4}$ of a can of cat food every evening. Before feeding his cat on Monday morning, Roy opened a box containing $6$ cans of cat food. On what day of the week did the cat finish eat..."
+2026-04-14 00:50:50,708 - INFO - Prompt tokens: 77
+2026-04-14 00:51:29,184 - INFO - Generation complete: 128 tokens in 94 rounds
+2026-04-14 00:51:29,184 - INFO - Acceptance ratio: 10.37%
+2026-04-14 00:51:29,184 - INFO - Total latency: 38476.03ms
+2026-04-14 00:51:29,184 - INFO -       ✓ 128 tokens, 38476ms, 3.33 tok/s
+2026-04-14 00:51:29,184 - INFO -         Rounds: 94, Acceptance: 10.4%
+2026-04-14 00:51:29,684 - INFO - 
+[HARD Prompt 4] Length: 508 chars
+2026-04-14 00:51:29,684 - INFO -   [25/30] Direct...
+2026-04-14 00:51:35,461 - INFO -       ✓ 128 tokens, 5777ms, 22.16 tok/s
+2026-04-14 00:51:35,961 - INFO -   [26/30] Speculative K=2...
+2026-04-14 00:51:35,962 - INFO - Starting generation for request 82e8ee87-1d8d-41f1-a6a4-4f8c1a7b2104 with policy StaticK2
+2026-04-14 00:51:35,962 - INFO - Prompt: 'Return your final response within \\boxed{}. The internal angles of quadrilateral $ABCD$ form an arithmetic progression. Triangles $ABD$ and $DCB$ are similar with $\\angle DBA = \\angle DCB$ and $\\angle ADB = \\angle CBD$. Moreover, the angles in each of these two triangles also form an arithmetic prog...'
+2026-04-14 00:51:35,962 - INFO - Prompt tokens: 73
+2026-04-14 00:52:00,378 - INFO - Generation complete: 128 tokens in 73 rounds
+2026-04-14 00:52:00,378 - INFO - Acceptance ratio: 73.29%
+2026-04-14 00:52:00,378 - INFO - Total latency: 24416.70ms
+2026-04-14 00:52:00,378 - INFO -       ✓ 128 tokens, 24417ms, 5.24 tok/s
+2026-04-14 00:52:00,378 - INFO -         Rounds: 73, Acceptance: 73.3%
+2026-04-14 00:52:00,878 - INFO -   [27/30] Speculative K=4...
+2026-04-14 00:52:00,879 - INFO - Starting generation for request 66c5e69e-10d8-4caf-b487-714576fe8ce9 with policy StaticK4
+2026-04-14 00:52:00,879 - INFO - Prompt: 'Return your final response within \\boxed{}. The internal angles of quadrilateral $ABCD$ form an arithmetic progression. Triangles $ABD$ and $DCB$ are similar with $\\angle DBA = \\angle DCB$ and $\\angle ADB = \\angle CBD$. Moreover, the angles in each of these two triangles also form an arithmetic prog...'
+2026-04-14 00:52:00,879 - INFO - Prompt tokens: 73
+2026-04-14 00:52:24,317 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:24,717 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:25,116 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:25,508 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:25,909 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:26,307 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:26,708 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:27,119 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:27,530 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:27,939 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:28,351 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:28,762 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:29,174 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:29,587 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:30,001 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:30,415 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:30,840 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:31,263 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:31,685 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:32,111 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:32,534 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:32,962 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:52:33,219 - INFO - Generation complete: 128 tokens in 82 rounds
+2026-04-14 00:52:33,219 - INFO - Acceptance ratio: 17.97%
+2026-04-14 00:52:33,219 - INFO - Total latency: 32340.49ms
+2026-04-14 00:52:33,219 - INFO -       ✓ 128 tokens, 32341ms, 3.96 tok/s
+2026-04-14 00:52:33,219 - INFO -         Rounds: 82, Acceptance: 18.0%
+2026-04-14 00:52:33,719 - INFO - 
+[HARD Prompt 5] Length: 510 chars
+2026-04-14 00:52:33,719 - INFO -   [28/30] Direct...
+2026-04-14 00:52:39,495 - INFO -       ✓ 128 tokens, 5775ms, 22.16 tok/s
+2026-04-14 00:52:39,995 - INFO -   [29/30] Speculative K=2...
+2026-04-14 00:52:39,995 - INFO - Starting generation for request 7e502bd4-b19f-4887-954f-92758ad03341 with policy StaticK2
+2026-04-14 00:52:39,995 - INFO - Prompt: 'Return your final response within \\boxed{}. Triangle $ABC$ has side lengths $AB = 12$, $BC = 25$, and $CA = 17$. Rectangle $PQRS$ has vertex $P$ on $\\overline{AB}$, vertex $Q$ on $\\overline{AC}$, and vertices $R$ and $S$ on $\\overline{BC}$. In terms of the side length $PQ = \\omega$, the area of $PQR...'
+2026-04-14 00:52:39,995 - INFO - Prompt tokens: 104
+2026-04-14 00:52:57,279 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:52:57,623 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:52:57,962 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:52:58,310 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:52:58,617 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:52:58,963 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:52:59,313 - WARNING - Generated only 1 tokens, expected 2
+2026-04-14 00:52:59,688 - WARNING - Generated only 0 tokens, expected 2
+2026-04-14 00:52:59,864 - WARNING - No progress in round 59, stopping
+2026-04-14 00:52:59,864 - INFO - Generation complete: 85 tokens in 59 rounds
+2026-04-14 00:52:59,864 - INFO - Acceptance ratio: 40.37%
+2026-04-14 00:52:59,864 - INFO - Total latency: 19869.25ms
+2026-04-14 00:52:59,864 - INFO -       ✓ 85 tokens, 19869ms, 4.28 tok/s
+2026-04-14 00:52:59,864 - INFO -         Rounds: 59, Acceptance: 40.4%
+2026-04-14 00:53:00,364 - INFO -   [30/30] Speculative K=4...
+2026-04-14 00:53:00,365 - INFO - Starting generation for request e046a9e9-29ef-4c2c-b1a5-0dd9d480a5d6 with policy StaticK4
+2026-04-14 00:53:00,365 - INFO - Prompt: 'Return your final response within \\boxed{}. Triangle $ABC$ has side lengths $AB = 12$, $BC = 25$, and $CA = 17$. Rectangle $PQRS$ has vertex $P$ on $\\overline{AB}$, vertex $Q$ on $\\overline{AC}$, and vertices $R$ and $S$ on $\\overline{BC}$. In terms of the side length $PQ = \\omega$, the area of $PQR...'
+2026-04-14 00:53:00,365 - INFO - Prompt tokens: 104
+2026-04-14 00:53:16,951 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:53:25,383 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:53:25,823 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:53:26,260 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:53:26,685 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:53:27,112 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:53:27,538 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:53:27,962 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:53:28,548 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:53:29,323 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:53:30,130 - WARNING - Generated only 3 tokens, expected 4
+2026-04-14 00:53:30,871 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:53:31,620 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:53:32,042 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:53:32,460 - WARNING - Generated only 2 tokens, expected 4
+2026-04-14 00:53:32,714 - INFO - Generation complete: 128 tokens in 76 rounds
+2026-04-14 00:53:32,714 - INFO - Acceptance ratio: 21.40%
+2026-04-14 00:53:32,714 - INFO - Total latency: 32349.63ms
+2026-04-14 00:53:32,714 - INFO -       ✓ 128 tokens, 32350ms, 3.96 tok/s
+2026-04-14 00:53:32,714 - INFO -         Rounds: 76, Acceptance: 21.4%
+2026-04-14 00:53:33,215 - INFO - 
+================================================================================
+2026-04-14 00:53:33,215 - INFO - EXPERIMENT COMPLETE - ANALYSIS
+2026-04-14 00:53:33,215 - INFO - ================================================================================
+2026-04-14 00:53:33,215 - INFO - 
+Results Summary by Prompt Type and Method:
+2026-04-14 00:53:33,215 - INFO - --------------------------------------------------------------------------------
+2026-04-14 00:53:33,215 - INFO - 
+EASY PROMPTS:
+2026-04-14 00:53:33,215 - INFO -   direct    : 22.16 tok/s, 128.0 tokens
+2026-04-14 00:53:33,215 - INFO -   spec_k2   :  3.86 tok/s, 121.4 tokens,  29.5% acc,  93.0 rounds
+2026-04-14 00:53:33,215 - INFO -   spec_k4   :  4.42 tok/s, 115.2 tokens,  23.3% acc,  74.0 rounds
+2026-04-14 00:53:33,215 - INFO - 
+HARD PROMPTS:
+2026-04-14 00:53:33,215 - INFO -   direct    : 21.84 tok/s, 112.0 tokens
+2026-04-14 00:53:33,215 - INFO -   spec_k2   :  4.08 tok/s,  82.8 tokens,  46.0% acc,  58.2 rounds
+2026-04-14 00:53:33,215 - INFO -   spec_k4   :  3.88 tok/s, 108.0 tokens,  18.8% acc,  67.0 rounds
+2026-04-14 00:53:33,215 - INFO - 
+Speedup Analysis (vs Direct):
+2026-04-14 00:53:33,215 - INFO - --------------------------------------------------------------------------------
+2026-04-14 00:53:33,215 - INFO - 
+EASY:
+2026-04-14 00:53:33,215 - INFO -   Direct baseline: 22.16 tok/s
+2026-04-14 00:53:33,215 - INFO -   spec_k2: 3.86 tok/s (0.17x of direct)
+2026-04-14 00:53:33,215 - INFO -   spec_k4: 4.42 tok/s (0.20x of direct)
+2026-04-14 00:53:33,215 - INFO - 
+HARD:
+2026-04-14 00:53:33,215 - INFO -   Direct baseline: 21.84 tok/s
+2026-04-14 00:53:33,215 - INFO -   spec_k2: 4.08 tok/s (0.19x of direct)
+2026-04-14 00:53:33,215 - INFO -   spec_k4: 3.88 tok/s (0.18x of direct)
+2026-04-14 00:53:33,216 - INFO - 
+Results saved to: /home/albert/code/AInfra/draft/experiments/comprehensive_results.json
+2026-04-14 00:53:33,216 - INFO - ================================================================================
