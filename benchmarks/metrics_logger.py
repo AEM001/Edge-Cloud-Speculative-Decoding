@@ -12,7 +12,7 @@ from datetime import datetime
 from dataclasses import dataclass, asdict
 import statistics
 
-from ..client.edge_client import RequestMetrics
+from client.edge_client import RequestMetrics
 
 
 logger = logging.getLogger(__name__)

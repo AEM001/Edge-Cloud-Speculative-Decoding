@@ -56,6 +56,7 @@ def load_workloads(
     # Default paths
     if easy_file is None:
         easy_candidates = [
+            base_dir / "data" / "prompts_easy.json",
             base_dir / "benchmarks" / "prompts_easy.json",
             base_dir.parent / "ubuntu-verify" / "prompts_easy.json",
             Path("prompts_easy.json"),
@@ -73,6 +74,7 @@ def load_workloads(
     
     if hard_file is None:
         hard_candidates = [
+            base_dir / "data" / "prompts_hard.json",
             base_dir / "benchmarks" / "prompts_hard.json",
             base_dir.parent / "ubuntu-verify" / "prompts_hard.json",
             Path("prompts_hard.json"),

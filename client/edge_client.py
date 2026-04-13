@@ -5,7 +5,7 @@ import logging
 from typing import List, Optional, Dict, Any, Callable
 from dataclasses import dataclass, field
 
-from ..protocol import (
+from protocol import (
     EdgeRequest, CloudResponse, DraftRequest, DraftResponse,
     TokenInfo
 )
@@ -129,8 +129,8 @@ class EdgeClient:
         round_id = 0
         
         while len(verified_prefix) - len(prompt_ids) < self.max_new_tokens:
-            # Check for EOS in prefix
-            if self.eos_token_id and self.eos_token_id in verified_prefix:
+            # Check for EOS in newly generated tokens only (not in prompt)
+            if self.eos_token_id and self.eos_token_id in verified_prefix[len(prompt_ids):]:
                 logger.info(f"EOS token reached at round {round_id}")
                 break
             

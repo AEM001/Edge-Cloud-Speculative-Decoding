@@ -4,7 +4,7 @@ import logging
 import requests
 from typing import Optional
 
-from ..protocol import EdgeRequest, CloudResponse
+from protocol import EdgeRequest, CloudResponse
 
 logger = logging.getLogger(__name__)
 

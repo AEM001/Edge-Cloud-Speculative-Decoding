@@ -28,7 +28,7 @@ from typing import Optional, List
 from abc import ABC, abstractmethod
 import random
 
-from ..protocol import EdgeRequest, CloudResponse
+from protocol import EdgeRequest, CloudResponse
 
 logger = logging.getLogger(__name__)
 

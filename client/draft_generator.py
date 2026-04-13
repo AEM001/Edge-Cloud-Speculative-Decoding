@@ -2,7 +2,7 @@
 from typing import List, Tuple
 import mlx.core as mx
 import numpy as np
-from ..protocol import TokenInfo, DraftRequest, DraftResponse
+from protocol import TokenInfo, DraftRequest, DraftResponse
 import logging
 
 logger = logging.getLogger(__name__)

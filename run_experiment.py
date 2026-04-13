@@ -216,8 +216,7 @@ class ExperimentRunner:
         # Create metrics logger
         condition_name = f"k{k_value}_{workload_group}_{network_regime}"
         metrics_logger = MetricsLogger(
-            output_dir=str(self.output_dir / condition_name),
-            condition_name=condition_name
+            output_dir=str(self.output_dir / condition_name)
         )
         
         # Run all prompts
@@ -248,8 +247,21 @@ class ExperimentRunner:
                 continue
         
         # Compute and save aggregate metrics
-        aggregate_metrics = metrics_logger.compute_aggregate_metrics()
-        metrics_logger.save_metrics()
+        condition_result = metrics_logger.aggregate_condition(
+            condition_name=condition_name,
+            policy_name=policy_name,
+            network_regime=network_regime,
+            workload_group=workload_group
+        )
+        metrics_logger.export_json()
+        metrics_logger.export_csv()
+        metrics_logger.export_detailed_csv()
+        
+        if condition_result is None:
+            logger.warning(f"No results for condition {condition_name}")
+            return {}
+        
+        aggregate_metrics = condition_result.to_dict()
         
         logger.info(f"Condition summary:")
         logger.info(f"  Mean latency: {aggregate_metrics['mean_latency_ms']:.2f}ms")

@@ -14,7 +14,7 @@ from typing import Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 
-from ..protocol import EdgeRequest, CloudResponse
+from protocol import EdgeRequest, CloudResponse
 
 
 class NetworkRegime(Enum):

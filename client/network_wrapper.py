@@ -4,7 +4,7 @@ import logging
 from typing import Callable
 from dataclasses import dataclass
 
-from ..protocol import EdgeRequest, CloudResponse
+from protocol import EdgeRequest, CloudResponse
 
 logger = logging.getLogger(__name__)
 
