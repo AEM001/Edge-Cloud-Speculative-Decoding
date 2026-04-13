@@ -1,6 +1,6 @@
 """Data structures for speculative decoding protocol."""
-from dataclasses import dataclass
-from typing import List, Optional
+from dataclasses import dataclass, field
+from typing import List, Optional, Dict, Any
 import numpy as np
 
 
@@ -47,4 +47,81 @@ class DraftResponse:
             logprobs=data["logprobs"],
             probabilities=data["probabilities"],
             confidence_stats=data["confidence_stats"]
+        )
+
+
+@dataclass
+class EdgeRequest:
+    """Request from edge (Mac) to cloud (Ubuntu) for verification."""
+    request_id: str
+    round_id: int
+    prefix_ids: List[int]
+    draft_ids: List[int]
+    draft_logprobs: List[float]
+    edge_draft_time_ms: float
+    policy_metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def to_dict(self):
+        """Serialize to dictionary for network transmission."""
+        return {
+            "request_id": self.request_id,
+            "round_id": self.round_id,
+            "prefix_ids": self.prefix_ids,
+            "draft_ids": self.draft_ids,
+            "draft_logprobs": self.draft_logprobs,
+            "edge_draft_time_ms": self.edge_draft_time_ms,
+            "policy_metadata": self.policy_metadata
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "EdgeRequest":
+        """Deserialize from dictionary."""
+        return cls(
+            request_id=data["request_id"],
+            round_id=data["round_id"],
+            prefix_ids=data["prefix_ids"],
+            draft_ids=data["draft_ids"],
+            draft_logprobs=data["draft_logprobs"],
+            edge_draft_time_ms=data["edge_draft_time_ms"],
+            policy_metadata=data.get("policy_metadata", {})
+        )
+
+
+@dataclass
+class CloudResponse:
+    """Response from cloud (Ubuntu) to edge (Mac) with verification results."""
+    request_id: str
+    round_id: int
+    accepted_len: int
+    accepted_token_ids: List[int]
+    correction_token_id: Optional[int]
+    server_verify_time_ms: float
+    server_total_time_ms: float
+    rtt_ms: Optional[float] = None
+    
+    def to_dict(self):
+        """Serialize to dictionary for network transmission."""
+        return {
+            "request_id": self.request_id,
+            "round_id": self.round_id,
+            "accepted_len": self.accepted_len,
+            "accepted_token_ids": self.accepted_token_ids,
+            "correction_token_id": self.correction_token_id,
+            "server_verify_time_ms": self.server_verify_time_ms,
+            "server_total_time_ms": self.server_total_time_ms,
+            "rtt_ms": self.rtt_ms
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "CloudResponse":
+        """Deserialize from dictionary."""
+        return cls(
+            request_id=data["request_id"],
+            round_id=data["round_id"],
+            accepted_len=data["accepted_len"],
+            accepted_token_ids=data["accepted_token_ids"],
+            correction_token_id=data.get("correction_token_id"),
+            server_verify_time_ms=data["server_verify_time_ms"],
+            server_total_time_ms=data["server_total_time_ms"],
+            rtt_ms=data.get("rtt_ms")
         )
