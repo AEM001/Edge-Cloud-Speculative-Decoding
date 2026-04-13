@@ -10,7 +10,11 @@ from protocol import (
     TokenInfo
 )
 from .draft_generator import DraftGenerator
-from .model_manager import ModelManager
+import sys
+from pathlib import Path
+# Import ModelManager from root (PyTorch version)
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from model_manager import ModelManager
 
 logger = logging.getLogger(__name__)
 

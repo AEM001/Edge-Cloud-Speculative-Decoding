@@ -3,7 +3,7 @@ from pathlib import Path
 
 # Model configuration - Qwen2.5 3B quantized version
 MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
-MODEL_PATH = Path.home() / "models" / "Qwen2.5-3B-Instruct"
+MODEL_PATH = Path.home() / "models" / "Qwen--Qwen2.5-3B-Instruct"
 
 # Server configuration
 # Edge client port (local)

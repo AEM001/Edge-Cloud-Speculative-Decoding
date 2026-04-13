@@ -18,7 +18,7 @@ from typing import List, Dict, Any
 import sys
 
 from config import MODEL_NAME, MODEL_PATH, TEMPERATURE
-from client.model_manager import ModelManager
+from model_manager import ModelManager
 from client.draft_generator import DraftGenerator
 from client.edge_client import EdgeClient
 from client.http_cloud_client import create_http_cloud_client
