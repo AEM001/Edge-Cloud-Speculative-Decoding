@@ -21,8 +21,9 @@ def main():
     """Run a simple test."""
     logger.info("=== Simple Speculative Decoding Test ===")
     
-    # Server URL
-    server_url = "http://localhost:5090"
+    # Server URL - via SSH tunnel to RTX 5090 verification server
+    # Make sure SSH tunnel is running: ssh -p 12272 -L 6006:localhost:6006 root@connect.westd.seetacloud.com -N
+    server_url = "http://localhost:6006"
     logger.info(f"Cloud server: {server_url}")
     
     # Load draft model
