@@ -3,7 +3,7 @@ from pathlib import Path
 
 # Model configuration
 MODEL_NAME = "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
-MODEL_PATH = Path.home() / ".models" / "mlx-draft-model"
+MODEL_PATH = Path.home() / ".models" / "mlx-community" / "Qwen2.5-0.5B-Instruct-4bit"
 
 # Generation settings
 MAX_DRAFT_TOKENS = 5

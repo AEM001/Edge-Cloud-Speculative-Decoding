@@ -23,25 +23,20 @@ class ModelManager:
         logger.info(f"Model storage path: {self.model_path}")
     
     def load(self) -> Tuple[Optional[object], Optional[object]]:
-        """Load model to custom path, avoiding cache."""
+        """Load model from local custom path, avoiding cache."""
         self.setup_storage()
         
         try:
-            logger.info(f"Loading model {self.model_name}...")
+            logger.info(f"Loading model from local path: {self.model_path}")
             
-            # Set environment to use custom path instead of cache
-            import os
-            os.environ["HF_HOME"] = str(self.model_path.parent)
-            os.environ["TRANSFORMERS_CACHE"] = str(self.model_path)
+            # Load directly from local path
+            self.model, self.tokenizer = load(str(self.model_path))
             
-            # Load with MLX - this downloads to the specified location
-            self.model, self.tokenizer = load(self.model_name)
-            
-            logger.info("Model loaded successfully")
+            logger.info(f"Model loaded successfully from {self.model_path}")
             return self.model, self.tokenizer
             
         except Exception as e:
-            logger.error(f"Failed to load model: {e}")
+            logger.error(f"Failed to load model from {self.model_path}: {e}")
             raise
     
     def is_loaded(self) -> bool:
