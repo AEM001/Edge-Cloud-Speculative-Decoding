@@ -21,6 +21,41 @@ Edge (Mac)                    Server
     │<───── final output ──────────│
 ```
 
+## Experiment Status
+
+### Current Status: Performance Bottleneck Identified
+
+**Issue**: Draft model (Mac) is **4.4x slower** than server verification (Ubuntu)
+
+| Component | Time | Expected |
+|-----------|------|----------|
+| Draft generation (0.5B 4-bit) | 200ms | <20ms |
+| Server verify (3B 4-bit) | 45ms | - |
+| **Ratio** | **4.4:1** | **1:10+** |
+
+**Result**: Speculative decoding is **5x slower** than direct server calls on current hardware.
+
+### Root Cause
+
+1. **Hardware limitation**: MacBook Air M1 8GB GPU has insufficient compute
+2. **Model already minimal**: 0.5B 4-bit is the smallest available Qwen2.5 model
+3. **No optimization space**: 2-bit quantization tested but slower (350ms vs 215ms)
+
+### Hardware Suitability
+
+**MacBook Air M1 8GB is NOT suitable for edge-cloud speculative decoding research.**
+
+Speculative decoding requires draft model to be 10-100x faster than target model. Current hardware achieves the opposite (draft is 4.4x slower).
+
+For research purposes, consider:
+- **MacBook Pro M3 18GB**: Marginal (~50ms draft)
+- **Mac Studio M2 Ultra 64GB**: Suitable (~10ms draft)
+- **NVIDIA GPU (Jetson Orin)**: Ideal for edge deployment
+
+### Documentation
+
+See `docs/EXPERIMENT_STATUS.md` for detailed analysis and next steps.
+
 ## Project Structure
 
 ```

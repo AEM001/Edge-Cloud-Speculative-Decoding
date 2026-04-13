@@ -49,7 +49,8 @@ class ExperimentRunner:
         cloud_server_url: str,
         output_dir: str = "results",
         max_new_tokens: int = 128,
-        enable_network_simulation: bool = True
+        enable_network_simulation: bool = True,
+        num_prompts: int = None
     ):
         """
         Initialize experiment runner.
@@ -64,6 +65,7 @@ class ExperimentRunner:
         self.output_dir = Path(output_dir)
         self.max_new_tokens = max_new_tokens
         self.enable_network_simulation = enable_network_simulation
+        self.num_prompts = num_prompts
         
         # Create output directory
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -94,6 +96,12 @@ class ExperimentRunner:
         logger.info("Loading workloads...")
         self.workloads = load_workloads()
         logger.info(f"Loaded {len(self.workloads['easy'])} easy prompts, {len(self.workloads['hard'])} hard prompts")
+        
+        # Truncate prompts if num_prompts is set
+        if self.num_prompts:
+            self.workloads['easy'] = self.workloads['easy'][:self.num_prompts]
+            self.workloads['hard'] = self.workloads['hard'][:self.num_prompts]
+            logger.info(f"Truncated to {self.num_prompts} prompts per workload")
     
     def run_full_experiment(self):
         """Run the full experiment matrix."""
@@ -301,6 +309,12 @@ def main():
         help="Disable network simulation (use real network only)"
     )
     parser.add_argument(
+        "--num-prompts",
+        type=int,
+        default=None,
+        help="Number of prompts per workload (default: all)"
+    )
+    parser.add_argument(
         "--test-connection",
         action="store_true",
         help="Test connection to server and exit"
@@ -324,7 +338,8 @@ def main():
         cloud_server_url=args.server_url,
         output_dir=args.output_dir,
         max_new_tokens=args.max_tokens,
-        enable_network_simulation=not args.no_network_simulation
+        enable_network_simulation=not args.no_network_simulation,
+        num_prompts=args.num_prompts
     )
     
     runner.run_full_experiment()
