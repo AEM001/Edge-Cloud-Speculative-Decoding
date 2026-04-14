@@ -1,51 +1,66 @@
-"""Draft token generation with confidence statistics."""
+"""Draft token generation with vLLM for GGUF models."""
 from typing import List, Tuple
-import mlx.core as mx
 import numpy as np
-from protocol import TokenInfo, DraftRequest, DraftResponse
 import logging
+
+from protocol import TokenInfo, DraftRequest, DraftResponse
 
 logger = logging.getLogger(__name__)
 
 
-class DraftGenerator:
-    """Generates draft tokens autoregressively with confidence stats."""
+class VLLMDraftGenerator:
+    """Generates draft tokens using vLLM with confidence statistics."""
     
-    def __init__(self, model, tokenizer):
-        self.model = model
+    def __init__(self, llm, tokenizer):
+        """
+        Initialize vLLM draft generator.
+        
+        Args:
+            llm: vLLM LLM instance
+            tokenizer: Tokenizer instance
+        """
+        self.llm = llm
         self.tokenizer = tokenizer
         
-    def compute_confidence_stats(self, logits: mx.array) -> Tuple[float, float, float, float]:
+    def compute_confidence_stats(self, logprobs_dict: dict) -> Tuple[float, float, float]:
         """
-        Compute confidence statistics from logits.
+        Compute confidence statistics from vLLM logprobs.
+        
+        Args:
+            logprobs_dict: Dict mapping token_id to logprob (from vLLM)
         
         Returns:
-            - probability of selected token
-            - max probability in distribution
-            - entropy of distribution
-            - top-1 minus top-2 margin
+            Tuple of (max_prob, entropy, top_margin)
         """
-        # Convert logits to probabilities
-        probs = mx.softmax(logits, axis=-1)
-        probs_np = np.array(probs)
+        # Convert logprobs to probabilities
+        probs = {}
+        for token_id, logprob_obj in logprobs_dict.items():
+            # vLLM returns LogProb objects with .logprob attribute
+            if hasattr(logprob_obj, 'logprob'):
+                logprob = logprob_obj.logprob
+            else:
+                logprob = logprob_obj
+            probs[token_id] = np.exp(logprob)
         
-        # Get top 2 probabilities
-        top_2_indices = np.argpartition(probs_np, -2)[-2:]
-        top_2_probs = probs_np[top_2_indices]
-        top_2_probs.sort()
+        # Normalize probabilities
+        total_prob = sum(probs.values())
+        if total_prob > 0:
+            probs = {k: v / total_prob for k, v in probs.items()}
         
-        max_prob = np.max(probs_np)
-        top_margin = top_2_probs[1] - top_2_probs[0]
+        probs_array = np.array(list(probs.values()))
         
-        # Compute entropy: -sum(p * log(p))
-        # Avoid log(0) by masking
-        log_probs = np.log(probs_np + 1e-10)
-        entropy = -np.sum(probs_np * log_probs)
+        # Max probability
+        max_prob = float(np.max(probs_array))
         
-        # Get probability of the sampled token
-        token_prob = max_prob  # Will be updated with actual sampled token
+        # Entropy
+        log_probs = np.log(probs_array + 1e-10)
+        entropy = float(-np.sum(probs_array * log_probs))
         
-        return float(token_prob), float(max_prob), float(entropy), float(top_margin)
+        # Top margin (top-1 minus top-2)
+        sorted_probs = np.sort(probs_array)[::-1]
+        top_margin = float(sorted_probs[0] - sorted_probs[1]) if len(sorted_probs) >= 2 else 0.0
+        
+        return max_prob, entropy, top_margin
     
     def generate_draft_tokens(
         self, 
@@ -54,7 +69,7 @@ class DraftGenerator:
         top_p: float = 0.95
     ) -> DraftResponse:
         """
-        Generate K draft tokens autoregressively with confidence stats.
+        Generate K draft tokens using vLLM with confidence stats.
         
         Args:
             request: DraftRequest with verified prefix and num tokens
@@ -64,81 +79,106 @@ class DraftGenerator:
         Returns:
             DraftResponse with token IDs and confidence stats
         """
-        if self.model is None or self.tokenizer is None:
+        if self.llm is None or self.tokenizer is None:
             raise RuntimeError("Model not loaded")
+        
+        from vllm import SamplingParams
         
         prefix = request.verified_prefix
         k = request.num_draft_tokens
         
-        draft_tokens: List[TokenInfo] = []
-        current_tokens = list(prefix)  # Working copy
+        # Decode prefix to text
+        prompt_text = self.tokenizer.decode(prefix, skip_special_tokens=False)
         
-        # Generate K tokens autoregressively
-        for step in range(k):
-            # Prepare input
-            input_ids = mx.array([current_tokens])
+        # Set up sampling parameters
+        sampling_params = SamplingParams(
+            temperature=temperature if temperature > 0 else 0.0,
+            top_p=top_p,
+            max_tokens=k,
+            logprobs=5,  # Get top 5 logprobs for each position
+            prompt_logprobs=k,  # Get logprobs for draft positions
+        )
+        
+        # Generate with vLLM
+        outputs = self.llm.generate(
+            prompts=[prompt_text],
+            sampling_params=sampling_params,
+            use_tqdm=False
+        )
+        
+        output = outputs[0]
+        
+        # Extract generated tokens
+        if output.outputs:
+            generated_ids = output.outputs[0].token_ids[:k]
+        else:
+            generated_ids = []
+        
+        if len(generated_ids) < k:
+            logger.warning(f"Generated only {len(generated_ids)} tokens, expected {k}")
+        
+        # Get prompt logprobs for confidence stats
+        prompt_logprobs = output.prompt_logprobs or []
+        
+        # Build response with confidence stats
+        draft_token_ids = []
+        draft_logprobs = []
+        draft_probs = []
+        max_probs = []
+        entropies = []
+        top_margins = []
+        
+        prefix_len = len(prefix)
+        
+        for i, token_id in enumerate(generated_ids):
+            # Position in the full sequence (after prefix)
+            pos = prefix_len + i
             
-            # Get logits from model
-            logits = self.model(input_ids)
-            next_token_logits = logits[0, -1, :]  # Last position logits
-            
-            # Sample next token with temperature
-            if temperature > 0:
-                scaled_logits = next_token_logits / temperature
-                probs = mx.softmax(scaled_logits, axis=-1)
+            # Get logprobs at this position
+            if pos < len(prompt_logprobs) and prompt_logprobs[pos] is not None:
+                logprobs_dict = prompt_logprobs[pos]
                 
-                # Simple top-p filtering
-                sorted_probs = mx.sort(probs)[::-1]
-                cumsum_probs = mx.cumsum(sorted_probs, axis=0)
-                threshold = sorted_probs[mx.argmax(cumsum_probs > top_p)]
-                probs = mx.where(probs < threshold, 0, probs)
-                probs = probs / mx.sum(probs)  # Renormalize
+                # Get probability of the selected token
+                token_logprob = logprobs_dict.get(token_id, None)
+                if token_logprob is not None:
+                    if hasattr(token_logprob, 'logprob'):
+                        token_prob = np.exp(token_logprob.logprob)
+                        token_logprob_val = token_logprob.logprob
+                    else:
+                        token_prob = np.exp(token_logprob)
+                        token_logprob_val = token_logprob
+                else:
+                    token_prob = 0.0
+                    token_logprob_val = -float('inf')
                 
-                # Sample
-                next_token = mx.random.categorical(mx.log(probs + 1e-10))
+                # Compute confidence stats
+                max_prob, entropy, top_margin = self.compute_confidence_stats(logprobs_dict)
             else:
-                next_token = mx.argmax(next_token_logits)
+                # Fallback if no logprobs available
+                token_prob = 1.0 / self.tokenizer.vocab_size if hasattr(self.tokenizer, 'vocab_size') else 0.0
+                token_logprob_val = np.log(token_prob + 1e-10)
+                max_prob = token_prob
+                entropy = np.log(self.tokenizer.vocab_size) if hasattr(self.tokenizer, 'vocab_size') else 0.0
+                top_margin = 0.0
             
-            next_token_id = int(next_token.item())
-            
-            # Compute confidence stats
-            token_prob, max_prob, entropy, top_margin = self.compute_confidence_stats(next_token_logits)
-            
-            # Get actual probability of sampled token
-            probs = mx.softmax(next_token_logits, axis=-1)
-            actual_prob = float(probs[next_token_id].item())
-            actual_logprob = float(mx.log(probs[next_token_id] + 1e-10).item())
-            
-            # Store token info
-            token_info = TokenInfo(
-                token_id=next_token_id,
-                logprob=actual_logprob,
-                probability=actual_prob,
-                max_prob=max_prob,
-                entropy=entropy,
-                top_margin=top_margin
-            )
-            draft_tokens.append(token_info)
-            
-            # Append to current tokens for next iteration
-            current_tokens.append(next_token_id)
-            
-            if logger.isEnabledFor(logging.DEBUG):
-                token_text = self.tokenizer.decode([next_token_id])
-                logger.debug(f"Step {step}: token={token_text!r}, prob={actual_prob:.4f}, entropy={entropy:.4f}")
+            draft_token_ids.append(token_id)
+            draft_logprobs.append(float(token_logprob_val))
+            draft_probs.append(float(token_prob))
+            max_probs.append(float(max_prob))
+            entropies.append(float(entropy))
+            top_margins.append(float(top_margin))
         
-        # Package response with lightweight transmission format
         return DraftResponse(
-            draft_token_ids=[t.token_id for t in draft_tokens],
-            logprobs=[t.logprob for t in draft_tokens],
-            probabilities=[t.probability for t in draft_tokens],
+            draft_token_ids=draft_token_ids,
+            logprobs=draft_logprobs,
+            probabilities=draft_probs,
             confidence_stats={
-                "max_probs": [t.max_prob for t in draft_tokens],
-                "entropies": [t.entropy for t in draft_tokens],
-                "top_margins": [t.top_margin for t in draft_tokens]
+                "max_probs": max_probs,
+                "entropies": entropies,
+                "top_margins": top_margins
             }
         )
     
     def decode_tokens(self, token_ids: List[int]) -> str:
         """Decode token IDs to text."""
-        return self.tokenizer.decode(token_ids)
+        return self.tokenizer.decode(token_ids, skip_special_tokens=False)

@@ -1,8 +1,8 @@
 """Main entry point for speculative decoding edge node on Ubuntu 3060."""
 import logging
 from config import MODEL_NAME, MODEL_PATH, MAX_DRAFT_TOKENS, TEMPERATURE, TOP_P, VERBOSE, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN
-from vllm_model_manager import VLLMModelManager
-from vllm_draft_generator import VLLMDraftGenerator
+from model_manager import VLLMModelManager
+from draft_generator import VLLMDraftGenerator
 from protocol import DraftRequest
 
 def setup_logging():
@@ -31,7 +31,7 @@ def main():
     logger.info(f"Model info: {model_manager.get_model_info()}")
     
     # Initialize draft generator
-    draft_gen = VLLMDraftGenerator(llm, tokenizer)
+    generator = VLLMDraftGenerator(llm, tokenizer)
     
     # Test generation
     logger.info("\n--- Test Draft Generation ---")
@@ -78,7 +78,7 @@ def main():
     
     logger.info("\n=== Ready for speculative decoding requests ===")
     
-    return generator, manager
+    return generator, model_manager
 
 
 if __name__ == "__main__":

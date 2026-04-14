@@ -18,8 +18,8 @@ from typing import List, Dict, Any
 import sys
 
 from config import MODEL_NAME, MODEL_PATH, TEMPERATURE, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN
-from vllm_model_manager import VLLMModelManager
-from vllm_draft_generator import VLLMDraftGenerator
+from model_manager import VLLMModelManager
+from draft_generator import VLLMDraftGenerator
 from client.edge_client import EdgeClient
 from client.http_cloud_client import create_http_cloud_client
 from client.network_wrapper import create_network_wrapped_client

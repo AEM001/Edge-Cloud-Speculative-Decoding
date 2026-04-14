@@ -1,79 +1,69 @@
-"""Model loading and management with custom storage path for PyTorch."""
+"""Model loading and management with vLLM for HuggingFace models."""
 from pathlib import Path
 from typing import Tuple, Optional
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-class ModelManager:
-    """Manages the draft model with custom storage location using PyTorch."""
+class VLLMModelManager:
+    """Manages the draft model using vLLM with GGUF support."""
     
-    def __init__(self, model_name: str, model_path: Path, quantization: bool = True):
-        self.model_name = model_name
+    def __init__(
+        self,
+        model_path: Path,
+        gpu_memory_utilization: float = 0.6,
+        max_model_len: int = 32768,
+        tensor_parallel_size: int = 1
+    ):
+        """
+        Initialize vLLM model manager.
+        
+        Args:
+            model_path: Path to HuggingFace model directory
+            gpu_memory_utilization: GPU memory fraction to use
+            max_model_len: Maximum sequence length
+            tensor_parallel_size: Number of GPUs for tensor parallelism
+        """
         self.model_path = Path(model_path)
-        self.model = None
+        self.gpu_memory_utilization = gpu_memory_utilization
+        self.max_model_len = max_model_len
+        self.tensor_parallel_size = tensor_parallel_size
+        
+        self.llm = None
         self.tokenizer = None
-        self.quantization = quantization
         
-    def setup_storage(self) -> None:
-        """Ensure model storage directory exists."""
-        self.model_path.parent.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Model storage path: {self.model_path}")
-    
-    def load(self) -> Tuple[Optional[AutoModelForCausalLM], Optional[AutoTokenizer]]:
-        """Load model from local custom path, avoiding HuggingFace cache."""
-        self.setup_storage()
-        
+    def load(self):
+        """Load model using vLLM."""
         try:
-            logger.info(f"Loading model from local path: {self.model_path}")
-            
-            # Configure quantization if enabled
-            quantization_config = None
-            if self.quantization:
-                quantization_config = BitsAndBytesConfig(
-                    load_in_4bit=True,
-                    bnb_4bit_compute_dtype=torch.float16,
-                    bnb_4bit_use_double_quant=True,
-                    bnb_4bit_quant_type="nf4"
-                )
-            
-            # Load tokenizer from local path
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                str(self.model_path),
-                trust_remote_code=True,
-                local_files_only=True
+            from vllm import LLM
+            from transformers import AutoTokenizer
+        except ImportError:
+            raise RuntimeError(
+                "vLLM not installed. Run: pip install vllm"
             )
-            
-            # Add pad token if missing
-            if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.eos_token
-            
-            # Load model from local path
-            self.model = AutoModelForCausalLM.from_pretrained(
-                str(self.model_path),
-                quantization_config=quantization_config,
-                torch_dtype=torch.float16,
-                device_map="auto",
-                trust_remote_code=True,
-                local_files_only=True
-            )
-            
-            self.model.eval()
-            
-            device = next(self.model.parameters()).device
-            logger.info(f"Model loaded successfully from {self.model_path} on {device}")
-            return self.model, self.tokenizer
-            
-        except Exception as e:
-            logger.error(f"Failed to load model from {self.model_path}: {e}")
-            raise
+        
+        logger.info(f"Loading vLLM model from: {self.model_path}")
+        
+        # Load HuggingFace format model with vLLM
+        self.llm = LLM(
+            model=str(self.model_path),
+            tensor_parallel_size=self.tensor_parallel_size,
+            gpu_memory_utilization=self.gpu_memory_utilization,
+            max_model_len=self.max_model_len,
+            trust_remote_code=True,
+        )
+        
+        # Get tokenizer from vLLM
+        self.tokenizer = self.llm.get_tokenizer()
+        
+        logger.info("vLLM model loaded successfully")
+        return self.llm, self.tokenizer
+    
     
     def is_loaded(self) -> bool:
         """Check if model is loaded."""
-        return self.model is not None and self.tokenizer is not None
+        return self.llm is not None and self.tokenizer is not None
     
     def get_model_info(self) -> dict:
         """Get model information."""
@@ -84,12 +74,10 @@ class ModelManager:
         if self.tokenizer:
             vocab_size = getattr(self.tokenizer, 'vocab_size', 0)
         
-        device = next(self.model.parameters()).device
-        
         return {
-            "name": self.model_name,
-            "storage_path": str(self.model_path),
+            "model_path": str(self.model_path),
             "vocab_size": vocab_size,
-            "device": str(device),
-            "quantization": self.quantization,
+            "gpu_memory_utilization": self.gpu_memory_utilization,
+            "max_model_len": self.max_model_len,
+            "tensor_parallel_size": self.tensor_parallel_size,
         }
