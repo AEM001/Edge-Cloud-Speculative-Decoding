@@ -1,0 +1,708 @@
+2026-04-14 13:36:30,399 - INFO - Loaded 10 easy prompts (length range: 288-337)
+2026-04-14 13:36:30,402 - INFO - Loaded 10 hard prompts (length range: 491-519)
+2026-04-14 13:36:30,402 - INFO - ================================================================================
+2026-04-14 13:36:30,402 - INFO - COMPREHENSIVE BENCHMARK RUN 2: K=6, K=8, K=10
+2026-04-14 13:36:30,402 - INFO - Methods: Direct, K=6, K=8, K=10
+2026-04-14 13:36:30,402 - INFO - Total tests: 20 prompts × 4 methods = 80 tests
+2026-04-14 13:36:30,402 - INFO - Output: /home/albert/code/AInfra/draft/experiments/outputs_run2
+2026-04-14 13:36:30,402 - INFO - ================================================================================
+2026-04-14 13:36:30,402 - INFO - 
+[Setup] Loading draft model...
+2026-04-14 13:36:33,258 - INFO - Loading vLLM model from: /home/albert/models/Qwen--Qwen2.5-3B-Instruct
+INFO 04-14 13:36:33 [utils.py:238] non-default args: {'trust_remote_code': True, 'max_model_len': 8192, 'gpu_memory_utilization': 0.7, 'disable_log_stats': True, 'model': '/home/albert/models/Qwen--Qwen2.5-3B-Instruct'}
+The argument `trust_remote_code` is to be used with Auto classes. It has no effect here and is ignored.
+The argument `trust_remote_code` is to be used with Auto classes. It has no effect here and is ignored.
+INFO 04-14 13:36:33 [model.py:531] Resolved architecture: Qwen2ForCausalLM
+INFO 04-14 13:36:33 [model.py:1554] Using max model len 8192
+INFO 04-14 13:36:33 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=8192.
+INFO 04-14 13:36:33 [vllm.py:747] Asynchronous scheduling is enabled.
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:34 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/albert/models/Qwen--Qwen2.5-3B-Instruct', speculative_config=None, tokenizer='/home/albert/models/Qwen--Qwen2.5-3B-Instruct', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=True, dtype=torch.bfloat16, max_seq_len=8192, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=/home/albert/models/Qwen--Qwen2.5-3B-Instruct, enable_prefix_caching=True, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['none'], 'splitting_ops': ['vllm::unified_attention', 'vllm::unified_attention_with_output', 'vllm::unified_mla_attention', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::gdn_attention_core', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [8192], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2, 4, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128, 136, 144, 152, 160, 168, 176, 184, 192, 200, 208, 216, 224, 232, 240, 248, 256, 272, 288, 304, 320, 336, 352, 368, 384, 400, 416, 432, 448, 464, 480, 496, 512], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 512, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:34 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://10.198.137.126:42915 backend=nccl
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:34 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:34 [base.py:106] Offloader set to NoopOffloader
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:34 [gpu_model_runner.py:4255] Starting to load model /home/albert/models/Qwen--Qwen2.5-3B-Instruct...
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:35 [cuda.py:405] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:35 [flash_attn.py:587] Using FlashAttention version 2
+(EngineCore_DP0 pid=1447311) <frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+(EngineCore_DP0 pid=1447311) <frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.nvrtc module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.nvrtc module instead.
+(EngineCore_DP0 pid=1447311) Loading safetensors checkpoint shards:   0% Completed | 0/2 [00:00<?, ?it/s]
+(EngineCore_DP0 pid=1447311) Loading safetensors checkpoint shards:  50% Completed | 1/2 [00:00<00:00,  1.45it/s]
+(EngineCore_DP0 pid=1447311) Loading safetensors checkpoint shards: 100% Completed | 2/2 [00:01<00:00,  1.55it/s]
+(EngineCore_DP0 pid=1447311) Loading safetensors checkpoint shards: 100% Completed | 2/2 [00:01<00:00,  1.53it/s]
+(EngineCore_DP0 pid=1447311) 
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:36 [default_loader.py:293] Loading weights took 1.36 seconds
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:37 [gpu_model_runner.py:4338] Model loading took 5.79 GiB memory and 1.624755 seconds
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:37 [decorators.py:465] Directly load AOT compilation from path /home/albert/.cache/vllm/torch_compile_cache/torch_aot_compile/ac809856cc712738d178dcae190e16333f57818198c1cb947581f39259641e77/rank_0_0/model
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:38 [backends.py:916] Using cache directory: /home/albert/.cache/vllm/torch_compile_cache/7a768f65d7/rank_0_0/backbone for vLLM's torch.compile
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:38 [backends.py:976] Dynamo bytecode transform time: 1.15 s
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:40 [backends.py:266] Directly load the compiled graph(s) for compile range (1, 8192) from the cache, took 2.047 s
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:40 [monitor.py:35] torch.compile takes 3.63 s in total
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:41 [gpu_worker.py:424] Available KV cache memory: 1.73 GiB
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:41 [kv_cache_utils.py:1314] GPU KV cache size: 50,384 tokens
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:41 [kv_cache_utils.py:1319] Maximum concurrency for 8,192 tokens per request: 6.15x
+(EngineCore_DP0 pid=1447311) Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   0%|          | 0/51 [00:00<?, ?it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   2%|▏         | 1/51 [00:00<00:07,  6.87it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   4%|▍         | 2/51 [00:00<00:07,  6.95it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   6%|▌         | 3/51 [00:00<00:06,  6.98it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   8%|▊         | 4/51 [00:00<00:06,  7.02it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  10%|▉         | 5/51 [00:00<00:06,  7.17it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  12%|█▏        | 6/51 [00:00<00:06,  7.20it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  14%|█▎        | 7/51 [00:00<00:06,  7.23it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  16%|█▌        | 8/51 [00:01<00:05,  7.28it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  18%|█▊        | 9/51 [00:01<00:05,  7.68it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  20%|█▉        | 10/51 [00:01<00:05,  8.02it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  22%|██▏       | 11/51 [00:01<00:04,  8.23it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  24%|██▎       | 12/51 [00:01<00:04,  8.43it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  25%|██▌       | 13/51 [00:01<00:04,  8.78it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  27%|██▋       | 14/51 [00:01<00:04,  9.03it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  29%|██▉       | 15/51 [00:01<00:03,  9.23it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  31%|███▏      | 16/51 [00:01<00:03,  9.38it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  35%|███▌      | 18/51 [00:02<00:03, 10.61it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  39%|███▉      | 20/51 [00:02<00:02, 11.34it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  43%|████▎     | 22/51 [00:02<00:02, 11.93it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  47%|████▋     | 24/51 [00:02<00:02, 12.15it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  51%|█████     | 26/51 [00:02<00:01, 12.66it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  55%|█████▍    | 28/51 [00:02<00:01, 13.02it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  59%|█████▉    | 30/51 [00:03<00:01, 13.64it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  63%|██████▎   | 32/51 [00:03<00:01, 14.11it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  69%|██████▊   | 35/51 [00:03<00:00, 16.21it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  75%|███████▍  | 38/51 [00:03<00:00, 17.81it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  80%|████████  | 41/51 [00:03<00:00, 19.37it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  88%|████████▊ | 45/51 [00:03<00:00, 22.80it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  96%|█████████▌| 49/51 [00:03<00:00, 25.23it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|██████████| 51/51 [00:03<00:00, 13.11it/s]
+(EngineCore_DP0 pid=1447311) Capturing CUDA graphs (decode, FULL):   0%|          | 0/35 [00:00<?, ?it/s]Capturing CUDA graphs (decode, FULL):   6%|▌         | 2/35 [00:00<00:02, 11.81it/s]Capturing CUDA graphs (decode, FULL):  11%|█▏        | 4/35 [00:00<00:02, 12.01it/s]Capturing CUDA graphs (decode, FULL):  17%|█▋        | 6/35 [00:00<00:02, 12.14it/s]Capturing CUDA graphs (decode, FULL):  23%|██▎       | 8/35 [00:00<00:02, 12.24it/s]Capturing CUDA graphs (decode, FULL):  29%|██▊       | 10/35 [00:00<00:01, 12.77it/s]Capturing CUDA graphs (decode, FULL):  34%|███▍      | 12/35 [00:00<00:01, 13.07it/s]Capturing CUDA graphs (decode, FULL):  40%|████      | 14/35 [00:01<00:01, 13.66it/s]Capturing CUDA graphs (decode, FULL):  46%|████▌     | 16/35 [00:01<00:01, 14.06it/s]Capturing CUDA graphs (decode, FULL):  54%|█████▍    | 19/35 [00:01<00:00, 16.24it/s]Capturing CUDA graphs (decode, FULL):  63%|██████▎   | 22/35 [00:01<00:00, 17.91it/s]Capturing CUDA graphs (decode, FULL):  71%|███████▏  | 25/35 [00:01<00:00, 19.83it/s]Capturing CUDA graphs (decode, FULL):  83%|████████▎ | 29/35 [00:01<00:00, 23.64it/s]Capturing CUDA graphs (decode, FULL):  94%|█████████▍| 33/35 [00:01<00:00, 26.62it/s]Capturing CUDA graphs (decode, FULL): 100%|██████████| 35/35 [00:01<00:00, 18.37it/s]
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:47 [gpu_model_runner.py:5360] Graph capturing finished in 6 secs, took 0.48 GiB
+(EngineCore_DP0 pid=1447311) INFO 04-14 13:36:47 [core.py:282] init engine (profile, create kv cache, warmup model) took 10.80 seconds
+INFO 04-14 13:36:48 [llm.py:388] Supported tasks: ['generate']
+2026-04-14 13:36:48,269 - INFO - vLLM model loaded successfully
+2026-04-14 13:36:48,269 - INFO - HTTPCloudClient initialized with server: http://localhost:6006
+2026-04-14 13:36:48,336 - INFO - Successfully connected to cloud server
+2026-04-14 13:36:48,336 - INFO - Server info: {'status': 'healthy', 'model_info': {'model_name': 'Qwen/Qwen2.5-32B-Instruct-GPTQ-Int4', 'gpu_memory_utilization': 0.9, 'quantization': 'gptq'}}
+2026-04-14 13:36:48,336 - INFO - EdgeClient initialized with max_new_tokens=128, temperature=0.8
+2026-04-14 13:36:48,336 - INFO - [Setup] Ready!
+
+2026-04-14 13:36:48,336 - INFO - 
+========================================
+2026-04-14 13:36:48,336 - INFO - Testing EASY PROMPTS (10 total)
+2026-04-14 13:36:48,336 - INFO - ========================================
+
+2026-04-14 13:36:48,336 - INFO - 
+[EASY Prompt 1] Length: 321 chars
+2026-04-14 13:36:48,336 - INFO -   [1/80] Direct...
+2026-04-14 13:36:49,997 - INFO -       ✓ 114 tokens, 1661ms, 68.64 tok/s
+2026-04-14 13:36:50,497 - INFO -   [2/80] Speculative K=6...
+2026-04-14 13:36:50,498 - INFO - Starting generation for request 7c8b6407-23c4-4442-915e-8b15dbf2dbcc with policy StaticK6
+2026-04-14 13:36:50,498 - INFO - Prompt: "I had a conversation with your aunt yesterday. I wrote her a letter about how content I feel. There are so many things that have been making me happy lately, like spending more time with my friends and taking on new challenges at work. And you know what, I'm grateful to have such a supportive sister..."
+2026-04-14 13:36:50,498 - INFO - Prompt tokens: 63
+2026-04-14 13:37:25,463 - INFO - Generation complete: 128 tokens in 95 rounds
+2026-04-14 13:37:25,463 - INFO - Acceptance ratio: 6.14%
+2026-04-14 13:37:25,463 - INFO - Total latency: 34966.07ms
+2026-04-14 13:37:25,463 - INFO -       ✓ 128 tokens, 34966ms, 3.66 tok/s
+2026-04-14 13:37:25,463 - INFO -         Rounds: 95, Accept: 6.1%, RTT: 202ms, Net%: 21%
+2026-04-14 13:37:25,964 - INFO -   [3/80] Speculative K=8...
+2026-04-14 13:37:25,964 - INFO - Starting generation for request e457858e-8887-4199-be80-2547e8b7a233 with policy StaticK8
+2026-04-14 13:37:25,964 - INFO - Prompt: "I had a conversation with your aunt yesterday. I wrote her a letter about how content I feel. There are so many things that have been making me happy lately, like spending more time with my friends and taking on new challenges at work. And you know what, I'm grateful to have such a supportive sister..."
+2026-04-14 13:37:25,964 - INFO - Prompt tokens: 63
+2026-04-14 13:37:34,463 - INFO - Generation complete: 129 tokens in 22 rounds
+2026-04-14 13:37:34,464 - INFO - Acceptance ratio: 69.32%
+2026-04-14 13:37:34,464 - INFO - Total latency: 8499.72ms
+2026-04-14 13:37:34,464 - INFO -       ✓ 129 tokens, 8500ms, 15.18 tok/s
+2026-04-14 13:37:34,464 - INFO -         Rounds: 22, Accept: 69.3%, RTT: 193ms, Net%: 18%
+2026-04-14 13:37:34,964 - INFO -   [4/80] Speculative K=10...
+2026-04-14 13:37:34,964 - INFO - Starting generation for request 2e2fb777-6702-4575-bde0-903efca046fe with policy StaticK10
+2026-04-14 13:37:34,964 - INFO - Prompt: "I had a conversation with your aunt yesterday. I wrote her a letter about how content I feel. There are so many things that have been making me happy lately, like spending more time with my friends and taking on new challenges at work. And you know what, I'm grateful to have such a supportive sister..."
+2026-04-14 13:37:34,964 - INFO - Prompt tokens: 63
+2026-04-14 13:38:13,376 - INFO - Generation complete: 128 tokens in 88 rounds
+2026-04-14 13:38:13,376 - INFO - Acceptance ratio: 4.89%
+2026-04-14 13:38:13,376 - INFO - Total latency: 38411.81ms
+2026-04-14 13:38:13,376 - INFO -       ✓ 128 tokens, 38412ms, 3.33 tok/s
+2026-04-14 13:38:13,376 - INFO -         Rounds: 88, Accept: 4.9%, RTT: 202ms, Net%: 17%
+2026-04-14 13:38:13,876 - INFO - 
+[EASY Prompt 2] Length: 337 chars
+2026-04-14 13:38:13,876 - INFO -   [5/80] Direct...
+2026-04-14 13:38:15,746 - INFO -       ✓ 128 tokens, 1870ms, 68.44 tok/s
+2026-04-14 13:38:16,247 - INFO -   [6/80] Speculative K=6...
+2026-04-14 13:38:16,247 - INFO - Starting generation for request 98901731-0422-4865-8a78-701b13c46df1 with policy StaticK6
+2026-04-14 13:38:16,247 - INFO - Prompt: "I love everything about autumn, from the way the leaves change color to the cool weather. It's a time of year when you can cozy up with a cup of coffee and a good book, or go for a long walk and enjoy the scenery. There's something so peaceful and calming about autumn that I can't help but feel nost..."
+2026-04-14 13:38:16,247 - INFO - Prompt tokens: 68
+2026-04-14 13:38:56,593 - INFO - Generation complete: 128 tokens in 113 rounds
+2026-04-14 13:38:56,593 - INFO - Acceptance ratio: 2.21%
+2026-04-14 13:38:56,593 - INFO - Total latency: 40345.98ms
+2026-04-14 13:38:56,593 - INFO -       ✓ 128 tokens, 40346ms, 3.17 tok/s
+2026-04-14 13:38:56,593 - INFO -         Rounds: 113, Accept: 2.2%, RTT: 194ms, Net%: 20%
+2026-04-14 13:38:57,093 - INFO -   [7/80] Speculative K=8...
+2026-04-14 13:38:57,093 - INFO - Starting generation for request 42823e0e-3747-4d5d-b283-73a0a6fa1ced with policy StaticK8
+2026-04-14 13:38:57,093 - INFO - Prompt: "I love everything about autumn, from the way the leaves change color to the cool weather. It's a time of year when you can cozy up with a cup of coffee and a good book, or go for a long walk and enjoy the scenery. There's something so peaceful and calming about autumn that I can't help but feel nost..."
+2026-04-14 13:38:57,093 - INFO - Prompt tokens: 68
+2026-04-14 13:39:18,657 - INFO - Generation complete: 130 tokens in 55 rounds
+2026-04-14 13:39:18,657 - INFO - Acceptance ratio: 18.64%
+2026-04-14 13:39:18,657 - INFO - Total latency: 21564.00ms
+2026-04-14 13:39:18,657 - INFO -       ✓ 130 tokens, 21564ms, 6.03 tok/s
+2026-04-14 13:39:18,657 - INFO -         Rounds: 55, Accept: 18.6%, RTT: 194ms, Net%: 18%
+2026-04-14 13:39:19,157 - INFO -   [8/80] Speculative K=10...
+2026-04-14 13:39:19,158 - INFO - Starting generation for request bef6a7d4-19a2-4685-b793-2bb5ad060e25 with policy StaticK10
+2026-04-14 13:39:19,158 - INFO - Prompt: "I love everything about autumn, from the way the leaves change color to the cool weather. It's a time of year when you can cozy up with a cup of coffee and a good book, or go for a long walk and enjoy the scenery. There's something so peaceful and calming about autumn that I can't help but feel nost..."
+2026-04-14 13:39:19,158 - INFO - Prompt tokens: 68
+2026-04-14 13:39:48,375 - INFO - Generation complete: 134 tokens in 67 rounds
+2026-04-14 13:39:48,375 - INFO - Acceptance ratio: 11.04%
+2026-04-14 13:39:48,375 - INFO - Total latency: 29216.95ms
+2026-04-14 13:39:48,375 - INFO -       ✓ 134 tokens, 29217ms, 4.59 tok/s
+2026-04-14 13:39:48,375 - INFO -         Rounds: 67, Accept: 11.0%, RTT: 200ms, Net%: 17%
+2026-04-14 13:39:48,875 - INFO - 
+[EASY Prompt 3] Length: 290 chars
+2026-04-14 13:39:48,875 - INFO -   [9/80] Direct...
+2026-04-14 13:39:50,822 - INFO -       ✓ 128 tokens, 1947ms, 65.75 tok/s
+2026-04-14 13:39:51,322 - INFO -   [10/80] Speculative K=6...
+2026-04-14 13:39:51,322 - INFO - Starting generation for request 912d9f9a-e218-4953-a439-ce8518240de3 with policy StaticK6
+2026-04-14 13:39:51,322 - INFO - Prompt: "Doctor, I wanted to talk to you about my health regimen. I try to be very conscious of the amount of liquids I consume. I typically drink eight cups of water a day, but I'll cut down to six or seven if I'm feeling bloated. My go-to drink is unsweetened green tea, which I enjoy hot or iced...."
+2026-04-14 13:39:51,322 - INFO - Prompt tokens: 72
+2026-04-14 13:40:15,416 - INFO - Generation complete: 132 tokens in 55 rounds
+2026-04-14 13:40:15,416 - INFO - Acceptance ratio: 25.76%
+2026-04-14 13:40:15,416 - INFO - Total latency: 24094.24ms
+2026-04-14 13:40:15,416 - INFO -       ✓ 132 tokens, 24094ms, 5.48 tok/s
+2026-04-14 13:40:15,416 - INFO -         Rounds: 55, Accept: 25.8%, RTT: 276ms, Net%: 35%
+2026-04-14 13:40:15,917 - INFO -   [11/80] Speculative K=8...
+2026-04-14 13:40:15,917 - INFO - Starting generation for request 675c7b51-686e-4219-a378-1250f77fb6e3 with policy StaticK8
+2026-04-14 13:40:15,917 - INFO - Prompt: "Doctor, I wanted to talk to you about my health regimen. I try to be very conscious of the amount of liquids I consume. I typically drink eight cups of water a day, but I'll cut down to six or seven if I'm feeling bloated. My go-to drink is unsweetened green tea, which I enjoy hot or iced...."
+2026-04-14 13:40:15,917 - INFO - Prompt tokens: 72
+2026-04-14 13:40:47,357 - INFO - Generation complete: 133 tokens in 75 rounds
+2026-04-14 13:40:47,357 - INFO - Acceptance ratio: 10.67%
+2026-04-14 13:40:47,357 - INFO - Total latency: 31440.17ms
+2026-04-14 13:40:47,357 - INFO -       ✓ 133 tokens, 31440ms, 4.23 tok/s
+2026-04-14 13:40:47,357 - INFO -         Rounds: 75, Accept: 10.7%, RTT: 217ms, Net%: 21%
+2026-04-14 13:40:47,857 - INFO -   [12/80] Speculative K=10...
+2026-04-14 13:40:47,858 - INFO - Starting generation for request 63a018ee-cd37-4230-9dc2-ce23074029d7 with policy StaticK10
+2026-04-14 13:40:47,858 - INFO - Prompt: "Doctor, I wanted to talk to you about my health regimen. I try to be very conscious of the amount of liquids I consume. I typically drink eight cups of water a day, but I'll cut down to six or seven if I'm feeling bloated. My go-to drink is unsweetened green tea, which I enjoy hot or iced...."
+2026-04-14 13:40:47,858 - INFO - Prompt tokens: 72
+2026-04-14 13:41:20,796 - INFO - Generation complete: 135 tokens in 72 rounds
+2026-04-14 13:41:20,796 - INFO - Acceptance ratio: 8.75%
+2026-04-14 13:41:20,796 - INFO - Total latency: 32938.61ms
+2026-04-14 13:41:20,796 - INFO -       ✓ 135 tokens, 32939ms, 4.10 tok/s
+2026-04-14 13:41:20,796 - INFO -         Rounds: 72, Accept: 8.8%, RTT: 211ms, Net%: 17%
+2026-04-14 13:41:21,296 - INFO - 
+[EASY Prompt 4] Length: 290 chars
+2026-04-14 13:41:21,296 - INFO -   [13/80] Direct...
+2026-04-14 13:41:23,142 - INFO -       ✓ 128 tokens, 1846ms, 69.35 tok/s
+2026-04-14 13:41:23,642 - INFO -   [14/80] Speculative K=6...
+2026-04-14 13:41:23,643 - INFO - Starting generation for request 0ca4a8bc-747d-4116-97d5-dbd29aa452b7 with policy StaticK6
+2026-04-14 13:41:23,643 - INFO - Prompt: "Boss, I wanted to mention something. After our last conversation, I realized that I should give you the benefit of the doubt. I assumed that you were having a bad day and didn't mean what you said. And you know what? It worked! The next time we talked, you seemed much happier and positive...."
+2026-04-14 13:41:23,643 - INFO - Prompt tokens: 64
+2026-04-14 13:41:47,657 - INFO - Generation complete: 129 tokens in 69 rounds
+2026-04-14 13:41:47,657 - INFO - Acceptance ratio: 15.22%
+2026-04-14 13:41:47,657 - INFO - Total latency: 24014.18ms
+2026-04-14 13:41:47,657 - INFO -       ✓ 129 tokens, 24014ms, 5.37 tok/s
+2026-04-14 13:41:47,657 - INFO -         Rounds: 69, Accept: 15.2%, RTT: 191ms, Net%: 21%
+2026-04-14 13:41:48,157 - INFO -   [15/80] Speculative K=8...
+2026-04-14 13:41:48,157 - INFO - Starting generation for request b94fa897-be0e-4bc4-a259-9d12a69f8440 with policy StaticK8
+2026-04-14 13:41:48,157 - INFO - Prompt: "Boss, I wanted to mention something. After our last conversation, I realized that I should give you the benefit of the doubt. I assumed that you were having a bad day and didn't mean what you said. And you know what? It worked! The next time we talked, you seemed much happier and positive...."
+2026-04-14 13:41:48,157 - INFO - Prompt tokens: 64
+2026-04-14 13:42:33,828 - INFO - Generation complete: 128 tokens in 112 rounds
+2026-04-14 13:42:33,828 - INFO - Acceptance ratio: 1.90%
+2026-04-14 13:42:33,828 - INFO - Total latency: 45670.61ms
+2026-04-14 13:42:33,828 - INFO -       ✓ 128 tokens, 45671ms, 2.80 tok/s
+2026-04-14 13:42:33,828 - INFO -         Rounds: 112, Accept: 1.9%, RTT: 205ms, Net%: 19%
+2026-04-14 13:42:34,328 - INFO -   [16/80] Speculative K=10...
+2026-04-14 13:42:34,328 - INFO - Starting generation for request 2d53a00e-6b8b-43a8-9d08-d1034e0ebcd4 with policy StaticK10
+2026-04-14 13:42:34,328 - INFO - Prompt: "Boss, I wanted to mention something. After our last conversation, I realized that I should give you the benefit of the doubt. I assumed that you were having a bad day and didn't mean what you said. And you know what? It worked! The next time we talked, you seemed much happier and positive...."
+2026-04-14 13:42:34,328 - INFO - Prompt tokens: 64
+2026-04-14 13:43:25,058 - INFO - Generation complete: 128 tokens in 115 rounds
+2026-04-14 13:43:25,058 - INFO - Acceptance ratio: 1.13%
+2026-04-14 13:43:25,058 - INFO - Total latency: 50730.02ms
+2026-04-14 13:43:25,058 - INFO -       ✓ 128 tokens, 50730ms, 2.52 tok/s
+2026-04-14 13:43:25,058 - INFO -         Rounds: 115, Accept: 1.1%, RTT: 203ms, Net%: 16%
+2026-04-14 13:43:25,558 - INFO - 
+[EASY Prompt 5] Length: 310 chars
+2026-04-14 13:43:25,558 - INFO -   [17/80] Direct...
+2026-04-14 13:43:27,364 - INFO -       ✓ 128 tokens, 1806ms, 70.89 tok/s
+2026-04-14 13:43:27,864 - INFO -   [18/80] Speculative K=6...
+2026-04-14 13:43:27,865 - INFO - Starting generation for request c78a96a7-3e09-4443-bb7b-2e400c9956c7 with policy StaticK6
+2026-04-14 13:43:27,865 - INFO - Prompt: 'Doctor, I wanted to tell you about something that happened at work today. I had a young patient who was really scared about an upcoming procedure, so I took the time to explain everything to them in a way that they could understand. I just really enjoy working with kids and making a difference in th...'
+2026-04-14 13:43:27,865 - INFO - Prompt tokens: 61
+2026-04-14 13:44:08,195 - INFO - Generation complete: 128 tokens in 116 rounds
+2026-04-14 13:44:08,195 - INFO - Acceptance ratio: 1.72%
+2026-04-14 13:44:08,195 - INFO - Total latency: 40330.56ms
+2026-04-14 13:44:08,195 - INFO -       ✓ 128 tokens, 40331ms, 3.17 tok/s
+2026-04-14 13:44:08,195 - INFO -         Rounds: 116, Accept: 1.7%, RTT: 190ms, Net%: 20%
+2026-04-14 13:44:08,695 - INFO -   [19/80] Speculative K=8...
+2026-04-14 13:44:08,696 - INFO - Starting generation for request b26ca36b-71b2-47fe-83d1-7fa348d946db with policy StaticK8
+2026-04-14 13:44:08,696 - INFO - Prompt: 'Doctor, I wanted to tell you about something that happened at work today. I had a young patient who was really scared about an upcoming procedure, so I took the time to explain everything to them in a way that they could understand. I just really enjoy working with kids and making a difference in th...'
+2026-04-14 13:44:08,696 - INFO - Prompt tokens: 61
+2026-04-14 13:44:52,789 - INFO - Generation complete: 128 tokens in 111 rounds
+2026-04-14 13:44:52,789 - INFO - Acceptance ratio: 1.91%
+2026-04-14 13:44:52,789 - INFO - Total latency: 44093.46ms
+2026-04-14 13:44:52,789 - INFO -       ✓ 128 tokens, 44094ms, 2.90 tok/s
+2026-04-14 13:44:52,789 - INFO -         Rounds: 111, Accept: 1.9%, RTT: 198ms, Net%: 18%
+2026-04-14 13:44:53,289 - INFO -   [20/80] Speculative K=10...
+2026-04-14 13:44:53,290 - INFO - Starting generation for request 070560b6-c540-4d82-8574-ff55fbaf7a9f with policy StaticK10
+2026-04-14 13:44:53,290 - INFO - Prompt: 'Doctor, I wanted to tell you about something that happened at work today. I had a young patient who was really scared about an upcoming procedure, so I took the time to explain everything to them in a way that they could understand. I just really enjoy working with kids and making a difference in th...'
+2026-04-14 13:44:53,290 - INFO - Prompt tokens: 61
+2026-04-14 13:45:36,040 - INFO - Generation complete: 128 tokens in 96 rounds
+2026-04-14 13:45:36,040 - INFO - Acceptance ratio: 3.33%
+2026-04-14 13:45:36,040 - INFO - Total latency: 42750.60ms
+2026-04-14 13:45:36,040 - INFO -       ✓ 128 tokens, 42751ms, 2.99 tok/s
+2026-04-14 13:45:36,040 - INFO -         Rounds: 96, Accept: 3.3%, RTT: 207ms, Net%: 16%
+2026-04-14 13:45:36,540 - INFO - 
+[EASY Prompt 6] Length: 306 chars
+2026-04-14 13:45:36,540 - INFO -   [21/80] Direct...
+2026-04-14 13:45:38,526 - INFO -       ✓ 128 tokens, 1986ms, 64.45 tok/s
+2026-04-14 13:45:39,026 - INFO -   [22/80] Speculative K=6...
+2026-04-14 13:45:39,027 - INFO - Starting generation for request 4913f9f6-134b-4b02-9453-d724cbb0ac8c with policy StaticK6
+2026-04-14 13:45:39,027 - INFO - Prompt: "Mentor, I wanted to talk to you about racial discrimination in the workplace. I have noticed that there are a lot of biases against African-Americans, especially in higher positions. It's frustrating to see that my white colleagues are given more opportunities and recognition despite being less qual..."
+2026-04-14 13:45:39,027 - INFO - Prompt tokens: 56
+2026-04-14 13:46:03,652 - INFO - Generation complete: 133 tokens in 71 rounds
+2026-04-14 13:46:03,652 - INFO - Acceptance ratio: 16.90%
+2026-04-14 13:46:03,652 - INFO - Total latency: 24625.29ms
+2026-04-14 13:46:03,652 - INFO -       ✓ 133 tokens, 24625ms, 5.40 tok/s
+2026-04-14 13:46:03,652 - INFO -         Rounds: 71, Accept: 16.9%, RTT: 190ms, Net%: 20%
+2026-04-14 13:46:04,152 - INFO -   [23/80] Speculative K=8...
+2026-04-14 13:46:04,153 - INFO - Starting generation for request 6e7ce55f-7bb5-4360-80f2-1a6291b1c6cb with policy StaticK8
+2026-04-14 13:46:04,153 - INFO - Prompt: "Mentor, I wanted to talk to you about racial discrimination in the workplace. I have noticed that there are a lot of biases against African-Americans, especially in higher positions. It's frustrating to see that my white colleagues are given more opportunities and recognition despite being less qual..."
+2026-04-14 13:46:04,153 - INFO - Prompt tokens: 56
+2026-04-14 13:46:47,817 - INFO - Generation complete: 128 tokens in 111 rounds
+2026-04-14 13:46:47,817 - INFO - Acceptance ratio: 1.91%
+2026-04-14 13:46:47,817 - INFO - Total latency: 43664.30ms
+2026-04-14 13:46:47,817 - INFO -       ✓ 128 tokens, 43664ms, 2.93 tok/s
+2026-04-14 13:46:47,817 - INFO -         Rounds: 111, Accept: 1.9%, RTT: 197ms, Net%: 18%
+2026-04-14 13:46:48,317 - INFO -   [24/80] Speculative K=10...
+2026-04-14 13:46:48,317 - INFO - Starting generation for request 065d2fcf-dac3-4afe-b004-c8188eb39c6f with policy StaticK10
+2026-04-14 13:46:48,317 - INFO - Prompt: "Mentor, I wanted to talk to you about racial discrimination in the workplace. I have noticed that there are a lot of biases against African-Americans, especially in higher positions. It's frustrating to see that my white colleagues are given more opportunities and recognition despite being less qual..."
+2026-04-14 13:46:48,317 - INFO - Prompt tokens: 56
+2026-04-14 13:47:34,348 - INFO - Generation complete: 128 tokens in 103 rounds
+2026-04-14 13:47:34,348 - INFO - Acceptance ratio: 2.43%
+2026-04-14 13:47:34,348 - INFO - Total latency: 46030.76ms
+2026-04-14 13:47:34,348 - INFO -       ✓ 128 tokens, 46031ms, 2.78 tok/s
+2026-04-14 13:47:34,348 - INFO -         Rounds: 103, Accept: 2.4%, RTT: 209ms, Net%: 17%
+2026-04-14 13:47:34,848 - INFO - 
+[EASY Prompt 7] Length: 292 chars
+2026-04-14 13:47:34,848 - INFO -   [25/80] Direct...
+2026-04-14 13:47:36,697 - INFO -       ✓ 128 tokens, 1849ms, 69.24 tok/s
+2026-04-14 13:47:37,197 - INFO -   [26/80] Speculative K=6...
+2026-04-14 13:47:37,198 - INFO - Starting generation for request d7b9674c-1721-4046-b01e-eeb15946db68 with policy StaticK6
+2026-04-14 13:47:37,198 - INFO - Prompt: "Doctor, I wanted to talk to you about something that's been on my mind lately. I've never wanted kids and I've been perfectly happy with my decision. However, I've been getting a lot of pressure from friends and family to start a family. It's getting overwhelming and I don't know what to do...."
+2026-04-14 13:47:37,198 - INFO - Prompt tokens: 65
+2026-04-14 13:47:55,532 - INFO - Generation complete: 133 tokens in 54 rounds
+2026-04-14 13:47:55,532 - INFO - Acceptance ratio: 28.09%
+2026-04-14 13:47:55,532 - INFO - Total latency: 18334.62ms
+2026-04-14 13:47:55,532 - INFO -       ✓ 133 tokens, 18335ms, 7.25 tok/s
+2026-04-14 13:47:55,532 - INFO -         Rounds: 54, Accept: 28.1%, RTT: 187ms, Net%: 20%
+2026-04-14 13:47:56,032 - INFO -   [27/80] Speculative K=8...
+2026-04-14 13:47:56,032 - INFO - Starting generation for request 02d6bebb-e8c6-41ba-860f-578ef9de216d with policy StaticK8
+2026-04-14 13:47:56,033 - INFO - Prompt: "Doctor, I wanted to talk to you about something that's been on my mind lately. I've never wanted kids and I've been perfectly happy with my decision. However, I've been getting a lot of pressure from friends and family to start a family. It's getting overwhelming and I don't know what to do...."
+2026-04-14 13:47:56,033 - INFO - Prompt tokens: 65
+2026-04-14 13:48:31,701 - INFO - Generation complete: 128 tokens in 89 rounds
+2026-04-14 13:48:31,701 - INFO - Acceptance ratio: 5.48%
+2026-04-14 13:48:31,701 - INFO - Total latency: 35668.83ms
+2026-04-14 13:48:31,701 - INFO -       ✓ 128 tokens, 35669ms, 3.59 tok/s
+2026-04-14 13:48:31,701 - INFO -         Rounds: 89, Accept: 5.5%, RTT: 201ms, Net%: 18%
+2026-04-14 13:48:32,201 - INFO -   [28/80] Speculative K=10...
+2026-04-14 13:48:32,202 - INFO - Starting generation for request 0b1d1a85-97de-44a9-ad4d-c4c637f7dc05 with policy StaticK10
+2026-04-14 13:48:32,202 - INFO - Prompt: "Doctor, I wanted to talk to you about something that's been on my mind lately. I've never wanted kids and I've been perfectly happy with my decision. However, I've been getting a lot of pressure from friends and family to start a family. It's getting overwhelming and I don't know what to do...."
+2026-04-14 13:48:32,202 - INFO - Prompt tokens: 65
+2026-04-14 13:49:23,120 - INFO - Generation complete: 128 tokens in 113 rounds
+2026-04-14 13:49:23,120 - INFO - Acceptance ratio: 1.33%
+2026-04-14 13:49:23,120 - INFO - Total latency: 50918.43ms
+2026-04-14 13:49:23,120 - INFO -       ✓ 128 tokens, 50919ms, 2.51 tok/s
+2026-04-14 13:49:23,120 - INFO -         Rounds: 113, Accept: 1.3%, RTT: 209ms, Net%: 17%
+2026-04-14 13:49:23,620 - INFO - 
+[EASY Prompt 8] Length: 288 chars
+2026-04-14 13:49:23,620 - INFO -   [29/80] Direct...
+2026-04-14 13:49:25,651 - INFO -       ✓ 128 tokens, 2031ms, 63.02 tok/s
+2026-04-14 13:49:26,151 - INFO -   [30/80] Speculative K=6...
+2026-04-14 13:49:26,152 - INFO - Starting generation for request 758d34f2-1c4d-412f-a799-bb817a177476 with policy StaticK6
+2026-04-14 13:49:26,152 - INFO - Prompt: 'walked down the street, clutching his newly-written declaration of independence. He felt a sense of pride as he thought about what this document meant - freedom from oppression and the ability to govern himself. He knew that this was only the beginning, but he was hopeful for the future....'
+2026-04-14 13:49:26,152 - INFO - Prompt tokens: 57
+2026-04-14 13:50:06,218 - INFO - Generation complete: 128 tokens in 114 rounds
+2026-04-14 13:50:06,218 - INFO - Acceptance ratio: 2.05%
+2026-04-14 13:50:06,218 - INFO - Total latency: 40066.78ms
+2026-04-14 13:50:06,218 - INFO -       ✓ 128 tokens, 40067ms, 3.19 tok/s
+2026-04-14 13:50:06,218 - INFO -         Rounds: 114, Accept: 2.0%, RTT: 195ms, Net%: 21%
+2026-04-14 13:50:06,719 - INFO -   [31/80] Speculative K=8...
+2026-04-14 13:50:06,719 - INFO - Starting generation for request 0c9365fd-4d12-4fd6-bc42-5ff77b4cddd3 with policy StaticK8
+2026-04-14 13:50:06,719 - INFO - Prompt: 'walked down the street, clutching his newly-written declaration of independence. He felt a sense of pride as he thought about what this document meant - freedom from oppression and the ability to govern himself. He knew that this was only the beginning, but he was hopeful for the future....'
+2026-04-14 13:50:06,719 - INFO - Prompt tokens: 57
+2026-04-14 13:50:52,550 - INFO - Generation complete: 128 tokens in 115 rounds
+2026-04-14 13:50:52,550 - INFO - Acceptance ratio: 1.41%
+2026-04-14 13:50:52,550 - INFO - Total latency: 45831.01ms
+2026-04-14 13:50:52,550 - INFO -       ✓ 128 tokens, 45831ms, 2.79 tok/s
+2026-04-14 13:50:52,550 - INFO -         Rounds: 115, Accept: 1.4%, RTT: 200ms, Net%: 19%
+2026-04-14 13:50:53,050 - INFO -   [32/80] Speculative K=10...
+2026-04-14 13:50:53,050 - INFO - Starting generation for request 9ebae23e-5c78-4dd7-8d75-f3c32537c5c0 with policy StaticK10
+2026-04-14 13:50:53,050 - INFO - Prompt: 'walked down the street, clutching his newly-written declaration of independence. He felt a sense of pride as he thought about what this document meant - freedom from oppression and the ability to govern himself. He knew that this was only the beginning, but he was hopeful for the future....'
+2026-04-14 13:50:53,050 - INFO - Prompt tokens: 57
+2026-04-14 13:51:29,791 - INFO - Generation complete: 137 tokens in 82 rounds
+2026-04-14 13:51:29,791 - INFO - Acceptance ratio: 6.71%
+2026-04-14 13:51:29,792 - INFO - Total latency: 36741.21ms
+2026-04-14 13:51:29,792 - INFO -       ✓ 137 tokens, 36741ms, 3.73 tok/s
+2026-04-14 13:51:29,792 - INFO -         Rounds: 82, Accept: 6.7%, RTT: 205ms, Net%: 17%
+2026-04-14 13:51:30,292 - INFO - 
+[EASY Prompt 9] Length: 304 chars
+2026-04-14 13:51:30,292 - INFO -   [33/80] Direct...
+2026-04-14 13:51:32,218 - INFO -       ✓ 128 tokens, 1926ms, 66.46 tok/s
+2026-04-14 13:51:32,718 - INFO -   [34/80] Speculative K=6...
+2026-04-14 13:51:32,718 - INFO - Starting generation for request be1b2d5e-38b5-4882-81d5-385e62331e86 with policy StaticK6
+2026-04-14 13:51:32,719 - INFO - Prompt: "Coach, I wanted to talk to you about something that's been on my mind. I recently spoke to your family and expressed my condolences for your loss. They were really grateful and told me how highly you spoke of me. I just wanted to let you know that I appreciate everything you've done for me and the t..."
+2026-04-14 13:51:32,719 - INFO - Prompt tokens: 65
+2026-04-14 13:52:08,896 - INFO - Generation complete: 128 tokens in 98 rounds
+2026-04-14 13:52:08,896 - INFO - Acceptance ratio: 5.10%
+2026-04-14 13:52:08,896 - INFO - Total latency: 36177.91ms
+2026-04-14 13:52:08,896 - INFO -       ✓ 128 tokens, 36178ms, 3.54 tok/s
+2026-04-14 13:52:08,896 - INFO -         Rounds: 98, Accept: 5.1%, RTT: 199ms, Net%: 20%
+2026-04-14 13:52:09,396 - INFO -   [35/80] Speculative K=8...
+2026-04-14 13:52:09,397 - INFO - Starting generation for request a593a63a-eae0-4a50-b5f7-9bfb8c5985f9 with policy StaticK8
+2026-04-14 13:52:09,397 - INFO - Prompt: "Coach, I wanted to talk to you about something that's been on my mind. I recently spoke to your family and expressed my condolences for your loss. They were really grateful and told me how highly you spoke of me. I just wanted to let you know that I appreciate everything you've done for me and the t..."
+2026-04-14 13:52:09,397 - INFO - Prompt tokens: 65
+2026-04-14 13:52:50,920 - INFO - Generation complete: 130 tokens in 100 rounds
+2026-04-14 13:52:50,920 - INFO - Acceptance ratio: 3.88%
+2026-04-14 13:52:50,920 - INFO - Total latency: 41523.43ms
+2026-04-14 13:52:50,920 - INFO -       ✓ 130 tokens, 41524ms, 3.13 tok/s
+2026-04-14 13:52:50,920 - INFO -         Rounds: 100, Accept: 3.9%, RTT: 214ms, Net%: 21%
+2026-04-14 13:52:51,420 - INFO -   [36/80] Speculative K=10...
+2026-04-14 13:52:51,421 - INFO - Starting generation for request 0782f4cc-0610-4a07-bdff-4af661e73578 with policy StaticK10
+2026-04-14 13:52:51,421 - INFO - Prompt: "Coach, I wanted to talk to you about something that's been on my mind. I recently spoke to your family and expressed my condolences for your loss. They were really grateful and told me how highly you spoke of me. I just wanted to let you know that I appreciate everything you've done for me and the t..."
+2026-04-14 13:52:51,421 - INFO - Prompt tokens: 65
+2026-04-14 13:53:07,189 - INFO - Generation complete: 135 tokens in 35 rounds
+2026-04-14 13:53:07,189 - INFO - Acceptance ratio: 31.43%
+2026-04-14 13:53:07,189 - INFO - Total latency: 15768.62ms
+2026-04-14 13:53:07,189 - INFO -       ✓ 135 tokens, 15769ms, 8.56 tok/s
+2026-04-14 13:53:07,189 - INFO -         Rounds: 35, Accept: 31.4%, RTT: 209ms, Net%: 17%
+2026-04-14 13:53:07,689 - INFO - 
+[EASY Prompt 10] Length: 300 chars
+2026-04-14 13:53:07,689 - INFO -   [37/80] Direct...
+2026-04-14 13:53:09,680 - INFO -       ✓ 128 tokens, 1990ms, 64.31 tok/s
+2026-04-14 13:53:10,180 - INFO -   [38/80] Speculative K=6...
+2026-04-14 13:53:10,181 - INFO - Starting generation for request be5ffb78-fdfd-4047-9cd6-54a4e09ef442 with policy StaticK6
+2026-04-14 13:53:10,181 - INFO - Prompt: "I've been struggling with something lately. As a high school student, I've been trying to fit in with the popular girls. I've been pretending to like the things they like and acting a certain way to gain their acceptance. But I've realized that I don't even like the person I've become because of it....\n\n\n======================================================================\nHARD BENCHMARKS"
+2026-04-14 13:53:10,181 - INFO - Prompt tokens: 73
+2026-04-14 13:53:53,230 - INFO - Generation complete: 128 tokens in 116 rounds
+2026-04-14 13:53:53,230 - INFO - Acceptance ratio: 1.72%
+2026-04-14 13:53:53,230 - INFO - Total latency: 43049.48ms
+2026-04-14 13:53:53,230 - INFO -       ✓ 128 tokens, 43050ms, 2.97 tok/s
+2026-04-14 13:53:53,230 - INFO -         Rounds: 116, Accept: 1.7%, RTT: 209ms, Net%: 23%
+2026-04-14 13:53:53,730 - INFO -   [39/80] Speculative K=8...
+2026-04-14 13:53:53,730 - INFO - Starting generation for request 3d960142-30cf-40b3-8112-b778f2edbe36 with policy StaticK8
+2026-04-14 13:53:53,731 - INFO - Prompt: "I've been struggling with something lately. As a high school student, I've been trying to fit in with the popular girls. I've been pretending to like the things they like and acting a certain way to gain their acceptance. But I've realized that I don't even like the person I've become because of it....\n\n\n======================================================================\nHARD BENCHMARKS"
+2026-04-14 13:53:53,731 - INFO - Prompt tokens: 73
+2026-04-14 13:54:11,739 - INFO - Generation complete: 135 tokens in 45 rounds
+2026-04-14 13:54:11,739 - INFO - Acceptance ratio: 27.22%
+2026-04-14 13:54:11,739 - INFO - Total latency: 18009.24ms
+2026-04-14 13:54:11,739 - INFO -       ✓ 135 tokens, 18009ms, 7.50 tok/s
+2026-04-14 13:54:11,739 - INFO -         Rounds: 45, Accept: 27.2%, RTT: 205ms, Net%: 20%
+2026-04-14 13:54:12,240 - INFO -   [40/80] Speculative K=10...
+2026-04-14 13:54:12,240 - INFO - Starting generation for request a86b389d-f4d8-40f3-82a8-7119209b45c3 with policy StaticK10
+2026-04-14 13:54:12,240 - INFO - Prompt: "I've been struggling with something lately. As a high school student, I've been trying to fit in with the popular girls. I've been pretending to like the things they like and acting a certain way to gain their acceptance. But I've realized that I don't even like the person I've become because of it....\n\n\n======================================================================\nHARD BENCHMARKS"
+2026-04-14 13:54:12,240 - INFO - Prompt tokens: 73
+2026-04-14 13:54:20,555 - INFO - Generation complete: 130 tokens in 18 rounds
+2026-04-14 13:54:20,556 - INFO - Acceptance ratio: 68.89%
+2026-04-14 13:54:20,556 - INFO - Total latency: 8315.69ms
+2026-04-14 13:54:20,556 - INFO -       ✓ 130 tokens, 8316ms, 15.63 tok/s
+2026-04-14 13:54:20,556 - INFO -         Rounds: 18, Accept: 68.9%, RTT: 221ms, Net%: 20%
+2026-04-14 13:54:21,056 - INFO - 
+========================================
+2026-04-14 13:54:21,056 - INFO - Testing HARD PROMPTS (10 total)
+2026-04-14 13:54:21,056 - INFO - ========================================
+
+2026-04-14 13:54:21,056 - INFO - 
+[HARD Prompt 1] Length: 491 chars
+2026-04-14 13:54:21,056 - INFO -   [41/80] Direct...
+2026-04-14 13:54:23,023 - INFO -       ✓ 128 tokens, 1967ms, 65.06 tok/s
+2026-04-14 13:54:23,524 - INFO -   [42/80] Speculative K=6...
+2026-04-14 13:54:23,524 - INFO - Starting generation for request 8a57c44e-de24-48ec-a4d8-5717536309be with policy StaticK6
+2026-04-14 13:54:23,524 - INFO - Prompt: 'Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a positive integer n. Output its binary notation. Input The only line of input data contains an integer n ...'
+2026-04-14 13:54:23,524 - INFO - Prompt tokens: 55
+2026-04-14 13:54:43,086 - INFO - Generation complete: 129 tokens in 56 rounds
+2026-04-14 13:54:43,086 - INFO - Acceptance ratio: 22.32%
+2026-04-14 13:54:43,087 - INFO - Total latency: 19562.63ms
+2026-04-14 13:54:43,087 - INFO -       ✓ 129 tokens, 19563ms, 6.59 tok/s
+2026-04-14 13:54:43,087 - INFO -         Rounds: 56, Accept: 22.3%, RTT: 198ms, Net%: 23%
+2026-04-14 13:54:43,587 - INFO -   [43/80] Speculative K=8...
+2026-04-14 13:54:43,587 - INFO - Starting generation for request b219f6bf-0649-46fa-99d5-c3d957017865 with policy StaticK8
+2026-04-14 13:54:43,587 - INFO - Prompt: 'Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a positive integer n. Output its binary notation. Input The only line of input data contains an integer n ...'
+2026-04-14 13:54:43,587 - INFO - Prompt tokens: 55
+2026-04-14 13:55:06,631 - WARNING - Generated only 6 tokens, expected 8
+2026-04-14 13:55:34,468 - INFO - Generation complete: 128 tokens in 115 rounds
+2026-04-14 13:55:34,468 - INFO - Acceptance ratio: 1.42%
+2026-04-14 13:55:34,468 - INFO - Total latency: 50881.11ms
+2026-04-14 13:55:34,468 - INFO -       ✓ 128 tokens, 50881ms, 2.52 tok/s
+2026-04-14 13:55:34,468 - INFO -         Rounds: 115, Accept: 1.4%, RTT: 245ms, Net%: 27%
+2026-04-14 13:55:34,968 - INFO -   [44/80] Speculative K=10...
+2026-04-14 13:55:34,969 - INFO - Starting generation for request fec17ec2-c2d6-4067-83a9-a96a84f00543 with policy StaticK10
+2026-04-14 13:55:34,969 - INFO - Prompt: 'Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.You are given a positive integer n. Output its binary notation. Input The only line of input data contains an integer n ...'
+2026-04-14 13:55:34,969 - INFO - Prompt tokens: 55
+2026-04-14 13:55:38,209 - WARNING - Generated only 6 tokens, expected 10
+2026-04-14 13:56:13,661 - INFO - Generation complete: 128 tokens in 80 rounds
+2026-04-14 13:56:13,661 - INFO - Acceptance ratio: 6.16%
+2026-04-14 13:56:13,661 - INFO - Total latency: 38692.88ms
+2026-04-14 13:56:13,662 - INFO -       ✓ 128 tokens, 38693ms, 3.31 tok/s
+2026-04-14 13:56:13,662 - INFO -         Rounds: 80, Accept: 6.2%, RTT: 240ms, Net%: 22%
+2026-04-14 13:56:14,162 - INFO - 
+[HARD Prompt 2] Length: 508 chars
+2026-04-14 13:56:14,162 - INFO -   [45/80] Direct...
+2026-04-14 13:56:15,992 - INFO -       ✓ 128 tokens, 1830ms, 69.93 tok/s
+2026-04-14 13:56:16,492 - INFO -   [46/80] Speculative K=6...
+2026-04-14 13:56:16,493 - INFO - Starting generation for request 4642ad96-b4b4-48f8-9fe7-1c26634d84a2 with policy StaticK6
+2026-04-14 13:56:16,493 - INFO - Prompt: "Return your final response within \\boxed{}. Distinct lines $\\ell$ and $m$ lie in the $xy$-plane. They intersect at the origin. Point $P(-1, 4)$ is reflected about line $\\ell$ to point $P'$, and then $P'$ is reflected about line $m$ to point $P''$. The equation of line $\\ell$ is $5x - y = 0$, and the..."
+2026-04-14 13:56:16,493 - INFO - Prompt tokens: 93
+2026-04-14 13:57:03,641 - INFO - Generation complete: 128 tokens in 123 rounds
+2026-04-14 13:57:03,641 - INFO - Acceptance ratio: 0.68%
+2026-04-14 13:57:03,641 - INFO - Total latency: 47148.43ms
+2026-04-14 13:57:03,641 - INFO -       ✓ 128 tokens, 47149ms, 2.71 tok/s
+2026-04-14 13:57:03,641 - INFO -         Rounds: 123, Accept: 0.7%, RTT: 206ms, Net%: 20%
+2026-04-14 13:57:04,141 - INFO -   [47/80] Speculative K=8...
+2026-04-14 13:57:04,142 - INFO - Starting generation for request 99cf3654-77a4-40cf-887c-d662e1137098 with policy StaticK8
+2026-04-14 13:57:04,142 - INFO - Prompt: "Return your final response within \\boxed{}. Distinct lines $\\ell$ and $m$ lie in the $xy$-plane. They intersect at the origin. Point $P(-1, 4)$ is reflected about line $\\ell$ to point $P'$, and then $P'$ is reflected about line $m$ to point $P''$. The equation of line $\\ell$ is $5x - y = 0$, and the..."
+2026-04-14 13:57:04,142 - INFO - Prompt tokens: 93
+2026-04-14 13:57:22,498 - INFO - Generation complete: 134 tokens in 44 rounds
+2026-04-14 13:57:22,498 - INFO - Acceptance ratio: 25.57%
+2026-04-14 13:57:22,498 - INFO - Total latency: 18356.26ms
+2026-04-14 13:57:22,498 - INFO -       ✓ 134 tokens, 18356ms, 7.30 tok/s
+2026-04-14 13:57:22,498 - INFO -         Rounds: 44, Accept: 25.6%, RTT: 203ms, Net%: 18%
+2026-04-14 13:57:22,998 - INFO -   [48/80] Speculative K=10...
+2026-04-14 13:57:22,998 - INFO - Starting generation for request 4a7297a7-0e64-498c-b436-aabc45836a09 with policy StaticK10
+2026-04-14 13:57:22,999 - INFO - Prompt: "Return your final response within \\boxed{}. Distinct lines $\\ell$ and $m$ lie in the $xy$-plane. They intersect at the origin. Point $P(-1, 4)$ is reflected about line $\\ell$ to point $P'$, and then $P'$ is reflected about line $m$ to point $P''$. The equation of line $\\ell$ is $5x - y = 0$, and the..."
+2026-04-14 13:57:22,999 - INFO - Prompt tokens: 93
+2026-04-14 13:57:58,713 - INFO - Generation complete: 130 tokens in 76 rounds
+2026-04-14 13:57:58,713 - INFO - Acceptance ratio: 7.11%
+2026-04-14 13:57:58,713 - INFO - Total latency: 35715.05ms
+2026-04-14 13:57:58,713 - INFO -       ✓ 130 tokens, 35715ms, 3.64 tok/s
+2026-04-14 13:57:58,713 - INFO -         Rounds: 76, Accept: 7.1%, RTT: 211ms, Net%: 16%
+2026-04-14 13:57:59,213 - INFO - 
+[HARD Prompt 3] Length: 502 chars
+2026-04-14 13:57:59,214 - INFO -   [49/80] Direct...
+2026-04-14 13:58:01,012 - INFO -       ✓ 128 tokens, 1798ms, 71.18 tok/s
+2026-04-14 13:58:01,512 - INFO -   [50/80] Speculative K=6...
+2026-04-14 13:58:01,513 - INFO - Starting generation for request 11d260b5-0162-4950-973d-58fc2a1bde60 with policy StaticK6
+2026-04-14 13:58:01,513 - INFO - Prompt: "Return your final response within \\boxed{}. Roy's cat eats $\\frac{1}{3}$ of a can of cat food every morning and $\\frac{1}{4}$ of a can of cat food every evening. Before feeding his cat on Monday morning, Roy opened a box containing $6$ cans of cat food. On what day of the week did the cat finish eat..."
+2026-04-14 13:58:01,513 - INFO - Prompt tokens: 77
+2026-04-14 13:58:32,475 - INFO - Generation complete: 132 tokens in 87 rounds
+2026-04-14 13:58:32,475 - INFO - Acceptance ratio: 8.81%
+2026-04-14 13:58:32,475 - INFO - Total latency: 30962.43ms
+2026-04-14 13:58:32,475 - INFO -       ✓ 132 tokens, 30963ms, 4.26 tok/s
+2026-04-14 13:58:32,475 - INFO -         Rounds: 87, Accept: 8.8%, RTT: 195ms, Net%: 20%
+2026-04-14 13:58:32,975 - INFO -   [51/80] Speculative K=8...
+2026-04-14 13:58:32,976 - INFO - Starting generation for request 258da526-4c77-48df-85f4-4f9eff775478 with policy StaticK8
+2026-04-14 13:58:32,976 - INFO - Prompt: "Return your final response within \\boxed{}. Roy's cat eats $\\frac{1}{3}$ of a can of cat food every morning and $\\frac{1}{4}$ of a can of cat food every evening. Before feeding his cat on Monday morning, Roy opened a box containing $6$ cans of cat food. On what day of the week did the cat finish eat..."
+2026-04-14 13:58:32,976 - INFO - Prompt tokens: 77
+2026-04-14 13:59:15,390 - WARNING - Generated only 3 tokens, expected 8
+2026-04-14 13:59:16,048 - INFO - Generation complete: 128 tokens in 100 rounds
+2026-04-14 13:59:16,048 - INFO - Acceptance ratio: 3.52%
+2026-04-14 13:59:16,048 - INFO - Total latency: 43072.78ms
+2026-04-14 13:59:16,048 - INFO -       ✓ 128 tokens, 43073ms, 2.97 tok/s
+2026-04-14 13:59:16,048 - INFO -         Rounds: 100, Accept: 3.5%, RTT: 224ms, Net%: 22%
+2026-04-14 13:59:16,548 - INFO -   [52/80] Speculative K=10...
+2026-04-14 13:59:16,549 - INFO - Starting generation for request b4534c6c-a5ea-487c-bfec-2658d228f5f9 with policy StaticK10
+2026-04-14 13:59:16,549 - INFO - Prompt: "Return your final response within \\boxed{}. Roy's cat eats $\\frac{1}{3}$ of a can of cat food every morning and $\\frac{1}{4}$ of a can of cat food every evening. Before feeding his cat on Monday morning, Roy opened a box containing $6$ cans of cat food. On what day of the week did the cat finish eat..."
+2026-04-14 13:59:16,549 - INFO - Prompt tokens: 77
+2026-04-14 13:59:27,406 - WARNING - Generated only 9 tokens, expected 10
+2026-04-14 13:59:54,568 - INFO - Generation complete: 128 tokens in 80 rounds
+2026-04-14 13:59:54,568 - INFO - Acceptance ratio: 6.38%
+2026-04-14 13:59:54,568 - INFO - Total latency: 38019.38ms
+2026-04-14 13:59:54,568 - INFO -       ✓ 128 tokens, 38020ms, 3.37 tok/s
+2026-04-14 13:59:54,568 - INFO -         Rounds: 80, Accept: 6.4%, RTT: 221ms, Net%: 17%
+2026-04-14 13:59:55,068 - INFO - 
+[HARD Prompt 4] Length: 519 chars
+2026-04-14 13:59:55,068 - INFO -   [53/80] Direct...
+2026-04-14 13:59:56,874 - INFO -       ✓ 128 tokens, 1806ms, 70.88 tok/s
+2026-04-14 13:59:57,374 - INFO -   [54/80] Speculative K=6...
+2026-04-14 13:59:57,375 - INFO - Starting generation for request adc30d85-2761-45a2-a854-6df387de8d34 with policy StaticK6
+2026-04-14 13:59:57,375 - INFO - Prompt: 'Return your final response within \\boxed{}. Triangle $ABC$ is equilateral with $AB=1$. Points $E$ and $G$ are on $\\overline{AC}$ and points $D$ and $F$ are on $\\overline{AB}$ such that both $\\overline{DE}$ and $\\overline{FG}$ are parallel to $\\overline{BC}$. Furthermore, triangle $ADE$ and trapezoid...'
+2026-04-14 13:59:57,375 - INFO - Prompt tokens: 92
+2026-04-14 14:00:07,883 - INFO - Generation complete: 131 tokens in 28 rounds
+2026-04-14 14:00:07,883 - INFO - Acceptance ratio: 71.43%
+2026-04-14 14:00:07,883 - INFO - Total latency: 10508.44ms
+2026-04-14 14:00:07,883 - INFO -       ✓ 131 tokens, 10509ms, 12.47 tok/s
+2026-04-14 14:00:07,883 - INFO -         Rounds: 28, Accept: 71.4%, RTT: 204ms, Net%: 20%
+2026-04-14 14:00:08,383 - INFO -   [55/80] Speculative K=8...
+2026-04-14 14:00:08,384 - INFO - Starting generation for request b6113692-9a8c-4823-8945-4444eea3b834 with policy StaticK8
+2026-04-14 14:00:08,384 - INFO - Prompt: 'Return your final response within \\boxed{}. Triangle $ABC$ is equilateral with $AB=1$. Points $E$ and $G$ are on $\\overline{AC}$ and points $D$ and $F$ are on $\\overline{AB}$ such that both $\\overline{DE}$ and $\\overline{FG}$ are parallel to $\\overline{BC}$. Furthermore, triangle $ADE$ and trapezoid...'
+2026-04-14 14:00:08,384 - INFO - Prompt tokens: 92
+2026-04-14 14:00:27,568 - INFO - Generation complete: 129 tokens in 48 rounds
+2026-04-14 14:00:27,568 - INFO - Acceptance ratio: 21.09%
+2026-04-14 14:00:27,568 - INFO - Total latency: 19185.00ms
+2026-04-14 14:00:27,568 - INFO -       ✓ 129 tokens, 19185ms, 6.72 tok/s
+2026-04-14 14:00:27,568 - INFO -         Rounds: 48, Accept: 21.1%, RTT: 200ms, Net%: 18%
+2026-04-14 14:00:28,068 - INFO -   [56/80] Speculative K=10...
+2026-04-14 14:00:28,069 - INFO - Starting generation for request bc6513e5-6c22-4af1-83b2-b37ca14b8f78 with policy StaticK10
+2026-04-14 14:00:28,069 - INFO - Prompt: 'Return your final response within \\boxed{}. Triangle $ABC$ is equilateral with $AB=1$. Points $E$ and $G$ are on $\\overline{AC}$ and points $D$ and $F$ are on $\\overline{AB}$ such that both $\\overline{DE}$ and $\\overline{FG}$ are parallel to $\\overline{BC}$. Furthermore, triangle $ADE$ and trapezoid...'
+2026-04-14 14:00:28,069 - INFO - Prompt tokens: 92
+2026-04-14 14:01:18,146 - INFO - Generation complete: 128 tokens in 109 rounds
+2026-04-14 14:01:18,146 - INFO - Acceptance ratio: 1.74%
+2026-04-14 14:01:18,146 - INFO - Total latency: 50077.17ms
+2026-04-14 14:01:18,146 - INFO -       ✓ 128 tokens, 50077ms, 2.56 tok/s
+2026-04-14 14:01:18,146 - INFO -         Rounds: 109, Accept: 1.7%, RTT: 211ms, Net%: 16%
+2026-04-14 14:01:18,646 - INFO - 
+[HARD Prompt 5] Length: 510 chars
+2026-04-14 14:01:18,646 - INFO -   [57/80] Direct...
+2026-04-14 14:01:20,615 - INFO -       ✓ 128 tokens, 1969ms, 65.01 tok/s
+2026-04-14 14:01:21,115 - INFO -   [58/80] Speculative K=6...
+2026-04-14 14:01:21,116 - INFO - Starting generation for request 133d38c3-a48d-4831-a859-925c51c96a7c with policy StaticK6
+2026-04-14 14:01:21,116 - INFO - Prompt: 'Return your final response within \\boxed{}. The internal angles of quadrilateral $ABCD$ form an arithmetic progression. Triangles $ABD$ and $DCB$ are similar with $\\angle DBA = \\angle DCB$ and $\\angle ADB = \\angle CBD$. Moreover, the angles in each of these two triangles also form an arithmetic prog...'
+2026-04-14 14:01:21,116 - INFO - Prompt tokens: 73
+2026-04-14 14:01:38,158 - INFO - Generation complete: 128 tokens in 47 rounds
+2026-04-14 14:01:38,158 - INFO - Acceptance ratio: 31.21%
+2026-04-14 14:01:38,158 - INFO - Total latency: 17042.80ms
+2026-04-14 14:01:38,158 - INFO -       ✓ 128 tokens, 17043ms, 7.51 tok/s
+2026-04-14 14:01:38,158 - INFO -         Rounds: 47, Accept: 31.2%, RTT: 197ms, Net%: 20%
+2026-04-14 14:01:38,658 - INFO -   [59/80] Speculative K=8...
+2026-04-14 14:01:38,659 - INFO - Starting generation for request 79782a9c-1dd6-40f0-b308-62b4cfdf2d58 with policy StaticK8
+2026-04-14 14:01:38,659 - INFO - Prompt: 'Return your final response within \\boxed{}. The internal angles of quadrilateral $ABCD$ form an arithmetic progression. Triangles $ABD$ and $DCB$ are similar with $\\angle DBA = \\angle DCB$ and $\\angle ADB = \\angle CBD$. Moreover, the angles in each of these two triangles also form an arithmetic prog...'
+2026-04-14 14:01:38,659 - INFO - Prompt tokens: 73
+2026-04-14 14:02:08,517 - INFO - Generation complete: 131 tokens in 74 rounds
+2026-04-14 14:02:08,517 - INFO - Acceptance ratio: 9.97%
+2026-04-14 14:02:08,517 - INFO - Total latency: 29858.32ms
+2026-04-14 14:02:08,517 - INFO -       ✓ 131 tokens, 29858ms, 4.39 tok/s
+2026-04-14 14:02:08,517 - INFO -         Rounds: 74, Accept: 10.0%, RTT: 200ms, Net%: 18%
+2026-04-14 14:02:09,017 - INFO -   [60/80] Speculative K=10...
+2026-04-14 14:02:09,018 - INFO - Starting generation for request 7def32f9-e88c-452c-8949-64d7ea48256e with policy StaticK10
+2026-04-14 14:02:09,018 - INFO - Prompt: 'Return your final response within \\boxed{}. The internal angles of quadrilateral $ABCD$ form an arithmetic progression. Triangles $ABD$ and $DCB$ are similar with $\\angle DBA = \\angle DCB$ and $\\angle ADB = \\angle CBD$. Moreover, the angles in each of these two triangles also form an arithmetic prog...'
+2026-04-14 14:02:09,018 - INFO - Prompt tokens: 73
+2026-04-14 14:03:00,884 - INFO - Generation complete: 128 tokens in 115 rounds
+2026-04-14 14:03:00,884 - INFO - Acceptance ratio: 1.13%
+2026-04-14 14:03:00,884 - INFO - Total latency: 51866.64ms
+2026-04-14 14:03:00,884 - INFO -       ✓ 128 tokens, 51867ms, 2.47 tok/s
+2026-04-14 14:03:00,884 - INFO -         Rounds: 115, Accept: 1.1%, RTT: 206ms, Net%: 16%
+2026-04-14 14:03:01,384 - INFO - 
+[HARD Prompt 6] Length: 509 chars
+2026-04-14 14:03:01,384 - INFO -   [61/80] Direct...
+2026-04-14 14:03:03,205 - INFO -       ✓ 128 tokens, 1820ms, 70.33 tok/s
+2026-04-14 14:03:03,705 - INFO -   [62/80] Speculative K=6...
+2026-04-14 14:03:03,705 - INFO - Starting generation for request dd37d204-64d5-422e-ba79-e790c41559d3 with policy StaticK6
+2026-04-14 14:03:03,705 - INFO - Prompt: 'Return your final response within \\boxed{}. Triangle $ABC$ has side lengths $AB = 12$, $BC = 25$, and $CA = 17$. Rectangle $PQRS$ has vertex $P$ on $\\overline{AB}$, vertex $Q$ on $\\overline{AC}$, and vertices $R$ and $S$ on $\\overline{BC}$. In terms of the side length $PQ = \\omega$, the area of $PQR...'
+2026-04-14 14:03:03,705 - INFO - Prompt tokens: 104
+2026-04-14 14:03:20,182 - INFO - Generation complete: 128 tokens in 42 rounds
+2026-04-14 14:03:20,182 - INFO - Acceptance ratio: 39.29%
+2026-04-14 14:03:20,182 - INFO - Total latency: 16477.55ms
+2026-04-14 14:03:20,183 - INFO -       ✓ 128 tokens, 16478ms, 7.77 tok/s
+2026-04-14 14:03:20,183 - INFO -         Rounds: 42, Accept: 39.3%, RTT: 217ms, Net%: 19%
+2026-04-14 14:03:20,683 - INFO -   [63/80] Speculative K=8...
+2026-04-14 14:03:20,683 - INFO - Starting generation for request 075bec81-6a9f-4528-a64a-6c83784cb8c6 with policy StaticK8
+2026-04-14 14:03:20,683 - INFO - Prompt: 'Return your final response within \\boxed{}. Triangle $ABC$ has side lengths $AB = 12$, $BC = 25$, and $CA = 17$. Rectangle $PQRS$ has vertex $P$ on $\\overline{AB}$, vertex $Q$ on $\\overline{AC}$, and vertices $R$ and $S$ on $\\overline{BC}$. In terms of the side length $PQ = \\omega$, the area of $PQR...'
+2026-04-14 14:03:20,683 - INFO - Prompt tokens: 104
+2026-04-14 14:03:43,223 - INFO - Generation complete: 133 tokens in 55 rounds
+2026-04-14 14:03:43,223 - INFO - Acceptance ratio: 17.73%
+2026-04-14 14:03:43,223 - INFO - Total latency: 22540.56ms
+2026-04-14 14:03:43,223 - INFO -       ✓ 133 tokens, 22541ms, 5.90 tok/s
+2026-04-14 14:03:43,223 - INFO -         Rounds: 55, Accept: 17.7%, RTT: 204ms, Net%: 17%
+2026-04-14 14:03:43,724 - INFO -   [64/80] Speculative K=10...
+2026-04-14 14:03:43,724 - INFO - Starting generation for request 796079b1-b649-430e-a04e-7455a8ef586a with policy StaticK10
+2026-04-14 14:03:43,724 - INFO - Prompt: 'Return your final response within \\boxed{}. Triangle $ABC$ has side lengths $AB = 12$, $BC = 25$, and $CA = 17$. Rectangle $PQRS$ has vertex $P$ on $\\overline{AB}$, vertex $Q$ on $\\overline{AC}$, and vertices $R$ and $S$ on $\\overline{BC}$. In terms of the side length $PQ = \\omega$, the area of $PQR...'
+2026-04-14 14:03:43,724 - INFO - Prompt tokens: 104
+2026-04-14 14:04:19,492 - INFO - Generation complete: 131 tokens in 77 rounds
+2026-04-14 14:04:19,492 - INFO - Acceptance ratio: 7.01%
+2026-04-14 14:04:19,492 - INFO - Total latency: 35768.19ms
+2026-04-14 14:04:19,492 - INFO -       ✓ 131 tokens, 35768ms, 3.66 tok/s
+2026-04-14 14:04:19,492 - INFO -         Rounds: 77, Accept: 7.0%, RTT: 215ms, Net%: 16%
+2026-04-14 14:04:19,992 - INFO - 
+[HARD Prompt 7] Length: 495 chars
+2026-04-14 14:04:19,992 - INFO -   [65/80] Direct...
+2026-04-14 14:04:21,864 - INFO -       ✓ 128 tokens, 1871ms, 68.40 tok/s
+2026-04-14 14:04:22,364 - INFO -   [66/80] Speculative K=6...
+2026-04-14 14:04:22,365 - INFO - Starting generation for request 5807ad00-e568-47a6-b311-6155a2e783bf with policy StaticK6
+2026-04-14 14:04:22,365 - INFO - Prompt: 'Generate an executable Python function generated from the given prompt. Return the function body without invoking it at the final solution.In an array A of 0s and 1s, how many non-empty subarrays have sum S? Example 1: Input: A = [1,0,1,0,1], S = 2 Output: 4 Explanation: The 4 subarrays are bolded b...'
+2026-04-14 14:04:22,365 - INFO - Prompt tokens: 84
+2026-04-14 14:04:38,216 - WARNING - Generated only 3 tokens, expected 6
+2026-04-14 14:05:02,603 - INFO - Generation complete: 128 tokens in 107 rounds
+2026-04-14 14:05:02,603 - INFO - Acceptance ratio: 3.44%
+2026-04-14 14:05:02,603 - INFO - Total latency: 40238.86ms
+2026-04-14 14:05:02,603 - INFO -       ✓ 128 tokens, 40239ms, 3.18 tok/s
+2026-04-14 14:05:02,603 - INFO -         Rounds: 107, Accept: 3.4%, RTT: 208ms, Net%: 21%
+2026-04-14 14:05:03,103 - INFO -   [67/80] Speculative K=8...
+2026-04-14 14:05:03,104 - INFO - Starting generation for request cd5dbc9d-6cf2-43f3-a5eb-1b7307154f26 with policy StaticK8
+2026-04-14 14:05:03,104 - INFO - Prompt: 'Generate an executable Python function generated from the given prompt. Return the function body without invoking it at the final solution.In an array A of 0s and 1s, how many non-empty subarrays have sum S? Example 1: Input: A = [1,0,1,0,1], S = 2 Output: 4 Explanation: The 4 subarrays are bolded b...'
+2026-04-14 14:05:03,104 - INFO - Prompt tokens: 84
+2026-04-14 14:05:10,430 - INFO - Generation complete: 130 tokens in 18 rounds
+2026-04-14 14:05:10,430 - INFO - Acceptance ratio: 88.89%
+2026-04-14 14:05:10,430 - INFO - Total latency: 7326.88ms
+2026-04-14 14:05:10,430 - INFO -       ✓ 130 tokens, 7327ms, 17.74 tok/s
+2026-04-14 14:05:10,430 - INFO -         Rounds: 18, Accept: 88.9%, RTT: 201ms, Net%: 18%
+2026-04-14 14:05:10,931 - INFO -   [68/80] Speculative K=10...
+2026-04-14 14:05:10,931 - INFO - Starting generation for request 5a59a456-303b-4090-bee6-f13009eacdd3 with policy StaticK10
+2026-04-14 14:05:10,931 - INFO - Prompt: 'Generate an executable Python function generated from the given prompt. Return the function body without invoking it at the final solution.In an array A of 0s and 1s, how many non-empty subarrays have sum S? Example 1: Input: A = [1,0,1,0,1], S = 2 Output: 4 Explanation: The 4 subarrays are bolded b...'
+2026-04-14 14:05:10,931 - INFO - Prompt tokens: 84
+2026-04-14 14:06:02,774 - INFO - Generation complete: 128 tokens in 115 rounds
+2026-04-14 14:06:02,774 - INFO - Acceptance ratio: 1.13%
+2026-04-14 14:06:02,774 - INFO - Total latency: 51843.20ms
+2026-04-14 14:06:02,774 - INFO -       ✓ 128 tokens, 51843ms, 2.47 tok/s
+2026-04-14 14:06:02,774 - INFO -         Rounds: 115, Accept: 1.1%, RTT: 207ms, Net%: 16%
+2026-04-14 14:06:03,274 - INFO - 
+[HARD Prompt 8] Length: 519 chars
+2026-04-14 14:06:03,274 - INFO -   [69/80] Direct...
+2026-04-14 14:06:05,285 - INFO -       ✓ 128 tokens, 2010ms, 63.67 tok/s
+2026-04-14 14:06:05,785 - INFO -   [70/80] Speculative K=6...
+2026-04-14 14:06:05,785 - INFO - Starting generation for request 41788a21-53e7-4851-8bf8-a44470d18d6b with policy StaticK6
+2026-04-14 14:06:05,785 - INFO - Prompt: 'Return your final response within \\boxed{}. A coin is altered so that the probability that it lands on heads is less than $\\frac{1}{2}$ and when the coin is flipped four times, the probability of an equal number of heads and tails is $\\frac{1}{6}$. What is the probability that the coin lands on head...'
+2026-04-14 14:06:05,785 - INFO - Prompt tokens: 70
+2026-04-14 14:06:27,889 - INFO - Generation complete: 129 tokens in 64 rounds
+2026-04-14 14:06:27,889 - INFO - Acceptance ratio: 17.19%
+2026-04-14 14:06:27,889 - INFO - Total latency: 22103.79ms
+2026-04-14 14:06:27,889 - INFO -       ✓ 129 tokens, 22104ms, 5.84 tok/s
+2026-04-14 14:06:27,889 - INFO -         Rounds: 64, Accept: 17.2%, RTT: 189ms, Net%: 20%
+2026-04-14 14:06:28,389 - INFO -   [71/80] Speculative K=8...
+2026-04-14 14:06:28,389 - INFO - Starting generation for request 0b3d2fe3-2b6e-4e0a-9d4e-484aa5ea9186 with policy StaticK8
+2026-04-14 14:06:28,390 - INFO - Prompt: 'Return your final response within \\boxed{}. A coin is altered so that the probability that it lands on heads is less than $\\frac{1}{2}$ and when the coin is flipped four times, the probability of an equal number of heads and tails is $\\frac{1}{6}$. What is the probability that the coin lands on head...'
+2026-04-14 14:06:28,390 - INFO - Prompt tokens: 70
+2026-04-14 14:07:04,839 - INFO - Generation complete: 129 tokens in 92 rounds
+2026-04-14 14:07:04,839 - INFO - Acceptance ratio: 5.03%
+2026-04-14 14:07:04,839 - INFO - Total latency: 36449.70ms
+2026-04-14 14:07:04,839 - INFO -       ✓ 129 tokens, 36450ms, 3.54 tok/s
+2026-04-14 14:07:04,839 - INFO -         Rounds: 92, Accept: 5.0%, RTT: 197ms, Net%: 18%
+2026-04-14 14:07:05,339 - INFO -   [72/80] Speculative K=10...
+2026-04-14 14:07:05,340 - INFO - Starting generation for request b0396a04-a844-478c-8d45-151c98cc654b with policy StaticK10
+2026-04-14 14:07:05,340 - INFO - Prompt: 'Return your final response within \\boxed{}. A coin is altered so that the probability that it lands on heads is less than $\\frac{1}{2}$ and when the coin is flipped four times, the probability of an equal number of heads and tails is $\\frac{1}{6}$. What is the probability that the coin lands on head...'
+2026-04-14 14:07:05,340 - INFO - Prompt tokens: 70
+2026-04-14 14:07:36,427 - INFO - Generation complete: 128 tokens in 71 rounds
+2026-04-14 14:07:36,427 - INFO - Acceptance ratio: 8.03%
+2026-04-14 14:07:36,427 - INFO - Total latency: 31087.96ms
+2026-04-14 14:07:36,427 - INFO -       ✓ 128 tokens, 31088ms, 4.12 tok/s
+2026-04-14 14:07:36,427 - INFO -         Rounds: 71, Accept: 8.0%, RTT: 201ms, Net%: 16%
+2026-04-14 14:07:36,927 - INFO - 
+[HARD Prompt 9] Length: 505 chars
+2026-04-14 14:07:36,928 - INFO -   [73/80] Direct...
+2026-04-14 14:07:38,877 - INFO -       ✓ 128 tokens, 1949ms, 65.67 tok/s
+2026-04-14 14:07:39,377 - INFO -   [74/80] Speculative K=6...
+2026-04-14 14:07:39,377 - INFO - Starting generation for request 7d029cc3-c82b-4156-951a-55168066a32d with policy StaticK6
+2026-04-14 14:07:39,377 - INFO - Prompt: 'Return your final response within \\boxed{}. A number $x$ is $2$ more than the product of its [reciprocal](https://artofproblemsolving.com/wiki/index.php/Reciprocal) and its additive [inverse](https://artofproblemsolving.com/wiki/index.php/Inverse). In which [interval](https://artofproblemsolving.com...'
+2026-04-14 14:07:39,377 - INFO - Prompt tokens: 75
+2026-04-14 14:07:59,609 - INFO - Generation complete: 131 tokens in 57 rounds
+2026-04-14 14:07:59,610 - INFO - Acceptance ratio: 23.10%
+2026-04-14 14:07:59,610 - INFO - Total latency: 20232.40ms
+2026-04-14 14:07:59,610 - INFO -       ✓ 131 tokens, 20233ms, 6.47 tok/s
+2026-04-14 14:07:59,610 - INFO -         Rounds: 57, Accept: 23.1%, RTT: 194ms, Net%: 19%
+2026-04-14 14:08:00,110 - INFO -   [75/80] Speculative K=8...
+2026-04-14 14:08:00,110 - INFO - Starting generation for request 383ca1a1-3d07-4f67-be2f-906856b1a188 with policy StaticK8
+2026-04-14 14:08:00,110 - INFO - Prompt: 'Return your final response within \\boxed{}. A number $x$ is $2$ more than the product of its [reciprocal](https://artofproblemsolving.com/wiki/index.php/Reciprocal) and its additive [inverse](https://artofproblemsolving.com/wiki/index.php/Inverse). In which [interval](https://artofproblemsolving.com...'
+2026-04-14 14:08:00,110 - INFO - Prompt tokens: 75
+2026-04-14 14:08:22,430 - INFO - Generation complete: 133 tokens in 57 rounds
+2026-04-14 14:08:22,430 - INFO - Acceptance ratio: 16.89%
+2026-04-14 14:08:22,430 - INFO - Total latency: 22320.00ms
+2026-04-14 14:08:22,430 - INFO -       ✓ 133 tokens, 22320ms, 5.96 tok/s
+2026-04-14 14:08:22,430 - INFO -         Rounds: 57, Accept: 16.9%, RTT: 195ms, Net%: 18%
+2026-04-14 14:08:22,930 - INFO -   [76/80] Speculative K=10...
+2026-04-14 14:08:22,931 - INFO - Starting generation for request a03eb486-101d-4dc6-8d81-6bf5a38e2fca with policy StaticK10
+2026-04-14 14:08:22,931 - INFO - Prompt: 'Return your final response within \\boxed{}. A number $x$ is $2$ more than the product of its [reciprocal](https://artofproblemsolving.com/wiki/index.php/Reciprocal) and its additive [inverse](https://artofproblemsolving.com/wiki/index.php/Inverse). In which [interval](https://artofproblemsolving.com...'
+2026-04-14 14:08:22,931 - INFO - Prompt tokens: 75
+2026-04-14 14:08:33,823 - INFO - Generation complete: 128 tokens in 25 rounds
+2026-04-14 14:08:33,823 - INFO - Acceptance ratio: 45.60%
+2026-04-14 14:08:33,823 - INFO - Total latency: 10893.07ms
+2026-04-14 14:08:33,823 - INFO -       ✓ 128 tokens, 10893ms, 11.75 tok/s
+2026-04-14 14:08:33,824 - INFO -         Rounds: 25, Accept: 45.6%, RTT: 199ms, Net%: 17%
+2026-04-14 14:08:34,324 - INFO - 
+[HARD Prompt 10] Length: 511 chars
+2026-04-14 14:08:34,324 - INFO -   [77/80] Direct...
+2026-04-14 14:08:36,221 - INFO -       ✓ 128 tokens, 1897ms, 67.46 tok/s
+2026-04-14 14:08:36,721 - INFO -   [78/80] Speculative K=6...
+2026-04-14 14:08:36,722 - INFO - Starting generation for request 741cc732-ce6f-481a-b352-946733f2bb72 with policy StaticK6
+2026-04-14 14:08:36,722 - INFO - Prompt: 'Return your final response within \\boxed{}. Melinda has three empty boxes and $12$ textbooks, three of which are mathematics textbooks. One box will hold any three of her textbooks, one will hold any four of her textbooks, and one will hold any five of her textbooks. If Melinda packs her textbooks i...'
+2026-04-14 14:08:36,722 - INFO - Prompt tokens: 65
+2026-04-14 14:09:11,523 - INFO - Generation complete: 128 tokens in 96 rounds
+2026-04-14 14:09:11,523 - INFO - Acceptance ratio: 5.56%
+2026-04-14 14:09:11,523 - INFO - Total latency: 34801.86ms
+2026-04-14 14:09:11,524 - INFO -       ✓ 128 tokens, 34802ms, 3.68 tok/s
+2026-04-14 14:09:11,524 - INFO -         Rounds: 96, Accept: 5.6%, RTT: 199ms, Net%: 20%
+2026-04-14 14:09:12,024 - INFO -   [79/80] Speculative K=8...
+2026-04-14 14:09:12,024 - INFO - Starting generation for request 061e0936-d8c5-46b7-96d9-f5ff63c5e3fa with policy StaticK8
+2026-04-14 14:09:12,024 - INFO - Prompt: 'Return your final response within \\boxed{}. Melinda has three empty boxes and $12$ textbooks, three of which are mathematics textbooks. One box will hold any three of her textbooks, one will hold any four of her textbooks, and one will hold any five of her textbooks. If Melinda packs her textbooks i...'
+2026-04-14 14:09:12,024 - INFO - Prompt tokens: 65
+2026-04-14 14:09:45,326 - INFO - Generation complete: 128 tokens in 81 rounds
+2026-04-14 14:09:45,327 - INFO - Acceptance ratio: 7.41%
+2026-04-14 14:09:45,327 - INFO - Total latency: 33302.67ms
+2026-04-14 14:09:45,327 - INFO -       ✓ 128 tokens, 33303ms, 3.84 tok/s
+2026-04-14 14:09:45,327 - INFO -         Rounds: 81, Accept: 7.4%, RTT: 208ms, Net%: 19%
+2026-04-14 14:09:45,827 - INFO -   [80/80] Speculative K=10...
+2026-04-14 14:09:45,827 - INFO - Starting generation for request d4808499-86dd-4c65-9d24-9feb134807d3 with policy StaticK10
+2026-04-14 14:09:45,827 - INFO - Prompt: 'Return your final response within \\boxed{}. Melinda has three empty boxes and $12$ textbooks, three of which are mathematics textbooks. One box will hold any three of her textbooks, one will hold any four of her textbooks, and one will hold any five of her textbooks. If Melinda packs her textbooks i...'
+2026-04-14 14:09:45,827 - INFO - Prompt tokens: 65
+2026-04-14 14:10:18,195 - INFO - Generation complete: 132 tokens in 75 rounds
+2026-04-14 14:10:18,195 - INFO - Acceptance ratio: 7.60%
+2026-04-14 14:10:18,195 - INFO - Total latency: 32368.24ms
+2026-04-14 14:10:18,195 - INFO -       ✓ 132 tokens, 32368ms, 4.08 tok/s
+2026-04-14 14:10:18,195 - INFO -         Rounds: 75, Accept: 7.6%, RTT: 199ms, Net%: 17%
+2026-04-14 14:10:18,695 - INFO - 
+================================================================================
+2026-04-14 14:10:18,696 - INFO - EXPERIMENT COMPLETE - ANALYSIS
+2026-04-14 14:10:18,696 - INFO - ================================================================================
+2026-04-14 14:10:18,696 - INFO - 
+EASY PROMPTS:
+2026-04-14 14:10:18,696 - INFO -   Direct baseline: 67.05 tok/s
+2026-04-14 14:10:18,696 - INFO -   spec_k6: 4.32 tok/s (0.06x of direct), Avg RTT: 203ms, Accept: 10.5%
+2026-04-14 14:10:18,696 - INFO -   spec_k8: 5.11 tok/s (0.08x of direct), Avg RTT: 202ms, Accept: 14.2%
+2026-04-14 14:10:18,696 - INFO -   spec_k10: 5.08 tok/s (0.08x of direct), Avg RTT: 208ms, Accept: 14.0%
+2026-04-14 14:10:18,696 - INFO - 
+HARD PROMPTS:
+2026-04-14 14:10:18,696 - INFO -   Direct baseline: 67.76 tok/s
+2026-04-14 14:10:18,696 - INFO -   spec_k6: 6.05 tok/s (0.09x of direct), Avg RTT: 201ms, Accept: 22.3%
+2026-04-14 14:10:18,696 - INFO -   spec_k8: 6.09 tok/s (0.09x of direct), Avg RTT: 208ms, Accept: 19.8%
+2026-04-14 14:10:18,696 - INFO -   spec_k10: 4.14 tok/s (0.06x of direct), Avg RTT: 211ms, Accept: 9.2%
+2026-04-14 14:10:18,697 - INFO - 
+Results saved to: /home/albert/code/AInfra/draft/experiments/outputs_run2/comprehensive_results.json
+2026-04-14 14:10:18,697 - INFO - ================================================================================

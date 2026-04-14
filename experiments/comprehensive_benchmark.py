@@ -38,6 +38,8 @@ class TestResult:
     acceptance_rate: float = 0.0
     avg_draft_ms: float = 0.0
     avg_verify_ms: float = 0.0
+    avg_rtt_ms: float = 0.0
+    avg_network_ms: float = 0.0
 
 def load_prompts_from_file(filepath: Path, count: int = 50) -> Tuple[List[Dict], List[Dict]]:
     """
@@ -112,8 +114,8 @@ def test_direct(server_url: str, prompt: str, max_tokens: int = 128) -> Tuple[in
         logger.error(f"Direct failed: {e}")
         return 0, 0
 
-def test_speculative(client: EdgeClient, prompt: str, k: int) -> Tuple[int, float, int, float, float, float]:
-    """Test speculative with given K, returns (tokens, time_ms, rounds, acceptance, draft_ms, verify_ms)"""
+def test_speculative(client: EdgeClient, prompt: str, k: int) -> Tuple[int, float, int, float, float, float, float, float]:
+    """Test speculative with given K, returns (tokens, time_ms, rounds, acceptance, draft_ms, verify_ms, rtt_ms, network_ms)"""
     start = time.time()
     try:
         def policy(round_id, draft_tokens):
@@ -122,20 +124,25 @@ def test_speculative(client: EdgeClient, prompt: str, k: int) -> Tuple[int, floa
         metrics = client.generate(prompt=prompt, policy=policy, policy_name=f"StaticK{k}")
         total_ms = (time.time() - start) * 1000
         
-        avg_draft = metrics.total_edge_draft_time_ms / metrics.total_rounds if metrics.total_rounds > 0 else 0
-        avg_verify = metrics.total_server_verify_time_ms / metrics.total_rounds if metrics.total_rounds > 0 else 0
+        rounds = metrics.total_rounds
+        avg_draft = metrics.total_edge_draft_time_ms / rounds if rounds > 0 else 0
+        avg_verify = metrics.total_server_verify_time_ms / rounds if rounds > 0 else 0
+        avg_rtt = metrics.average_rtt_ms
+        avg_network = metrics.total_network_time_ms / rounds if rounds > 0 else 0
         
         return (
             metrics.generated_tokens,
             total_ms,
-            metrics.total_rounds,
+            rounds,
             metrics.acceptance_ratio,
             avg_draft,
-            avg_verify
+            avg_verify,
+            avg_rtt,
+            avg_network
         )
     except Exception as e:
         logger.error(f"Speculative K={k} failed: {e}")
-        return 0, 0, 0, 0, 0, 0
+        return 0, 0, 0, 0, 0, 0, 0, 0
 
 def run_experiment():
     server_url = "http://localhost:6006"
@@ -190,49 +197,52 @@ def run_experiment():
             # 2. Test K=2
             test_count += 1
             logger.info(f"  [{test_count}/{total_tests}] Speculative K=2...")
-            tokens, time_ms, rounds, acc, draft_ms, verify_ms = test_speculative(edge_client, prompt_text, k=2)
+            tokens, time_ms, rounds, acc, draft_ms, verify_ms, rtt_ms, net_ms = test_speculative(edge_client, prompt_text, k=2)
             if tokens > 0:
                 results.append(TestResult(
                     method='spec_k2', prompt_type=prompt_type, prompt_id=prompt_id,
                     prompt_length=prompt_len, tokens_generated=tokens,
                     total_time_ms=time_ms, tokens_per_second=tokens/(time_ms/1000),
                     num_rounds=rounds, acceptance_rate=acc,
-                    avg_draft_ms=draft_ms, avg_verify_ms=verify_ms
+                    avg_draft_ms=draft_ms, avg_verify_ms=verify_ms,
+                    avg_rtt_ms=rtt_ms, avg_network_ms=net_ms
                 ))
                 logger.info(f"      ✓ {tokens} tokens, {time_ms:.0f}ms, {tokens/(time_ms/1000):.2f} tok/s")
-                logger.info(f"        Rounds: {rounds}, Acceptance: {acc*100:.1f}%")
+                logger.info(f"        Rounds: {rounds}, Acceptance: {acc*100:.1f}%, RTT: {rtt_ms:.0f}ms")
             time.sleep(0.5)
             
             # 3. Test K=4
             test_count += 1
             logger.info(f"  [{test_count}/{total_tests}] Speculative K=4...")
-            tokens, time_ms, rounds, acc, draft_ms, verify_ms = test_speculative(edge_client, prompt_text, k=4)
+            tokens, time_ms, rounds, acc, draft_ms, verify_ms, rtt_ms, net_ms = test_speculative(edge_client, prompt_text, k=4)
             if tokens > 0:
                 results.append(TestResult(
                     method='spec_k4', prompt_type=prompt_type, prompt_id=prompt_id,
                     prompt_length=prompt_len, tokens_generated=tokens,
                     total_time_ms=time_ms, tokens_per_second=tokens/(time_ms/1000),
                     num_rounds=rounds, acceptance_rate=acc,
-                    avg_draft_ms=draft_ms, avg_verify_ms=verify_ms
+                    avg_draft_ms=draft_ms, avg_verify_ms=verify_ms,
+                    avg_rtt_ms=rtt_ms, avg_network_ms=net_ms
                 ))
                 logger.info(f"      ✓ {tokens} tokens, {time_ms:.0f}ms, {tokens/(time_ms/1000):.2f} tok/s")
-                logger.info(f"        Rounds: {rounds}, Acceptance: {acc*100:.1f}%")
+                logger.info(f"        Rounds: {rounds}, Acceptance: {acc*100:.1f}%, RTT: {rtt_ms:.0f}ms")
             time.sleep(0.5)
             
             # 4. Test K=6
             test_count += 1
             logger.info(f"  [{test_count}/{total_tests}] Speculative K=6...")
-            tokens, time_ms, rounds, acc, draft_ms, verify_ms = test_speculative(edge_client, prompt_text, k=6)
+            tokens, time_ms, rounds, acc, draft_ms, verify_ms, rtt_ms, net_ms = test_speculative(edge_client, prompt_text, k=6)
             if tokens > 0:
                 results.append(TestResult(
                     method='spec_k6', prompt_type=prompt_type, prompt_id=prompt_id,
                     prompt_length=prompt_len, tokens_generated=tokens,
                     total_time_ms=time_ms, tokens_per_second=tokens/(time_ms/1000),
                     num_rounds=rounds, acceptance_rate=acc,
-                    avg_draft_ms=draft_ms, avg_verify_ms=verify_ms
+                    avg_draft_ms=draft_ms, avg_verify_ms=verify_ms,
+                    avg_rtt_ms=rtt_ms, avg_network_ms=net_ms
                 ))
                 logger.info(f"      ✓ {tokens} tokens, {time_ms:.0f}ms, {tokens/(time_ms/1000):.2f} tok/s")
-                logger.info(f"        Rounds: {rounds}, Acceptance: {acc*100:.1f}%")
+                logger.info(f"        Rounds: {rounds}, Acceptance: {acc*100:.1f}%, RTT: {rtt_ms:.0f}ms")
             time.sleep(0.5)
     
     # Analysis
