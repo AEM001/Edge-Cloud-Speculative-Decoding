@@ -1,13 +1,13 @@
 """Configuration settings for speculative decoding with vLLM."""
 from pathlib import Path
 
-# Model configuration - Qwen2.5 1.5B in HuggingFace format
-MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
-MODEL_PATH = Path.home() / "models" / "Qwen--Qwen2.5-1.5B-Instruct"
+# Model configuration - Qwen2.5 3B in HuggingFace format
+MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
+MODEL_PATH = Path.home() / "models" / "Qwen--Qwen2.5-3B-Instruct"
 
 # vLLM settings
-GPU_MEMORY_UTILIZATION = 0.6  # GPU memory fraction for draft model
-MAX_MODEL_LEN = 32768  # Maximum sequence length
+GPU_MEMORY_UTILIZATION = 0.7  # GPU memory fraction for draft model
+MAX_MODEL_LEN = 8192  # Maximum sequence length (reduced for 3B model)
 TENSOR_PARALLEL_SIZE = 1  # Number of GPUs for tensor parallelism
 
 # Server configuration
@@ -17,7 +17,7 @@ EDGE_PORT = 6006
 CLOUD_PORT = 6008
 # Cloud server address
 CLOUD_SERVER = "connect.westd.seetacloud.com"
-CLOUD_SSH_PORT = 12272
+CLOUD_SSH_PORT = 20514
 CLOUD_URL = f"http://{CLOUD_SERVER}:{CLOUD_PORT}"
 
 # Generation settings

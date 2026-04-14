@@ -22,7 +22,7 @@ def main():
     logger.info("=== Simple Speculative Decoding Test ===")
     
     # Server URL - via SSH tunnel to RTX 5090 verification server
-    # Make sure SSH tunnel is running: ssh -p 12272 -L 6006:localhost:6006 root@connect.westd.seetacloud.com -N
+    # Make sure SSH tunnel is running: ssh -p 20514 -L 6006:localhost:6006 root@connect.westd.seetacloud.com -N
     server_url = "http://localhost:6006"
     logger.info(f"Cloud server: {server_url}")
     

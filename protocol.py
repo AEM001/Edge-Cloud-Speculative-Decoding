@@ -63,12 +63,18 @@ class EdgeRequest:
     
     def to_dict(self):
         """Serialize to dictionary for network transmission."""
+        # Replace -inf with a very small number for JSON compatibility
+        import math
+        safe_logprobs = [
+            -1e10 if math.isinf(lp) and lp < 0 else lp 
+            for lp in self.draft_logprobs
+        ]
         return {
             "request_id": self.request_id,
             "round_id": self.round_id,
             "prefix_ids": self.prefix_ids,
             "draft_ids": self.draft_ids,
-            "draft_logprobs": self.draft_logprobs,
+            "draft_logprobs": safe_logprobs,
             "edge_draft_time_ms": self.edge_draft_time_ms,
             "policy_metadata": self.policy_metadata
         }

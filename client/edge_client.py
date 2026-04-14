@@ -5,16 +5,17 @@ import logging
 from typing import List, Optional, Dict, Any, Callable
 from dataclasses import dataclass, field
 
+import sys
+from pathlib import Path
+# Import from root directory
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from protocol import (
     EdgeRequest, CloudResponse, DraftRequest, DraftResponse,
     TokenInfo
 )
-from .draft_generator import DraftGenerator
-import sys
-from pathlib import Path
-# Import ModelManager from root (PyTorch version)
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from model_manager import ModelManager
+from draft_generator import VLLMDraftGenerator
+from model_manager import VLLMModelManager
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +78,8 @@ class EdgeClient:
     
     def __init__(
         self,
-        model_manager: ModelManager,
-        draft_generator: DraftGenerator,
+        model_manager: VLLMModelManager,
+        draft_generator: VLLMDraftGenerator,
         cloud_client: Callable[[EdgeRequest], CloudResponse],
         max_new_tokens: int = 128,
         temperature: float = 0.0,
