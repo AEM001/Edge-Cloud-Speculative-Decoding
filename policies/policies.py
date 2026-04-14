@@ -11,6 +11,13 @@ from protocol import TokenInfo
 # Test exactly three fixed values: K = 2, 4, 6
 # Why three: enough to show under-speculation, middle point, over-speculation
 
+def static_k_policy(k: int):
+    """Create a static K policy with given K value."""
+    def policy(round_id: int, draft_tokens: List[TokenInfo]) -> int:
+        return k
+    return policy
+
+
 def static_k_2(round_id: int, draft_tokens: List[TokenInfo]) -> int:
     """Static K = 2 policy."""
     return 2

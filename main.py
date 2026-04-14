@@ -1,8 +1,8 @@
 """Main entry point for speculative decoding edge node on Ubuntu 3060."""
 import logging
-from config import MODEL_NAME, MODEL_PATH, MAX_DRAFT_TOKENS, TEMPERATURE, TOP_P, VERBOSE
-from model_manager import ModelManager
-from client.draft_generator import DraftGenerator
+from config import MODEL_NAME, MODEL_PATH, MAX_DRAFT_TOKENS, TEMPERATURE, TOP_P, VERBOSE, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN
+from vllm_model_manager import VLLMModelManager
+from vllm_draft_generator import VLLMDraftGenerator
 from protocol import DraftRequest
 
 def setup_logging():
@@ -18,22 +18,20 @@ def main():
     setup_logging()
     logger = logging.getLogger(__name__)
     
-    logger.info("=== PyTorch Speculative Decoding Edge Node (Ubuntu 3060) ===")
+    logger.info("=== vLLM Speculative Decoding Edge Node (Ubuntu 3060) ===")
     
     # Initialize model manager with custom storage and quantization
-    manager = ModelManager(
-        model_name=MODEL_NAME,
+    model_manager = VLLMModelManager(
         model_path=MODEL_PATH,
-        quantization=True  # Enable 4-bit quantization
+        gpu_memory_utilization=GPU_MEMORY_UTILIZATION,
+        max_model_len=MAX_MODEL_LEN,
     )
+    llm, tokenizer = model_manager.load()
     
-    # Load model to specified path
-    model, tokenizer = manager.load()
-    
-    logger.info(f"Model info: {manager.get_model_info()}")
+    logger.info(f"Model info: {model_manager.get_model_info()}")
     
     # Initialize draft generator
-    generator = DraftGenerator(model, tokenizer)
+    draft_gen = VLLMDraftGenerator(llm, tokenizer)
     
     # Test generation
     logger.info("\n--- Test Draft Generation ---")

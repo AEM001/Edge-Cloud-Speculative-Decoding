@@ -10,10 +10,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Import from root (PyTorch versions)
-from config import MODEL_NAME, MODEL_PATH, TEMPERATURE
-from model_manager import ModelManager
-from client.draft_generator import DraftGenerator
+# Import from root (vLLM versions)
+from config import MODEL_NAME, MODEL_PATH, TEMPERATURE, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN
+from vllm_model_manager import VLLMModelManager
+from vllm_draft_generator import VLLMDraftGenerator
 from client.edge_client import EdgeClient
 from client.http_cloud_client import create_http_cloud_client
 
@@ -28,16 +28,16 @@ def main():
     
     # Load draft model
     logger.info(f"Loading draft model: {MODEL_NAME}")
-    model_manager = ModelManager(
-        model_name=MODEL_NAME,
+    model_manager = VLLMModelManager(
         model_path=MODEL_PATH,
-        quantization=False  # Disable quantization for now
+        gpu_memory_utilization=GPU_MEMORY_UTILIZATION,
+        max_model_len=MAX_MODEL_LEN,
     )
-    model, tokenizer = model_manager.load()
+    llm, tokenizer = model_manager.load()
     logger.info(f"Model loaded: {model_manager.get_model_info()}")
     
     # Initialize draft generator
-    draft_generator = DraftGenerator(model, tokenizer)
+    draft_generator = VLLMDraftGenerator(llm, tokenizer)
     
     # Create HTTP cloud client
     cloud_client = create_http_cloud_client(

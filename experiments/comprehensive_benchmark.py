@@ -15,9 +15,9 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import MODEL_NAME, MODEL_PATH, TEMPERATURE
-from model_manager import ModelManager
-from client.draft_generator import DraftGenerator
+from config import MODEL_NAME, MODEL_PATH, TEMPERATURE, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN
+from vllm_model_manager import VLLMModelManager
+from vllm_draft_generator import VLLMDraftGenerator
 from client.edge_client import EdgeClient
 from client.http_cloud_client import create_http_cloud_client
 
@@ -150,9 +150,9 @@ def run_experiment():
     
     # Initialize speculative client once
     logger.info("\n[Setup] Loading draft model...")
-    model_manager = ModelManager(MODEL_NAME, MODEL_PATH, quantization=False)
-    model, tokenizer = model_manager.load()
-    draft_generator = DraftGenerator(model, tokenizer)
+    model_manager = VLLMModelManager(MODEL_PATH, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN)
+    llm, tokenizer = model_manager.load()
+    draft_generator = VLLMDraftGenerator(llm, tokenizer)
     cloud_client = create_http_cloud_client(server_url, timeout=120.0)
     edge_client = EdgeClient(model_manager, draft_generator, cloud_client, 
                               max_new_tokens=128, temperature=TEMPERATURE)

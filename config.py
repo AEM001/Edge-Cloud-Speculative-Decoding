@@ -1,9 +1,14 @@
-"""Configuration settings for speculative decoding on Ubuntu 3060."""
+"""Configuration settings for speculative decoding with vLLM."""
 from pathlib import Path
 
-# Model configuration - Qwen2.5 1.5B quantized version
+# Model configuration - Qwen2.5 1.5B in HuggingFace format
 MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
 MODEL_PATH = Path.home() / "models" / "Qwen--Qwen2.5-1.5B-Instruct"
+
+# vLLM settings
+GPU_MEMORY_UTILIZATION = 0.6  # GPU memory fraction for draft model
+MAX_MODEL_LEN = 32768  # Maximum sequence length
+TENSOR_PARALLEL_SIZE = 1  # Number of GPUs for tensor parallelism
 
 # Server configuration
 # Edge client port (local)
