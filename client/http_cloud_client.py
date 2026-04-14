@@ -35,12 +35,14 @@ class HTTPCloudClient:
         self.timeout = timeout
         self.retry_attempts = retry_attempts
         self.verify_endpoint = f"{self.server_url}/verify"
+        self.session = requests.Session()
+        self.session.trust_env = False
         
         logger.info(f"HTTPCloudClient initialized with server: {self.server_url}")
         
         # Test connection
         try:
-            response = requests.get(f"{self.server_url}/health", timeout=5.0)
+            response = self.session.get(f"{self.server_url}/health", timeout=5.0)
             if response.status_code == 200:
                 logger.info("Successfully connected to cloud server")
                 logger.info(f"Server info: {response.json()}")
@@ -86,7 +88,7 @@ class HTTPCloudClient:
                     f"request_id={request.request_id}, round_id={request.round_id}"
                 )
                 
-                response = requests.post(
+                response = self.session.post(
                     self.verify_endpoint,
                     json=request_data,
                     timeout=self.timeout
@@ -133,7 +135,7 @@ class HTTPCloudClient:
             True if server is healthy, False otherwise
         """
         try:
-            response = requests.get(f"{self.server_url}/health", timeout=5.0)
+            response = self.session.get(f"{self.server_url}/health", timeout=5.0)
             return response.status_code == 200
         except Exception as e:
             logger.error(f"Health check failed: {e}")
