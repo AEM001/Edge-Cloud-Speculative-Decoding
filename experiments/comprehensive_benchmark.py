@@ -287,7 +287,9 @@ def run_experiment():
                     logger.info(f"  {method}: {spec_tps:.2f} tok/s ({ratio:.2f}x of direct)")
     
     # Save results
-    output_file = Path(__file__).parent / 'comprehensive_results.json'
+    outputs_dir = Path(__file__).parent / 'outputs'
+    outputs_dir.mkdir(exist_ok=True)
+    output_file = outputs_dir / 'comprehensive_results.json'
     with open(output_file, 'w') as f:
         json.dump({
             'results': [asdict(r) for r in results],

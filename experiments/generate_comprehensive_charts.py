@@ -7,8 +7,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 
+# Setup paths
+script_dir = Path(__file__).parent
+outputs_dir = script_dir / 'outputs'
+outputs_dir.mkdir(exist_ok=True)
+
 # Load results
-with open('comprehensive_results.json', 'r') as f:
+results_file = outputs_dir / 'comprehensive_results.json'
+with open(results_file, 'r') as f:
     data = json.load(f)
 
 results = data['results']
@@ -41,140 +47,20 @@ hard_k2 = get_data('hard', 'spec_k2')
 hard_k4 = get_data('hard', 'spec_k4')
 hard_k6 = get_data('hard', 'spec_k6')
 
-# Figure 1: Main Comparison
-fig1, axes = plt.subplots(2, 3, figsize=(16, 10))
-fig1.suptitle('Comprehensive Benchmark: Easy vs Hard Prompts (50 each)\nDirect vs K=2 vs K=4 vs K=6', 
-              fontsize=14, fontweight='bold', y=0.98)
-
-# 1. Speed Comparison - Easy
-ax = axes[0, 0]
-methods = ['Direct', 'K=2', 'K=4', 'K=6']
-easy_speeds = [
-    np.mean([r['tokens_per_second'] for r in easy_direct]),
-    np.mean([r['tokens_per_second'] for r in easy_k2]),
-    np.mean([r['tokens_per_second'] for r in easy_k4]),
-    np.mean([r['tokens_per_second'] for r in easy_k6])
-]
-bars = ax.bar(methods, easy_speeds, color=[direct_color, k2_color, k4_color, k6_color], 
-              edgecolor='black', linewidth=1.5)
-ax.set_ylabel('Tokens per Second')
-ax.set_title('EASY Prompts: Generation Speed', fontweight='bold')
-for bar, speed in zip(bars, easy_speeds):
-    ax.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.3,
-            f'{speed:.1f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
-ax.set_ylim(0, 25)
-ax.grid(axis='y', alpha=0.3)
-
-# 2. Speed Comparison - Hard
-ax = axes[0, 1]
-hard_speeds = [
-    np.mean([r['tokens_per_second'] for r in hard_direct]),
-    np.mean([r['tokens_per_second'] for r in hard_k2]),
-    np.mean([r['tokens_per_second'] for r in hard_k4]),
-    np.mean([r['tokens_per_second'] for r in hard_k6])
-]
-bars = ax.bar(methods, hard_speeds, color=[direct_color, k2_color, k4_color, k6_color], 
-              edgecolor='black', linewidth=1.5)
-ax.set_ylabel('Tokens per Second')
-ax.set_title('HARD Prompts: Generation Speed', fontweight='bold')
-for bar, speed in zip(bars, hard_speeds):
-    ax.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.3,
-            f'{speed:.1f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
-ax.set_ylim(0, 25)
-ax.grid(axis='y', alpha=0.3)
-
-# 3. Speedup vs Direct
-ax = axes[0, 2]
-x = np.arange(2)
-width = 0.25
-k2_speedups = [easy_speeds[1]/easy_speeds[0], hard_speeds[1]/hard_speeds[0]]
-k4_speedups = [easy_speeds[2]/easy_speeds[0], hard_speeds[2]/hard_speeds[0]]
-k6_speedups = [easy_speeds[3]/easy_speeds[0], hard_speeds[3]/hard_speeds[0]]
-bars1 = ax.bar(x - width, k2_speedups, width, label='K=2', color=k2_color, edgecolor='black')
-bars2 = ax.bar(x, k4_speedups, width, label='K=4', color=k4_color, edgecolor='black')
-bars3 = ax.bar(x + width, k6_speedups, width, label='K=6', color=k6_color, edgecolor='black')
-ax.axhline(y=1.0, color='red', linestyle='--', linewidth=2, label='Direct baseline')
-ax.set_ylabel('Speedup Factor')
-ax.set_title('Speedup vs Direct (1.0 = same speed)', fontweight='bold')
-ax.set_xticks(x)
-ax.set_xticklabels(['Easy', 'Hard'])
-ax.legend(loc='upper right')
-ax.set_ylim(0, 1.5)
-ax.grid(axis='y', alpha=0.3)
-for bar, val in zip(bars1, k2_speedups):
-    ax.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.02,
-            f'{val:.2f}x', ha='center', va='bottom', fontsize=9)
-for bar, val in zip(bars2, k4_speedups):
-    ax.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.02,
-            f'{val:.2f}x', ha='center', va='bottom', fontsize=9)
-for bar, val in zip(bars3, k6_speedups):
-    ax.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.02,
-            f'{val:.2f}x', ha='center', va='bottom', fontsize=9)
-
-# 4. Acceptance Rate Distribution - Easy
-ax = axes[1, 0]
+# Pre-calculate acceptance rate and rounds data (needed for multiple charts)
 easy_k2_acc = [r['acceptance_rate']*100 for r in easy_k2]
 easy_k4_acc = [r['acceptance_rate']*100 for r in easy_k4]
 easy_k6_acc = [r['acceptance_rate']*100 for r in easy_k6]
-bp = ax.boxplot([easy_k2_acc, easy_k4_acc, easy_k6_acc], labels=['K=2', 'K=4', 'K=6'],
-                patch_artist=True, widths=0.6)
-bp['boxes'][0].set_facecolor(k2_color)
-bp['boxes'][1].set_facecolor(k4_color)
-bp['boxes'][2].set_facecolor(k6_color)
-ax.axhline(y=np.mean(easy_k2_acc), color=k2_color, linestyle='--', alpha=0.7, label=f'K=2 Avg: {np.mean(easy_k2_acc):.1f}%')
-ax.axhline(y=np.mean(easy_k4_acc), color=k4_color, linestyle='--', alpha=0.7, label=f'K=4 Avg: {np.mean(easy_k4_acc):.1f}%')
-ax.axhline(y=np.mean(easy_k6_acc), color=k6_color, linestyle='--', alpha=0.7, label=f'K=6 Avg: {np.mean(easy_k6_acc):.1f}%')
-ax.set_ylabel('Acceptance Rate (%)')
-ax.set_title('EASY: Acceptance Rate Distribution (50 prompts)', fontweight='bold')
-ax.legend(loc='upper right', fontsize=8)
-ax.set_ylim(0, 100)
-ax.grid(axis='y', alpha=0.3)
-
-# 5. Acceptance Rate Distribution - Hard
-ax = axes[1, 1]
 hard_k2_acc = [r['acceptance_rate']*100 for r in hard_k2]
 hard_k4_acc = [r['acceptance_rate']*100 for r in hard_k4]
 hard_k6_acc = [r['acceptance_rate']*100 for r in hard_k6]
-bp = ax.boxplot([hard_k2_acc, hard_k4_acc, hard_k6_acc], labels=['K=2', 'K=4', 'K=6'],
-                patch_artist=True, widths=0.6)
-bp['boxes'][0].set_facecolor(k2_color)
-bp['boxes'][1].set_facecolor(k4_color)
-bp['boxes'][2].set_facecolor(k6_color)
-ax.axhline(y=np.mean(hard_k2_acc), color=k2_color, linestyle='--', alpha=0.7, label=f'K=2 Avg: {np.mean(hard_k2_acc):.1f}%')
-ax.axhline(y=np.mean(hard_k4_acc), color=k4_color, linestyle='--', alpha=0.7, label=f'K=4 Avg: {np.mean(hard_k4_acc):.1f}%')
-ax.axhline(y=np.mean(hard_k6_acc), color=k6_color, linestyle='--', alpha=0.7, label=f'K=6 Avg: {np.mean(hard_k6_acc):.1f}%')
-ax.set_ylabel('Acceptance Rate (%)')
-ax.set_title('HARD: Acceptance Rate Distribution (50 prompts)', fontweight='bold')
-ax.legend(loc='upper right', fontsize=8)
-ax.set_ylim(0, 100)
-ax.grid(axis='y', alpha=0.3)
 
-# 6. Number of Rounds
-ax = axes[1, 2]
 easy_k2_rounds = [r['num_rounds'] for r in easy_k2]
 easy_k4_rounds = [r['num_rounds'] for r in easy_k4]
 easy_k6_rounds = [r['num_rounds'] for r in easy_k6]
 hard_k2_rounds = [r['num_rounds'] for r in hard_k2]
 hard_k4_rounds = [r['num_rounds'] for r in hard_k4]
 hard_k6_rounds = [r['num_rounds'] for r in hard_k6]
-x = np.arange(6)
-labels = ['Easy K=2', 'Easy K=4', 'Easy K=6', 'Hard K=2', 'Hard K=4', 'Hard K=6']
-avg_rounds = [np.mean(easy_k2_rounds), np.mean(easy_k4_rounds), np.mean(easy_k6_rounds),
-              np.mean(hard_k2_rounds), np.mean(hard_k4_rounds), np.mean(hard_k6_rounds)]
-colors_bar = [k2_color, k4_color, k6_color, k2_color, k4_color, k6_color]
-bars = ax.bar(x, avg_rounds, color=colors_bar, edgecolor='black', linewidth=1.5)
-ax.set_ylabel('Average Rounds')
-ax.set_title('Average Rounds per Configuration', fontweight='bold')
-ax.set_xticks(x)
-ax.set_xticklabels(labels, rotation=30, ha='right', fontsize=8)
-for bar, val in zip(bars, avg_rounds):
-    ax.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 1,
-            f'{val:.0f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
-ax.grid(axis='y', alpha=0.3)
-
-plt.tight_layout(rect=[0, 0.02, 1, 0.96])
-plt.savefig('comprehensive_main.png', dpi=200, bbox_inches='tight')
-print("Saved: comprehensive_main.png")
 
 # Figure 2: Detailed Analysis
 fig2, axes = plt.subplots(2, 3, figsize=(16, 10))
@@ -269,6 +155,7 @@ ax.grid(axis='y', alpha=0.3)
 for bar, val in zip(bars1 + bars2, easy_acc_avg + hard_acc_avg):
     ax.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 1,
             f'{val:.1f}%', ha='center', va='bottom', fontsize=9, fontweight='bold')
+
 # 6. Summary Table as Text (Dynamic)
 ax = axes[1, 2]
 ax.axis('off')
@@ -316,9 +203,69 @@ ax.text(0.1, 0.5, summary_text, transform=ax.transAxes, fontsize=9,
         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
 
 plt.tight_layout(rect=[0, 0.02, 1, 0.96])
-plt.savefig('comprehensive_detailed.png', dpi=200, bbox_inches='tight')
-print("Saved: comprehensive_detailed.png")
+plt.savefig(outputs_dir / 'comprehensive_detailed.png', dpi=200, bbox_inches='tight')
+print("Saved: outputs/comprehensive_detailed.png")
 
-print("\nAll charts generated successfully!")
-print("  - comprehensive_main.png (Main comparison - 50 prompts, K=2/4/6 + Direct)")
-print("  - comprehensive_detailed.png (Detailed analysis with distributions)")
+# Figure 3: Network Latency & Timing Analysis
+fig3, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig3.suptitle('Network Latency & Timing Breakdown', fontsize=14, fontweight='bold', y=0.98)
+
+# 1. Draft vs Verify Time Comparison (Stacked Bar)
+ax = axes[0]
+categories = ['Easy\nK=2', 'Easy\nK=4', 'Easy\nK=6', 'Hard\nK=2', 'Hard\nK=4', 'Hard\nK=6']
+draft_times = [
+    np.mean([r['avg_draft_ms'] for r in easy_k2]),
+    np.mean([r['avg_draft_ms'] for r in easy_k4]),
+    np.mean([r['avg_draft_ms'] for r in easy_k6]),
+    np.mean([r['avg_draft_ms'] for r in hard_k2]),
+    np.mean([r['avg_draft_ms'] for r in hard_k4]),
+    np.mean([r['avg_draft_ms'] for r in hard_k6])
+]
+verify_times = [
+    np.mean([r['avg_verify_ms'] for r in easy_k2]),
+    np.mean([r['avg_verify_ms'] for r in easy_k4]),
+    np.mean([r['avg_verify_ms'] for r in easy_k6]),
+    np.mean([r['avg_verify_ms'] for r in hard_k2]),
+    np.mean([r['avg_verify_ms'] for r in hard_k4]),
+    np.mean([r['avg_verify_ms'] for r in hard_k6])
+]
+x = np.arange(len(categories))
+width = 0.6
+bars1 = ax.bar(x, draft_times, width, label='Draft Time', color=k2_color, edgecolor='black')
+bars2 = ax.bar(x, verify_times, width, bottom=draft_times, label='Verify Time', color=k4_color, edgecolor='black')
+ax.set_ylabel('Time per Round (ms)')
+ax.set_title('Draft vs Verify Time Breakdown', fontweight='bold')
+ax.set_xticks(x)
+ax.set_xticklabels(categories, fontsize=9)
+ax.legend(loc='upper left')
+ax.grid(axis='y', alpha=0.3)
+# Add total time labels
+total_times = [d + v for d, v in zip(draft_times, verify_times)]
+for i, total in enumerate(total_times):
+    ax.text(i, total + 5, f'{total:.0f}ms', ha='center', va='bottom', fontsize=8, fontweight='bold')
+
+# 2. Total Latency vs Number of Rounds (Scatter)
+ax = axes[1]
+# Collect all speculative data points
+all_spec = easy_k2 + easy_k4 + easy_k6 + hard_k2 + hard_k4 + hard_k6
+latencies = [r['total_time_ms']/1000 for r in all_spec]  # Convert to seconds
+rounds = [r['num_rounds'] for r in all_spec]
+colors_scatter = [k2_color if 'K=2' in r['method'] else k4_color if 'K=4' in r['method'] else k6_color for r in all_spec]
+ax.scatter(rounds, latencies, c=colors_scatter, alpha=0.6, s=50, edgecolors='black', linewidth=0.5)
+ax.set_xlabel('Number of Rounds')
+ax.set_ylabel('Total Latency (seconds)')
+ax.set_title('Latency vs Rounds (Each point = 1 test)', fontweight='bold')
+ax.grid(alpha=0.3)
+# Add trend line
+z = np.polyfit(rounds, latencies, 1)
+p = np.poly1d(z)
+ax.plot(sorted(rounds), p(sorted(rounds)), "r--", alpha=0.8, linewidth=2, label=f'Trend: {z[0]:.2f}s/round')
+ax.legend(loc='upper left')
+
+plt.tight_layout(rect=[0, 0.02, 1, 0.96])
+plt.savefig(outputs_dir / 'latency_analysis.png', dpi=200, bbox_inches='tight')
+print("Saved: outputs/latency_analysis.png")
+
+print("\nCharts generated successfully!")
+print("  - outputs/comprehensive_detailed.png (Detailed analysis)")
+print("  - outputs/latency_analysis.png (Network latency breakdown)")

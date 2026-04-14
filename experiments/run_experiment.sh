@@ -23,7 +23,7 @@ if tmux has-session -t $SESSION_NAME 2>/dev/null; then
         echo "✓ Experiment is still running"
     else
         echo "✗ Experiment has finished or stopped"
-        echo "  View results: cat $SCRIPT_DIR/comprehensive_log.txt"
+        echo "  View results: cat $SCRIPT_DIR/outputs/comprehensive_log.txt"
     fi
     exit 0
 fi
@@ -48,7 +48,7 @@ tmux send-keys -t $SESSION_NAME "echo 'Virtual environment activated'" C-m
 tmux send-keys -t $SESSION_NAME "echo ''" C-m
 
 # Run the experiment
-tmux send-keys -t $SESSION_NAME "python3 comprehensive_benchmark.py 2>&1 | tee comprehensive_log.txt" C-m
+tmux send-keys -t $SESSION_NAME "mkdir -p outputs && python3 comprehensive_benchmark.py 2>&1 | tee outputs/comprehensive_log.txt" C-m
 
 echo "✓ Experiment started in tmux session '$SESSION_NAME'"
 echo ""
@@ -57,10 +57,10 @@ echo "  - View live progress: tmux attach-session -t $SESSION_NAME"
 echo "  - Detach from session: Ctrl+B, then D"
 echo "  - Stop experiment: tmux kill-session -t $SESSION_NAME"
 echo "  - Check if running: pgrep -f comprehensive_benchmark.py"
-echo "  - View log: tail -f $SCRIPT_DIR/comprehensive_log.txt"
+echo "  - View log: tail -f $SCRIPT_DIR/outputs/comprehensive_log.txt"
 echo "  - List all sessions: tmux list-sessions"
 echo ""
 echo "The experiment will continue running even if you disconnect from SSH."
 echo "Results will be saved to:"
-echo "  - $SCRIPT_DIR/comprehensive_results.json"
-echo "  - $SCRIPT_DIR/comprehensive_log.txt"
+echo "  - $SCRIPT_DIR/outputs/comprehensive_results.json"
+echo "  - $SCRIPT_DIR/outputs/comprehensive_log.txt"
