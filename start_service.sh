@@ -10,7 +10,7 @@ PORT=6006
 echo "=== Starting Speculative Decoding Edge Service ==="
 
 # Check if model exists
-MODEL_PATH="$HOME/models/Qwen2.5-3B-Instruct"
+MODEL_PATH="$HOME/models/Qwen2.5-1.5B-Instruct"
 if [ ! -d "$MODEL_PATH" ]; then
     echo "Error: Model not found at $MODEL_PATH"
     echo "Please run ./download_model.sh first"

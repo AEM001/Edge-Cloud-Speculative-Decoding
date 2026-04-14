@@ -1,9 +1,9 @@
 """Configuration settings for speculative decoding on Ubuntu 3060."""
 from pathlib import Path
 
-# Model configuration - Qwen2.5 3B quantized version
-MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
-MODEL_PATH = Path.home() / "models" / "Qwen--Qwen2.5-3B-Instruct"
+# Model configuration - Qwen2.5 1.5B quantized version
+MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
+MODEL_PATH = Path.home() / "models" / "Qwen--Qwen2.5-1.5B-Instruct"
 
 # Server configuration
 # Edge client port (local)

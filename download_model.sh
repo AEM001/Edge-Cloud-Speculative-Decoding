@@ -1,13 +1,13 @@
 #!/bin/bash
-# Download Qwen2.5 3B model to local directory (avoiding cache)
+# Download Qwen2.5 1.5B model to local directory (avoiding cache)
 
 set -e
 
-MODEL_NAME="Qwen/Qwen2.5-3B-Instruct"
-LOCAL_DIR="$HOME/models/Qwen2.5-3B-Instruct"
+MODEL_NAME="Qwen/Qwen2.5-1.5B-Instruct"
+LOCAL_DIR="$HOME/models/Qwen2.5-1.5B-Instruct"
 SESSION_NAME="model-download"
 
-echo "=== Downloading Qwen2.5 3B model to local directory ==="
+echo "=== Downloading Qwen2.5 1.5B model to local directory ==="
 echo "Model: $MODEL_NAME"
 echo "Local directory: $LOCAL_DIR"
 
