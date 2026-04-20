@@ -57,17 +57,17 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(Path(__file__).parent / "outputs_async" / "async_log.txt"),
+        logging.FileHandler(Path(__file__).parent / "outputs_async_k8" / "async_log.txt"),
     ],
 )
 logger = logging.getLogger(__name__)
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 BENCHMARK_TEMPERATURE = 0.0
-PROMPT_COUNT = 10          # easy + hard
+PROMPT_COUNT = 5           # easy + hard (reduced for faster run)
 MAX_TOKENS = 128
 SERVER_URL = "http://localhost:6006"
-K_VALUES = [2, 4]
+K_VALUES = [4, 8]
 LOOKAHEAD = 1              # PicoSpec baseline: 1 pre-draft batch in flight
 
 
@@ -75,7 +75,7 @@ LOOKAHEAD = 1              # PicoSpec baseline: 1 pre-draft batch in flight
 
 @dataclass
 class TestResult:
-    method: str              # "direct" | "sync_k2" | "sync_k4" | "async_k2" | "async_k4"
+    method: str              # "direct" | "sync_k4" | "sync_k8" | "async_k4" | "async_k8"
     prompt_type: str         # "easy" | "hard"
     prompt_id: int
     prompt_length: int
@@ -228,9 +228,9 @@ def result_from_async_metrics(
 # ─── Plotting ─────────────────────────────────────────────────────────────────
 
 def save_charts(results: List[TestResult], out_dir: Path) -> None:
-    methods = ["direct", "sync_k2", "sync_k4", "async_k2", "async_k4"]
+    methods = ["direct", "sync_k4", "sync_k8", "async_k4", "async_k8"]
     colors  = ["#2196F3", "#FF9800", "#F44336", "#4CAF50", "#9C27B0"]
-    labels  = ["Direct", "Sync K=2", "Sync K=4", "Async K=2", "Async K=4"]
+    labels  = ["Direct", "Sync K=4", "Sync K=8", "Async K=4", "Async K=8"]
 
     def mean_field(field: str, method: str, ptype: str) -> Optional[float]:
         vals = [getattr(r, field) for r in results if r.method == method and r.prompt_type == ptype]
@@ -255,8 +255,8 @@ def save_charts(results: List[TestResult], out_dir: Path) -> None:
 
     # ── 2. Latency breakdown (draft / network / verify per round) ───────────
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-    spec_methods = ["sync_k2", "sync_k4", "async_k2", "async_k4"]
-    spec_labels  = ["Sync K=2", "Sync K=4", "Async K=2", "Async K=4"]
+    spec_methods = ["sync_k4", "sync_k8", "async_k4", "async_k8"]
+    spec_labels  = ["Sync K=4", "Sync K=8", "Async K=4", "Async K=8"]
     for ax, ptype in zip(axes, ["easy", "hard"]):
         d_ms  = [mean_field("avg_draft_ms",   m, ptype) or 0 for m in spec_methods]
         n_ms  = [mean_field("avg_network_ms", m, ptype) or 0 for m in spec_methods]
@@ -276,8 +276,8 @@ def save_charts(results: List[TestResult], out_dir: Path) -> None:
 
     # ── 3. Pipeline efficiency (async only) ─────────────────────────────────
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-    async_methods = ["async_k2", "async_k4"]
-    async_labels  = ["Async K=2", "Async K=4"]
+    async_methods = ["async_k4", "async_k8"]
+    async_labels  = ["Async K=4", "Async K=8"]
     for ax, ptype in zip(axes, ["easy", "hard"]):
         effs = [mean_field("pipeline_efficiency", m, ptype) or 0 for m in async_methods]
         bars = ax.bar(async_labels, [e * 100 for e in effs], color=["#4CAF50", "#9C27B0"],
@@ -316,10 +316,10 @@ def save_charts(results: List[TestResult], out_dir: Path) -> None:
                                if r.method == "direct" and r.prompt_type == ptype]) or 1)
         for ptype in ["easy", "hard"]
     }
-    marker_map = {"sync_k2": "o", "sync_k4": "s", "async_k2": "^", "async_k4": "D"}
-    color_map  = {"sync_k2": "#FF9800", "sync_k4": "#F44336",
-                  "async_k2": "#4CAF50", "async_k4": "#9C27B0"}
-    for m in ["sync_k2", "sync_k4", "async_k2", "async_k4"]:
+    marker_map = {"sync_k4": "o", "sync_k8": "s", "async_k4": "^", "async_k8": "D"}
+    color_map  = {"sync_k4": "#FF9800", "sync_k8": "#F44336",
+                  "async_k4": "#4CAF50", "async_k8": "#9C27B0"}
+    for m in ["sync_k4", "sync_k8", "async_k4", "async_k8"]:
         for ptype in ["easy", "hard"]:
             pts = [r for r in results if r.method == m and r.prompt_type == ptype]
             if not pts:
@@ -344,7 +344,7 @@ def save_charts(results: List[TestResult], out_dir: Path) -> None:
 
 def run_experiment():
     # Ensure output dir exists before log handler opens the file
-    out_dir = Path(__file__).parent / "outputs_async"
+    out_dir = Path(__file__).parent / "outputs_async_k8"
     out_dir.mkdir(exist_ok=True)
 
     easy_prompts, hard_prompts = load_prompts(PROMPTS_FILE, count=PROMPT_COUNT)
@@ -354,7 +354,7 @@ def run_experiment():
     logger.info("ASYNC PIPELINE EXPERIMENT")
     logger.info("Draft model  : %s (%s)", MODEL_NAME, MODEL_PATH)
     logger.info("Verify model : %s (served at %s)", VERIFY_MODEL, SERVER_URL)
-    logger.info("Methods: Direct | Sync K=2,4 | Async K=2,4 (lookahead=%d)", LOOKAHEAD)
+    logger.info("Methods: Direct | Sync K=4,8 | Async K=4,8 (lookahead=%d)", LOOKAHEAD)
     logger.info("Prompts: %d easy + %d hard", len(easy_prompts), len(hard_prompts))
     logger.info("=" * 80)
 
@@ -466,7 +466,7 @@ def run_experiment():
     logger.info("RESULTS SUMMARY")
     logger.info("=" * 80)
 
-    all_methods = ["direct", "sync_k2", "sync_k4", "async_k2", "async_k4"]
+    all_methods = ["direct", "sync_k4", "sync_k8", "async_k4", "async_k8"]
     summary = {}
 
     for ptype in ["easy", "hard"]:
