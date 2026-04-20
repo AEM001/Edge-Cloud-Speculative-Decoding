@@ -50,6 +50,8 @@ from config_local import GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN, MODEL_NAME, MODE
 from draft_generator import VLLMDraftGenerator
 from model_manager import VLLMModelManager
 
+VERIFY_MODEL = "Qwen2.5-7B-Instruct-AWQ"   # target / verify model on same GPU
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -350,8 +352,8 @@ def run_experiment():
     # ── Setup models ────────────────────────────────────────────────────────
     logger.info("=" * 80)
     logger.info("ASYNC PIPELINE EXPERIMENT")
-    logger.info("Draft model : %s (%s)", MODEL_NAME, MODEL_PATH)
-    logger.info("Verify server: %s", SERVER_URL)
+    logger.info("Draft model  : %s (%s)", MODEL_NAME, MODEL_PATH)
+    logger.info("Verify model : %s (served at %s)", VERIFY_MODEL, SERVER_URL)
     logger.info("Methods: Direct | Sync K=2,4 | Async K=2,4 (lookahead=%d)", LOOKAHEAD)
     logger.info("Prompts: %d easy + %d hard", len(easy_prompts), len(hard_prompts))
     logger.info("=" * 80)
@@ -498,23 +500,38 @@ def run_experiment():
                 })
 
     # Print summary table
-    header = f"{'Method':<14} {'Easy tok/s':>12} {'Hard tok/s':>12} {'Accept%':>8} {'PipeEff%':>10} {'Bubble ms':>10} {'Waste%':>8}"
+    # Compute baseline (direct) tps for speedup ratios
+    direct_easy_tps = summary.get("easy_direct", {}).get("mean_tps", 1.0) or 1.0
+    direct_hard_tps = summary.get("hard_direct", {}).get("mean_tps", 1.0) or 1.0
+
+    header = (
+        f"{'Method':<14} {'Easy tok/s':>10} {'Speedup':>8} {'Hard tok/s':>10} {'Speedup':>8}"
+        f" {'Accept%':>8} {'PipeEff%':>10} {'Bubble ms':>10} {'Waste%':>8}"
+    )
     logger.info(header)
     logger.info("-" * len(header))
     for method in all_methods:
         e = summary.get(f"easy_{method}", {})
         h = summary.get(f"hard_{method}", {})
-        acc   = f"{e.get('mean_acceptance', 0)*100:6.1f}" if method != "direct" else "    -"
+        e_tps = e.get("mean_tps", 0)
+        h_tps = h.get("mean_tps", 0)
+        e_spd = f"{e_tps / direct_easy_tps:.2f}x"
+        h_spd = f"{h_tps / direct_hard_tps:.2f}x"
+        acc   = f"{e.get('mean_acceptance', 0)*100:6.1f}" if method != "direct" else "     -"
         peff  = f"{e.get('mean_pipeline_efficiency', 0)*100:8.1f}" if method.startswith("async") else "       -"
         bub   = f"{e.get('mean_bubble_ms', 0):8.1f}" if method.startswith("async") else "       -"
         waste = f"{e.get('mean_prefetch_waste', 0)*100:6.1f}" if method.startswith("async") else "     -"
         logger.info(
-            "%-14s %12.2f %12.2f %s %s %s %s",
-            method,
-            e.get("mean_tps", 0),
-            h.get("mean_tps", 0),
-            acc, peff, bub, waste,
+            "%-14s %10.2f %8s %10.2f %8s %s %s %s %s",
+            method, e_tps, e_spd, h_tps, h_spd, acc, peff, bub, waste,
         )
+    logger.info("  Speedup = tok/s relative to Direct baseline")
+    # Also store speedups in summary JSON
+    for method in all_methods:
+        for ptype, base in [("easy", direct_easy_tps), ("hard", direct_hard_tps)]:
+            k = f"{ptype}_{method}"
+            if k in summary:
+                summary[k]["speedup_vs_direct"] = summary[k]["mean_tps"] / base
 
     # ── Save JSON ─────────────────────────────────────────────────────────────
     out_file = out_dir / "async_results.json"

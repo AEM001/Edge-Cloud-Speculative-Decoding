@@ -22,8 +22,8 @@ MODEL_PATH = Path(
     )
 )
 
-# vLLM settings - optimized for 14B AWQ + 1.5B on same GPU
-GPU_MEMORY_UTILIZATION = _env_float("AINFRA_GPU_MEMORY_UTILIZATION", 0.25)
+# vLLM settings - optimized for 7B AWQ + 1.5B on same GPU
+GPU_MEMORY_UTILIZATION = _env_float("AINFRA_GPU_MEMORY_UTILIZATION", 0.20)
 MAX_MODEL_LEN = _env_int("AINFRA_MAX_MODEL_LEN", 4096)
 TENSOR_PARALLEL_SIZE = _env_int("AINFRA_TENSOR_PARALLEL_SIZE", 1)
 
