@@ -86,24 +86,22 @@ class VLLMDraftGenerator:
         
         prefix = request.verified_prefix
         k = request.num_draft_tokens
-        
-        # Decode prefix to text
-        prompt_text = self.tokenizer.decode(prefix, skip_special_tokens=False)
-        
-        # Set up sampling parameters
+
+        # Set up sampling parameters — no prompt_logprobs to avoid
+        # re-computing the full prefix at every draft step
         sampling_params = SamplingParams(
             temperature=temperature if temperature > 0 else 0.0,
             top_p=top_p,
             max_tokens=k,
-            logprobs=5,  # Get top 5 logprobs for each position
-            prompt_logprobs=k,  # Get logprobs for draft positions
+            logprobs=5,
         )
-        
-        # Generate with vLLM
+
+        # Pass token IDs directly to avoid decode → re-tokenize round-trip
+        from vllm import TokensPrompt
         outputs = self.llm.generate(
-            prompts=[prompt_text],
+            prompts=[TokensPrompt(prompt_token_ids=list(prefix))],
             sampling_params=sampling_params,
-            use_tqdm=False
+            use_tqdm=False,
         )
         
         output = outputs[0]
@@ -116,10 +114,10 @@ class VLLMDraftGenerator:
         
         if len(generated_ids) < k:
             logger.warning(f"Generated only {len(generated_ids)} tokens, expected {k}")
-        
-        # Get prompt logprobs for confidence stats
-        prompt_logprobs = output.prompt_logprobs or []
-        
+
+        # Use per-generated-token logprobs (output.outputs[0].logprobs)
+        out_logprobs = output.outputs[0].logprobs or []
+
         # Build response with confidence stats
         draft_token_ids = []
         draft_logprobs = []
@@ -127,40 +125,27 @@ class VLLMDraftGenerator:
         max_probs = []
         entropies = []
         top_margins = []
-        
-        prefix_len = len(prefix)
-        
+
         for i, token_id in enumerate(generated_ids):
-            # Position in the full sequence (after prefix)
-            pos = prefix_len + i
-            
-            # Get logprobs at this position
-            if pos < len(prompt_logprobs) and prompt_logprobs[pos] is not None:
-                logprobs_dict = prompt_logprobs[pos]
-                
-                # Get probability of the selected token
-                token_logprob = logprobs_dict.get(token_id, None)
-                if token_logprob is not None:
-                    if hasattr(token_logprob, 'logprob'):
-                        token_prob = np.exp(token_logprob.logprob)
-                        token_logprob_val = token_logprob.logprob
-                    else:
-                        token_prob = np.exp(token_logprob)
-                        token_logprob_val = token_logprob
+            if i < len(out_logprobs) and out_logprobs[i] is not None:
+                logprobs_dict = out_logprobs[i]
+
+                token_logprob_obj = logprobs_dict.get(token_id, None)
+                if token_logprob_obj is not None:
+                    token_logprob_val = token_logprob_obj.logprob if hasattr(token_logprob_obj, 'logprob') else float(token_logprob_obj)
+                    token_prob = np.exp(token_logprob_val)
                 else:
-                    token_prob = 0.0
                     token_logprob_val = -float('inf')
-                
-                # Compute confidence stats
+                    token_prob = 0.0
+
                 max_prob, entropy, top_margin = self.compute_confidence_stats(logprobs_dict)
             else:
-                # Fallback if no logprobs available
                 token_prob = 1.0 / self.tokenizer.vocab_size if hasattr(self.tokenizer, 'vocab_size') else 0.0
                 token_logprob_val = np.log(token_prob + 1e-10)
                 max_prob = token_prob
                 entropy = np.log(self.tokenizer.vocab_size) if hasattr(self.tokenizer, 'vocab_size') else 0.0
                 top_margin = 0.0
-            
+
             draft_token_ids.append(token_id)
             draft_logprobs.append(float(token_logprob_val))
             draft_probs.append(float(token_prob))

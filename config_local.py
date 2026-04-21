@@ -18,12 +18,12 @@ MODEL_NAME = os.getenv("AINFRA_DRAFT_MODEL_NAME", "Qwen/Qwen2.5-1.5B-Instruct")
 MODEL_PATH = Path(
     os.getenv(
         "AINFRA_DRAFT_MODEL_PATH",
-        "/root/autodl-tmp/ubuntu-verify/models/Qwen2.5-1.5B-Instruct",
+        "/root/code/Qwen2.5-1.5B-Instruct-AWQ",
     )
 )
 
 # vLLM settings - optimized for 7B AWQ + 1.5B on same GPU
-GPU_MEMORY_UTILIZATION = _env_float("AINFRA_GPU_MEMORY_UTILIZATION", 0.30)
+GPU_MEMORY_UTILIZATION = _env_float("AINFRA_GPU_MEMORY_UTILIZATION", 0.90)
 MAX_MODEL_LEN = _env_int("AINFRA_MAX_MODEL_LEN", 4096)
 TENSOR_PARALLEL_SIZE = _env_int("AINFRA_TENSOR_PARALLEL_SIZE", 1)
 
