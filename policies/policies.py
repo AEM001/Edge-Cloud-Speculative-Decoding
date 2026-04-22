@@ -5,7 +5,7 @@ Policy 1: Static K - fixed draft lengths (2, 4, 6)
 Policy 2: [Placeholder for dynamic policy]
 """
 from typing import List, Callable
-from protocol import TokenInfo
+from protocol import TokenInfo  # noqa: E402
 
 # Policy 1: Static K
 # Test exactly three fixed values: K = 2, 4, 6

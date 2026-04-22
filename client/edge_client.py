@@ -5,14 +5,9 @@ import logging
 from typing import List, Optional, Dict, Any, Callable
 from dataclasses import dataclass, field
 
-import sys
-from pathlib import Path
-# Import from root directory
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from protocol import (
     EdgeRequest, CloudResponse, DraftRequest, DraftResponse,
-    TokenInfo
+    TokenInfo,
 )
 from draft_generator import VLLMDraftGenerator
 from model_manager import VLLMModelManager

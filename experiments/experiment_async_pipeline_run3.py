@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from client.edge_client import EdgeClient, RequestMetrics
 from client.async_edge_client import AsyncEdgeClient, AsyncRequestMetrics
 from client.http_cloud_client import create_http_cloud_client
-from config_local import GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN, MODEL_NAME, MODEL_PATH
+from config import DRAFT_GPU_MEM as GPU_MEMORY_UTILIZATION, DRAFT_MAX_LEN as MAX_MODEL_LEN, DRAFT_MODEL_NAME as MODEL_NAME, DRAFT_MODEL_PATH as MODEL_PATH
 from draft_generator import VLLMDraftGenerator
 from model_manager import VLLMModelManager
 

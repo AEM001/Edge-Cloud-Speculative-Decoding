@@ -1,50 +1,53 @@
-"""Configuration settings for speculative decoding with vLLM."""
+"""
+Central configuration for PicoSpec.
+
+All values can be overridden via environment variables.
+The defaults assume both models are stored under /root/code/.
+"""
 import os
 from pathlib import Path
 
 
-def _env_float(name: str, default: float) -> float:
-    value = os.getenv(name)
-    return float(value) if value is not None else default
+def _float(name: str, default: float) -> float:
+    v = os.getenv(name)
+    return float(v) if v is not None else default
 
 
-def _env_int(name: str, default: int) -> int:
-    value = os.getenv(name)
-    return int(value) if value is not None else default
+def _int(name: str, default: int) -> int:
+    v = os.getenv(name)
+    return int(v) if v is not None else default
 
 
-# Model configuration - defaults to Qwen2.5 3B in HuggingFace format.
-MODEL_NAME = os.getenv("AINFRA_DRAFT_MODEL_NAME", "Qwen/Qwen2.5-3B-Instruct")
-MODEL_PATH = Path(
-    os.getenv(
-        "AINFRA_DRAFT_MODEL_PATH",
-        str(Path.home() / "models" / "Qwen--Qwen2.5-3B-Instruct"),
-    )
+# ---------------------------------------------------------------------------
+# Draft model  (Qwen2.5-1.5B-Instruct-AWQ — runs on the edge / GPU 1)
+# ---------------------------------------------------------------------------
+DRAFT_MODEL_NAME: str = os.getenv(
+    "DRAFT_MODEL_NAME", "Qwen/Qwen2.5-1.5B-Instruct"
 )
+DRAFT_MODEL_PATH: Path = Path(
+    os.getenv("DRAFT_MODEL_PATH", "/root/code/Qwen2.5-1.5B-Instruct-AWQ")
+)
+DRAFT_GPU_MEM: float = _float("DRAFT_GPU_MEM", 0.90)
+DRAFT_MAX_LEN: int = _int("DRAFT_MAX_LEN", 4096)
 
-# vLLM settings
-GPU_MEMORY_UTILIZATION = _env_float("AINFRA_GPU_MEMORY_UTILIZATION", 0.7)
-MAX_MODEL_LEN = _env_int("AINFRA_MAX_MODEL_LEN", 8192)
-TENSOR_PARALLEL_SIZE = _env_int("AINFRA_TENSOR_PARALLEL_SIZE", 1)
+# ---------------------------------------------------------------------------
+# Verify model  (Qwen2.5-7B-Instruct-AWQ — runs on GPU 0 via verify server)
+# ---------------------------------------------------------------------------
+VERIFY_MODEL_PATH: Path = Path(
+    os.getenv("VERIFY_MODEL_PATH", "/root/code/Qwen2.5-7B-Instruct-AWQ")
+)
+VERIFY_GPU_MEM: float = _float("VERIFY_GPU_MEM", 0.90)
+VERIFY_MAX_LEN: int = _int("VERIFY_MAX_LEN", 4096)
+VERIFY_QUANTIZATION: str = os.getenv("VERIFY_QUANTIZATION", "awq")
 
-# Server configuration
-# Edge client port (local)
-EDGE_PORT = 6006
-# Cloud server port (remote)
-CLOUD_PORT = 6008
-# Cloud server address
-CLOUD_SERVER = "connect.westd.seetacloud.com"
-CLOUD_SSH_PORT = 20514
-CLOUD_URL = f"http://{CLOUD_SERVER}:{CLOUD_PORT}"
+# ---------------------------------------------------------------------------
+# Verify server  (HTTP endpoint)
+# ---------------------------------------------------------------------------
+VERIFY_SERVER_URL: str = os.getenv("VERIFY_SERVER_URL", "http://localhost:6006")
 
-# Generation settings
-MAX_DRAFT_TOKENS = _env_int("AINFRA_MAX_DRAFT_TOKENS", 5)
-TEMPERATURE = _env_float("AINFRA_TEMPERATURE", 0.8)
-TOP_P = _env_float("AINFRA_TOP_P", 0.95)
-MAX_NEW_TOKENS = _env_int("AINFRA_MAX_NEW_TOKENS", 128)
-
-# Device settings
-DEVICE = "cuda"  # PyTorch uses CUDA on NVIDIA GPUs
-
-# Logging
-VERBOSE = True
+# ---------------------------------------------------------------------------
+# Generation defaults
+# ---------------------------------------------------------------------------
+MAX_NEW_TOKENS: int = _int("MAX_NEW_TOKENS", 128)
+TEMPERATURE: float = _float("TEMPERATURE", 0.0)
+TOP_P: float = _float("TOP_P", 0.95)

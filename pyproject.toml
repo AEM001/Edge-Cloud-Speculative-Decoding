@@ -1,15 +1,18 @@
 [project]
-name = "speculative-decoding-edge"
-version = "0.1.0"
-description = "Speculative decoding edge node for Ubuntu 3060 with PyTorch"
-requires-python = ">=3.8"
+name = "picospec"
+version = "1.0.0"
+description = "PicoSpec — synchronous and asynchronous speculative decoding toolkit"
+requires-python = ">=3.10"
 dependencies = [
+    "vllm>=0.4.0",
     "torch>=2.0.0",
     "transformers>=4.35.0",
     "accelerate>=0.24.0",
-    "bitsandbytes>=0.41.0",
     "numpy>=1.26.0",
     "requests>=2.31.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+    "matplotlib>=3.8.0",
 ]
 
 [build-system]

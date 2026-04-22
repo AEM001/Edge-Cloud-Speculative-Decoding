@@ -3,7 +3,7 @@ from typing import List, Tuple
 import numpy as np
 import logging
 
-from protocol import TokenInfo, DraftRequest, DraftResponse
+from protocol import DraftRequest, DraftResponse
 
 logger = logging.getLogger(__name__)
 
