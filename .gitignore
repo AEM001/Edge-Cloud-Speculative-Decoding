@@ -14,17 +14,30 @@ lib/
 lib64/
 parts/
 sdist/
-var/
 wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 
-# Virtual Environment
+# Virtual environments
 .venv/
 venv/
 ENV/
 env/
+.python-version
+
+# Tooling caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+.cache/
+.huggingface/
+*.cache
 
 # IDE
 .vscode/
@@ -33,22 +46,26 @@ env/
 *.swo
 *~
 
-# Data files (large datasets)
-data/
-*.json
-*.parquet
+# Environment files
+.env
+.env.*
 
-# Cache
-.cache/
-.huggingface/
-*.cache
-
-# Logs
+# Logs and runtime output
 *.log
-download.log
+*.out
+*.pid
 
-# MLX models
-~/.models/
+# Model and benchmark artifacts
+/models/Qwen3-8B/
+/models/qwen3_8b_eagle3/
+/speculative-decoding/outputs/
+/speculative-decoding/logs/
+/experiments/outputs*/
+
+# Local data artifacts
+data/
+*.parquet
+*.arrow
 
 # macOS
 .DS_Store
