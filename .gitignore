@@ -58,8 +58,6 @@ htmlcov/
 # Model and benchmark artifacts
 /models/Qwen3-8B/
 /models/qwen3_8b_eagle3/
-/speculative-decoding/outputs/
-/speculative-decoding/logs/
 /experiments/outputs*/
 
 # Local data artifacts
