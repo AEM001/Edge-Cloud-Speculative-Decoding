@@ -4,8 +4,9 @@ version = "1.0.0"
 description = "PicoSpec — synchronous and asynchronous speculative decoding toolkit"
 requires-python = ">=3.10"
 dependencies = [
-    "vllm>=0.4.0",
-    "torch>=2.0.0",
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
+    "torchvision",
     "transformers>=4.35.0",
     "accelerate>=0.24.0",
     "numpy>=1.26.0",
@@ -14,7 +15,7 @@ dependencies = [
     "uvicorn>=0.29.0",
     "matplotlib>=3.8.0",
     "huggingface-hub>=0.23.0",
-    "sglang>=0.4.0",
+    "sglang==0.5.2",
 ]
 
 [build-system]

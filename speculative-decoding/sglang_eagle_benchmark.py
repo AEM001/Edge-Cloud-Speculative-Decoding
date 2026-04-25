@@ -1,6 +1,7 @@
 import argparse
 import json
 import logging
+import os
 import re
 import statistics
 import subprocess
@@ -63,7 +64,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-new-tokens", type=int, default=128)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--dtype", default="bfloat16")
-    parser.add_argument("--mem-fraction-static", type=float, default=0.9)
+    parser.add_argument("--mem-fraction-static", type=float, default=0.75)
     parser.add_argument("--cuda-graph-max-bs", type=int, default=2)
     parser.add_argument("--speculative-algorithm", default="EAGLE3")
     parser.add_argument("--speculative-num-steps", type=int, default=6)
@@ -182,11 +183,14 @@ def launch_server(args: argparse.Namespace, mode: str, log_dir: Path) -> Tuple[s
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / f"{mode}_server.log"
     handle = open(log_file, "w")
+    env = os.environ.copy()
+    env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
     proc = subprocess.Popen(
         build_command(args, mode),
         stdout=handle,
         stderr=subprocess.STDOUT,
         cwd=str(Path(__file__).resolve().parent.parent),
+        env=env,
         text=True,
     )
     base_url = f"http://{args.host}:{args.port}"
@@ -275,6 +279,7 @@ def aggregate_metrics(mode: str, metrics: List[PromptMetrics]) -> AggregateMetri
 
 
 def run_mode(args: argparse.Namespace, mode: str, prompts: List[PromptCase]) -> Tuple[List[PromptMetrics], AggregateMetrics, Dict[str, Any]]:
+    time.sleep(5)
     proc, server_info, log_file = launch_server(args, mode, args.log_dir)
     metrics: List[PromptMetrics] = []
     base_url = f"http://{args.host}:{args.port}"
