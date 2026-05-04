@@ -1,22 +1,32 @@
 #!/usr/bin/env python3
-"""Quick test: Direct vs StaticK3 vs StaticK5 vs AsyncK3"""
+"""
+Quick sanity check: does speculative decoding (K=7) beat throttled direct?
+
+For each network condition the SAME throttle wrapper is applied to both
+direct and speculative, so the comparison is apples-to-apples.
+
+Key metric added: net_useful_toks_per_round  = accepted_tokens / rounds
+  (i.e. how many tokens we actually *keep* per verify call)
+Acceptance ratio alone is misleading because a 60% ratio on K=7 yields
+4.2 kept tokens/round, which amortises the RTT much better than K=3 at 60%.
+"""
 import json
 import logging
 import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import requests
 
 sys.path.insert(0, str(Path(__file__).parent))
 
 from client.edge_client import EdgeClient
-from client.async_edge_client import AsyncEdgeClient
 from client.http_cloud_client import create_http_cloud_client
 from config import DRAFT_GPU_MEM as GPU_MEMORY_UTILIZATION, DRAFT_MAX_LEN as MAX_MODEL_LEN, DRAFT_MODEL_NAME as MODEL_NAME, DRAFT_MODEL_PATH as MODEL_PATH
 from draft_generator import VLLMDraftGenerator
+from experiments.network_conditions import NetworkCondition, ThrottledCloudClient
 from model_manager import VLLMModelManager
 from prompt_loader import load_prompts_by_type
 
@@ -25,237 +35,196 @@ logger = logging.getLogger(__name__)
 
 SERVER_URL = "http://localhost:6006"
 MAX_TOKENS = 128
-K_VALUES = [3, 5]
-ASYNC_K = 3
-PROMPT_COUNT = 2  # 2 easy + 2 hard
+K = 7                # only large K — best speculative performer
+PROMPT_COUNT = 2    # prompts per type (simple + complex)
 
 
 @dataclass
 class QuickResult:
-    method: str
+    method: str                     # "direct" | "spec_k7"
+    network: str                    # "good" | "medium" | "bursty"
     prompt_type: str
     prompt_id: int
     tokens_generated: int
     total_time_ms: float
     tokens_per_second: float
+    # speculative-only
     acceptance_rate: float = 0.0
     num_rounds: int = 0
+    net_useful_toks_per_round: float = 0.0   # accepted tokens / rounds
     draft_time_ms: float = 0.0
     verify_time_ms: float = 0.0
-    network_time_ms: float = 0.0
     avg_rtt_ms: float = 0.0
-    pipeline_efficiency: float = 0.0  # async only
+    sim_overhead_ms: float = 0.0
 
 
 def load_prompts():
-    """Load PROMPT_COUNT easy + PROMPT_COUNT hard prompts from data/prompt.json."""
-    simple_prompts, complex_prompts = load_prompts_by_type(
-        count_per_type=PROMPT_COUNT
-    )
-    
-    # Map Simple -> easy, Complex -> hard for compatibility
-    easy_prompts = [{"id": p["id"], "text": p["text"][:300]} for p in simple_prompts]
-    hard_prompts = [{"id": p["id"], "text": p["text"][:300]} for p in complex_prompts]
-    
-    logger.info(f"Loaded {len(easy_prompts)} easy + {len(hard_prompts)} hard prompts from data/prompt.json")
-    return easy_prompts, hard_prompts
+    simple_prompts, complex_prompts = load_prompts_by_type(count_per_type=PROMPT_COUNT)
+    logger.info("Loaded %d simple + %d complex prompts", len(simple_prompts), len(complex_prompts))
+    return [(p, "simple") for p in simple_prompts] + [(p, "complex") for p in complex_prompts]
 
 
-def test_direct(prompt: str) -> Tuple[int, float]:
-    """Test direct generation."""
-    start = time.time()
+def _direct_with_throttle(prompt: str, throttled: ThrottledCloudClient) -> Tuple[int, float, float]:
+    """Direct /generate with same simulated network delay applied to direct too."""
+    cond = throttled.condition
+    now = time.perf_counter() - throttled._start_wall
+    one_way_ms, dl_mbps, ul_mbps = cond.current_link_params(now)
+    ul_bytes = len(prompt.encode()) + 64
+    ul_delay = one_way_ms + NetworkCondition._payload_delay_ms(ul_bytes, ul_mbps)
+    time.sleep(ul_delay / 1000.0)
+
+    start = time.perf_counter()
     try:
-        response = requests.post(
+        resp = requests.post(
             f"{SERVER_URL}/generate",
             json={"prompt": prompt, "max_tokens": MAX_TOKENS, "temperature": 0.0},
-            timeout=60.0,
+            timeout=120.0,
         )
-        response.raise_for_status()
-        result = response.json()
-        total_ms = (time.time() - start) * 1000
-        return result["tokens_generated"], total_ms
-    except Exception as e:
-        logger.error(f"Direct failed: {e}")
-        return 0, 0
+        resp.raise_for_status()
+        data = resp.json()
+        tokens = data.get("tokens_generated", 0)
+        text = data.get("text", "")
+    except Exception as exc:
+        logger.error("Direct failed: %s", exc)
+        return 0, 0.0, 0.0
+    elapsed_ms = (time.perf_counter() - start) * 1000
+
+    now2 = time.perf_counter() - throttled._start_wall
+    one_way_ms2, dl_mbps2, _ = cond.current_link_params(now2)
+    dl_bytes = len((text or "").encode()) + 64
+    dl_delay = one_way_ms2 + NetworkCondition._payload_delay_ms(dl_bytes, dl_mbps2)
+    time.sleep(dl_delay / 1000.0)
+
+    total_ms = ul_delay + elapsed_ms + dl_delay
+    overhead_ms = ul_delay + dl_delay
+    return tokens, total_ms, overhead_ms
 
 
-def test_speculative(client: EdgeClient, prompt: str, k: int) -> Tuple[int, float, float, int, float, float, float, float]:
-    """Test sync speculative decoding. Returns (tokens, time_ms, accept_rate, rounds, draft_ms, verify_ms, net_ms, rtt_ms)"""
-    start = time.time()
+def _speculative(edge_client: EdgeClient, prompt: str) -> Optional[object]:
     try:
-        metrics = client.generate(
-            prompt=prompt, 
-            policy=lambda _round_id, _draft_tokens: k, 
-            policy_name=f"StaticK{k}"
+        return edge_client.generate(
+            prompt=prompt,
+            policy=lambda _rid, _toks: K,
+            policy_name=f"StaticK{K}",
         )
-        total_ms = (time.time() - start) * 1000
-        return (
-            metrics.generated_tokens,
-            total_ms,
-            metrics.acceptance_ratio,
-            metrics.total_rounds,
-            metrics.total_edge_draft_time_ms,
-            metrics.total_server_verify_time_ms,
-            metrics.total_network_time_ms,
-            metrics.average_rtt_ms,
-        )
-    except Exception as e:
-        logger.error(f"Speculative K={k} failed: {e}")
-        return 0, 0, 0, 0, 0, 0, 0, 0
+    except Exception as exc:
+        logger.error("Speculative K=%d failed: %s", K, exc)
+        return None
+
+
+def _avg(lst): return sum(lst) / len(lst) if lst else 0.0
 
 
 def run_quick_test():
-    """Run quick comparison test."""
     logger.info("=" * 70)
-    logger.info("QUICK TEST: Direct vs StaticK3 vs StaticK5 vs AsyncK3")
-    logger.info(f"Draft model: {MODEL_NAME}")
-    logger.info(f"GPU util: {GPU_MEMORY_UTILIZATION}, Max len: {MAX_MODEL_LEN}")
+    logger.info("QUICK TEST  —  Direct (throttled) vs Speculative K=%d (throttled)", K)
+    logger.info("Draft model : %s", MODEL_NAME)
     logger.info("=" * 70)
-    
-    # Load prompts
-    easy_prompts, hard_prompts = load_prompts()
-    
-    cloud_client = create_http_cloud_client(SERVER_URL, timeout=60.0)
-    
-    # Load draft model
-    logger.info("Loading draft model...")
+
+    prompts = load_prompts()
+
+    base_client = create_http_cloud_client(SERVER_URL, timeout=120.0)
+
+    logger.info("Loading draft model on GPU 1 ...")
     model_manager = VLLMModelManager(MODEL_PATH, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN, gpu_id=1)
     llm, tokenizer = model_manager.load()
     draft_generator = VLLMDraftGenerator(llm, tokenizer)
-    
-    # Sync client
     edge_client = EdgeClient(
         model_manager=model_manager,
         draft_generator=draft_generator,
-        cloud_client=cloud_client,
+        cloud_client=base_client,   # swapped per condition below
         max_new_tokens=MAX_TOKENS,
         temperature=0.0,
     )
-    
-    # Async client (lookahead=2)
-    async_client = AsyncEdgeClient(
-        model_manager=model_manager,
-        draft_generator=draft_generator,
-        cloud_client=cloud_client,
-        max_new_tokens=MAX_TOKENS,
-        temperature=0.0,
-        lookahead=2,
-    )
-    logger.info("Draft model loaded!")
-    
+    logger.info("Draft model loaded.")
+
     results: List[QuickResult] = []
-    
-    # Test each prompt
-    for prompt_type, prompts in [("easy", easy_prompts), ("hard", hard_prompts)]:
-        logger.info(f"\n{'='*60}")
-        logger.info(f"Testing {prompt_type.upper()} prompts")
-        logger.info("=" * 60)
-        
-        for prompt_data in prompts:
-            pid = prompt_data["id"]
+
+    for condition in NetworkCondition.all_profiles():
+        throttled = ThrottledCloudClient(base_client, condition)
+        edge_client.cloud_client = throttled
+
+        logger.info("")
+        logger.info("── Network: %s", condition)
+
+        for prompt_data, ptype in prompts:
+            pid  = prompt_data["id"]
             text = prompt_data["text"]
-            logger.info(f"\n[Prompt {pid}] {text[:50]}...")
-            
-            # Direct
-            logger.info("  Testing Direct...")
-            tokens, time_ms = test_direct(text)
+            logger.info("  [%s | prompt %d] %s...", ptype, pid, text[:55])
+
+            # ── Direct (with throttle) ──────────────────────────────────
+            throttled.reset_stats()
+            tokens, total_ms, overhead_ms = _direct_with_throttle(text, throttled)
             if tokens > 0:
-                tps = tokens / (time_ms / 1000)
-                results.append(QuickResult("direct", prompt_type, pid, tokens, time_ms, tps))
-                logger.info(f"    -> {tokens} tokens, {time_ms:.0f}ms, {tps:.2f} tok/s")
-            time.sleep(0.5)
-            
-            # Speculative K=3, K=5
-            for k in K_VALUES:
-                logger.info(f"  Testing Speculative K={k}...")
-                tokens, time_ms, acc, rounds, draft_ms, verify_ms, net_ms, rtt_ms = test_speculative(edge_client, text, k)
-                if tokens > 0:
-                    tps = tokens / (time_ms / 1000)
-                    results.append(QuickResult(
-                        f"k{k}", prompt_type, pid, tokens, time_ms, tps, acc, rounds,
-                        draft_time_ms=draft_ms, verify_time_ms=verify_ms, network_time_ms=net_ms, avg_rtt_ms=rtt_ms
-                    ))
-                    logger.info(f"    -> {tokens} tokens, {time_ms:.0f}ms, {tps:.2f} tok/s, "
-                              f"accept={acc:.1%}, rounds={rounds}, "
-                              f"draft={draft_ms:.0f}ms, verify={verify_ms:.0f}ms, net={net_ms:.0f}ms")
-                time.sleep(0.5)
-            
-            # Async K=3
-            logger.info(f"  Testing Async K={ASYNC_K}...")
-            start = time.time()
-            try:
-                async_metrics = async_client.generate(
-                    prompt=text,
-                    policy=lambda _round_id, _draft_tokens: ASYNC_K,
-                    policy_name=f"AsyncK{ASYNC_K}"
+                tps = tokens / (total_ms / 1000)
+                results.append(QuickResult(
+                    method="direct", network=condition.name,
+                    prompt_type=ptype, prompt_id=pid,
+                    tokens_generated=tokens, total_time_ms=total_ms,
+                    tokens_per_second=tps, sim_overhead_ms=overhead_ms,
+                ))
+                logger.info("    direct  : %d tok  %5.0f ms  %5.1f tok/s  overhead=%d ms",
+                            tokens, total_ms, tps, overhead_ms)
+            time.sleep(0.3)
+
+            # ── Speculative K=7 (with throttle) ────────────────────────
+            throttled.reset_stats()
+            m = _speculative(edge_client, text)
+            net_stats = throttled.get_stats_dict()
+            if m and m.generated_tokens > 0:
+                total_ms_s = m.total_latency_ms
+                tps_s = m.generated_tokens / (total_ms_s / 1000)
+                accepted = round(m.acceptance_ratio * m.total_rounds * K)
+                net_useful = accepted / m.total_rounds if m.total_rounds else 0
+                results.append(QuickResult(
+                    method="spec_k7", network=condition.name,
+                    prompt_type=ptype, prompt_id=pid,
+                    tokens_generated=m.generated_tokens,
+                    total_time_ms=total_ms_s,
+                    tokens_per_second=tps_s,
+                    acceptance_rate=m.acceptance_ratio,
+                    num_rounds=m.total_rounds,
+                    net_useful_toks_per_round=net_useful,
+                    draft_time_ms=m.total_edge_draft_time_ms,
+                    verify_time_ms=m.total_server_verify_time_ms,
+                    avg_rtt_ms=m.average_rtt_ms,
+                    sim_overhead_ms=net_stats["total_simulated_overhead_ms"],
+                ))
+                logger.info(
+                    "    spec_k7 : %d tok  %5.0f ms  %5.1f tok/s  "
+                    "accept=%4.1f%%  net_useful=%.2f tok/round  "
+                    "rounds=%d  rtt=%d ms  overhead=%d ms",
+                    m.generated_tokens, total_ms_s, tps_s,
+                    m.acceptance_ratio * 100, net_useful,
+                    m.total_rounds, m.average_rtt_ms,
+                    net_stats["total_simulated_overhead_ms"],
                 )
-                total_ms = (time.time() - start) * 1000
-                if async_metrics.generated_tokens > 0:
-                    tps = async_metrics.generated_tokens / (total_ms / 1000)
-                    results.append(QuickResult(
-                        f"async_k{ASYNC_K}", prompt_type, pid, async_metrics.generated_tokens, total_ms, tps,
-                        async_metrics.acceptance_ratio, async_metrics.total_rounds,
-                        draft_time_ms=async_metrics.total_edge_draft_time_ms,
-                        verify_time_ms=async_metrics.total_server_verify_time_ms,
-                        network_time_ms=async_metrics.total_network_time_ms,
-                        avg_rtt_ms=async_metrics.average_rtt_ms,
-                        pipeline_efficiency=async_metrics.pipeline_efficiency,
-                    ))
-                    logger.info(f"    -> {async_metrics.generated_tokens} tokens, {total_ms:.0f}ms, {tps:.2f} tok/s, "
-                              f"accept={async_metrics.acceptance_ratio:.1%}, rounds={async_metrics.total_rounds}, "
-                              f"pipe_eff={async_metrics.pipeline_efficiency:.1%}, "
-                              f"draft={async_metrics.total_edge_draft_time_ms:.0f}ms, verify={async_metrics.total_server_verify_time_ms:.0f}ms, net={async_metrics.total_network_time_ms:.0f}ms")
-            except Exception as e:
-                logger.error(f"Async K={ASYNC_K} failed: {e}")
-            time.sleep(0.5)
-    
-    # Summary
-    logger.info("\n" + "=" * 70)
-    logger.info("SUMMARY")
+            time.sleep(0.3)
+
+    # ── Summary table ────────────────────────────────────────────────────
+    logger.info("")
     logger.info("=" * 70)
-    
-    from collections import defaultdict
-    method_stats = defaultdict(lambda: {"tps": [], "accept": [], "draft_ms": [], "verify_ms": [], "net_ms": []})
-    
-    for r in results:
-        method_stats[r.method]["tps"].append(r.tokens_per_second)
-        if r.acceptance_rate > 0:
-            method_stats[r.method]["accept"].append(r.acceptance_rate)
-        if r.draft_time_ms > 0:
-            method_stats[r.method]["draft_ms"].append(r.draft_time_ms)
-        if r.verify_time_ms > 0:
-            method_stats[r.method]["verify_ms"].append(r.verify_time_ms)
-        if r.network_time_ms > 0:
-            method_stats[r.method]["net_ms"].append(r.network_time_ms)
-    
-    method_order = ["direct"] + [f"k{k}" for k in K_VALUES] + [f"async_k{ASYNC_K}"]
-    for method in method_order:
-        if method in method_stats:
-            avg_tps = sum(method_stats[method]["tps"]) / len(method_stats[method]["tps"])
-            avg_accept = sum(method_stats[method]["accept"]) / len(method_stats[method]["accept"]) if method_stats[method]["accept"] else 0
-            avg_draft = sum(method_stats[method]["draft_ms"]) / len(method_stats[method]["draft_ms"]) if method_stats[method]["draft_ms"] else 0
-            avg_verify = sum(method_stats[method]["verify_ms"]) / len(method_stats[method]["verify_ms"]) if method_stats[method]["verify_ms"] else 0
-            avg_net = sum(method_stats[method]["net_ms"]) / len(method_stats[method]["net_ms"]) if method_stats[method]["net_ms"] else 0
-            logger.info(f"{method:10s}: {avg_tps:6.2f} tok/s (accept: {avg_accept:.1%}, draft: {avg_draft:.0f}ms, verify: {avg_verify:.0f}ms, net: {avg_net:.0f}ms)")
-    
-    # Speedup calculation
-    if "direct" in method_stats:
-        direct_tps = sum(method_stats["direct"]["tps"]) / len(method_stats["direct"]["tps"])
-        for method in [f"k{k}" for k in K_VALUES] + [f"async_k{ASYNC_K}"]:
-            if method in method_stats:
-                spec_tps = sum(method_stats[method]["tps"]) / len(method_stats[method]["tps"])
-                speedup = spec_tps / direct_tps
-                logger.info(f"Speedup {method} vs Direct: {speedup:.2f}x")
-    
-    # Save results
+    logger.info("SUMMARY  —  tok/s and speedup per network condition")
+    logger.info("=" * 70)
+    header = f"{'Network':<10}  {'direct tok/s':>13}  {'spec_k7 tok/s':>14}  {'speedup':>8}  {'net_useful tok/rd':>18}"
+    logger.info(header)
+    logger.info("-" * len(header))
+    for net in [c.name for c in NetworkCondition.all_profiles()]:
+        d_tps  = _avg([r.tokens_per_second for r in results if r.method == "direct"  and r.network == net])
+        s_tps  = _avg([r.tokens_per_second for r in results if r.method == "spec_k7" and r.network == net])
+        nu     = _avg([r.net_useful_toks_per_round for r in results if r.method == "spec_k7" and r.network == net])
+        speedup = s_tps / d_tps if d_tps else 0
+        flag = "✓ FASTER" if speedup >= 1.0 else "✗ slower"
+        logger.info("%-10s  %13.2f  %14.2f  %7.3fx  %14.2f   %s",
+                    net, d_tps, s_tps, speedup, nu, flag)
+
+    # ── Save ─────────────────────────────────────────────────────────────
     output_dir = Path(__file__).parent / "experiments" / "outputs_quick"
     output_dir.mkdir(parents=True, exist_ok=True)
     out_file = output_dir / "quick_test_results.json"
     with open(out_file, "w") as f:
         json.dump([asdict(r) for r in results], f, indent=2)
-    logger.info(f"\nResults saved to: {out_file}")
-
-    logger.info("\n(Speculative speedup requires network latency > draft latency — expected on remote setups)")
+    logger.info("\nResults saved to: %s", out_file)
     return True
 
 

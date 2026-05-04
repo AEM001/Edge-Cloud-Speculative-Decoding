@@ -1,8 +1,9 @@
 # Network-Constrained Speculative Decoding Experiments
 
-Compares **direct generation**, **synchronous speculative decoding** (K = 3, 5, 7),
-and **asynchronous (pipelined) speculative decoding** (K = 3, 5, 7) under a range
-of simulated network conditions — from ideal local loopback to degraded 3G mobile.
+Compares **direct generation** and **synchronous speculative decoding** (K = 3, 5, 7)
+under simulated mobile network conditions. Designed for the edge-cloud split
+research scenario: the draft model runs on the edge device (GPU 1), the verify
+model runs on the cloud server (GPU 0).
 
 ---
 
@@ -10,112 +11,85 @@ of simulated network conditions — from ideal local loopback to degraded 3G mob
 
 | File | Role |
 |------|------|
-| `network_conditions.py` | Reusable network simulation layer — wraps any `cloud_client` and injects configurable latency, bandwidth throttle, jitter, and packet-loss delay |
-| `metrics_collector.py` | Unified data model (`ExperimentResult`), converters from raw client metrics, per-(method × condition) aggregation, JSON/CSV export, and human-readable table printing |
-| `run_network_experiment.py` | Main experiment runner — loads the draft model once, sweeps every network profile × method × prompt, streams results to `MetricsCollector`, saves outputs |
+| `network_conditions.py` | Network simulation — wraps any `cloud_client`, injects RTT, bandwidth throttle, and bursty spike state machine |
+| `metrics_collector.py` | Unified data model (`ExperimentResult`), converters, aggregation, JSON/CSV export, and table printing |
+| `run_network_experiment.py` | Main runner — draft model loaded once, sweeps profiles × methods × prompts |
+| `outputs_network/report.md` | Full analysis report with tables and root-cause findings |
 
 ---
 
-## Prerequisites
+## Hardware Setup (2× RTX 4090)
 
-1. **Verify server running** on `localhost:6006` (or set `VERIFY_SERVER_URL`):
-   ```bash
-   python -m server.verify_server --port 6006
-   ```
-2. **Draft model** available at the path in `config.py` (`DRAFT_MODEL_PATH`).
-3. Dependencies installed (`vllm`, `requests`, `fastapi`, `uvicorn`, etc.).
+```
+GPU 0  →  verify server  (Qwen2.5-14B-Instruct-AWQ, 0.85 mem util)
+GPU 1  →  draft model    (Qwen2.5-3B-Instruct-AWQ,  0.60 mem util)
+```
+
+Start order:
+
+```bash
+# Terminal 1 — verify server on GPU 0
+CUDA_VISIBLE_DEVICES=0 VERIFY_GPU_MEM=0.85 \
+  .venv/bin/python -m server.verify_server --port 6006
+
+# Terminal 2 — experiment on GPU 1
+CUDA_VISIBLE_DEVICES=1 \
+  .venv/bin/python -m experiments.run_network_experiment --prompts 5
+```
+
+Or for a quick sanity check:
+
+```bash
+CUDA_VISIBLE_DEVICES=1 .venv/bin/python quick_test.py
+```
 
 ---
 
 ## Quick Start
 
 ```bash
-# From the project root
-python -m experiments.run_network_experiment \
-    --prompts 2 \
+CUDA_VISIBLE_DEVICES=1 .venv/bin/python -m experiments.run_network_experiment \
+    --prompts 5 \
     --max-tokens 128 \
     --k-values 3 5 7
 ```
 
-This runs every method across **all 7 network profiles** using 2 simple + 2 complex
-prompts and writes results to `experiments/outputs_network/`.
+Writes results to `experiments/outputs_network/`.
 
 ---
 
 ## CLI Reference
 
-```
-usage: run_network_experiment.py [-h]
-    [--server URL]
-    [--max-tokens N]
-    [--prompts N]
-    [--k-values K [K ...]]
-    [--lookahead N]
-    [--profiles {ideal,LAN,WiFi,WAN_Low,WAN_High,4G,3G} [...]]
-    [--no-async]
-    [--no-direct]
-```
-
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--server` | `http://localhost:6006` | Verify server base URL |
-| `--max-tokens` | `128` | Max new tokens per generation call |
-| `--prompts` | `2` | Prompts per type (simple + complex) |
-| `--k-values` | `3 5 7` | Draft lengths K to test |
-| `--lookahead` | `2` | Async pipeline lookahead depth |
-| `--profiles` | all | Network profiles to include |
-| `--no-async` | — | Skip async speculative runs |
-| `--no-direct` | — | Skip direct generation runs |
-
-### Example: sweep only WAN profiles
-
-```bash
-python -m experiments.run_network_experiment \
-    --profiles WAN_Low WAN_High 4G 3G \
-    --prompts 4 \
-    --max-tokens 256
-```
+| `--server` | `http://localhost:6006` | Verify server URL |
+| `--max-tokens` | `128` | Max new tokens per call |
+| `--prompts` | `5` | Prompts per type (simple + complex) |
+| `--k-values` | `3 5 7` | Draft lengths K to sweep |
+| `--profiles` | all | `good`, `medium`, `bursty` |
+| `--no-direct` | — | Skip direct generation baseline |
 
 ---
 
 ## Network Profiles
 
-Profiles are defined as `NetworkCondition` dataclasses in `network_conditions.py`.
-Each profile specifies:
+| Profile | RTT | Download | Upload | Notes |
+|---------|-----|----------|--------|-------|
+| `good` | 25 ms | 120 Mbps | 30 Mbps | Strong 5G / WiFi |
+| `medium` | 55 ms | 35 Mbps | 20 Mbps | Typical 4G |
+| `bursty` | 40 ms normal / 250 ms spike | 30/5 Mbps | 15/2 Mbps | 4G with 2 s congestion bursts every 8 s |
 
-| Profile | RTT (approx) | Bandwidth | Jitter | Packet loss |
-|---------|--------------|-----------|--------|-------------|
-| `good` | ~25 ms | 100 Mbps | ±3 ms | 0% |
-| `medium` | ~50 ms | 50 Mbps | ±5 ms | 0% |
-| `bursty` | 40-80 ms | 20 Mbps | ±20 ms | 1% |
-
-The RTT seen by each round is approximately:
-
-```
-RTT ≈ (one_way_latency × 2) + payload_bytes / bandwidth + jitter + server_verify_time
-```
+Bursty cycle: 8 s normal → 2 s spike → repeat.
 
 ### Adding a custom profile
 
 ```python
 from experiments.network_conditions import NetworkCondition
 
-my_link = NetworkCondition(
-    name="Satellite",
-    one_way_latency_ms=300.0,
-    bandwidth_mbps=5.0,
-    jitter_ms=50.0,
-    packet_loss_prob=0.02,   # 2 % simulated loss → one retransmit overhead added
+satellite = NetworkCondition(
+    name="satellite",
+    rtt_ms=600.0, download_mbps=10.0, upload_mbps=3.0,
 )
-```
-
-Pass it via `--profiles` (add to `DEFAULT_NETWORK_PROFILES` in the runner) or inject
-directly into any `ThrottledCloudClient`:
-
-```python
-from experiments.network_conditions import ThrottledCloudClient
-throttled = ThrottledCloudClient(base_client, my_link)
-edge_client.cloud_client = throttled
 ```
 
 ---
@@ -124,71 +98,36 @@ edge_client.cloud_client = throttled
 
 ### Core (all methods)
 
-| Metric | Field | Description |
-|--------|-------|-------------|
-| Tokens/second | `tokens_per_second` | End-to-end throughput |
-| Total latency | `total_latency_ms` | Wall-clock time for full generation |
-| Tokens generated | `tokens_generated` | Output token count |
+| Metric | Field |
+|--------|-------|
+| Tokens/second | `tokens_per_second` |
+| Total latency | `total_latency_ms` |
+| Tokens generated | `tokens_generated` |
 
-### Speculative decoding (sync + async)
+### Speculative-only
 
-| Metric | Field | Description |
-|--------|-------|-------------|
-| Acceptance ratio | `acceptance_ratio` | Fraction of drafted tokens accepted by verifier |
-| Mean K chosen | `mean_k_chosen` | Average draft length per round |
-| Total rounds | `total_rounds` | Number of draft–verify cycles |
-| Draft time | `total_draft_time_ms` | Cumulative draft model compute time |
-| Verify time | `total_verify_time_ms` | Cumulative verifier compute time |
-| Network time | `total_network_time_ms` | Cumulative measured network overhead |
-| Average RTT | `average_rtt_ms` | Mean round-trip time including simulated delay |
-| Uplink bytes | `uplink_bytes` | Total serialised request payload |
-| Downlink bytes | `downlink_bytes` | Total serialised response payload |
-
-### Async pipeline (async only)
-
-| Metric | Field | Description |
-|--------|-------|-------------|
-| Pipeline efficiency | `pipeline_efficiency` | Fraction of slots that were full hits (no rollback) |
-| Avg bubble ms | `avg_bubble_ms` | Mean stall time per round when drafter waits for verifier |
-| Prefetch waste ratio | `prefetch_waste_ratio` | Fraction of speculatively drafted tokens discarded on rollback |
-| Async speedup vs sync | `async_speedup_vs_sync` | `(T_draft + T_verify) / max(T_draft, T_verify)` — theoretical pipeline benefit |
-| Total rollbacks | `total_rollbacks` | Number of speculative prefix rollbacks |
-
-### Simulated network overhead
-
-| Metric | Field | Description |
-|--------|-------|-------------|
-| Simulated overhead | `simulated_overhead_ms` | Total injected delay (uplink + downlink) per request |
-| Uplink delay | `simulated_uplink_delay_ms` | Latency + BW delay on the uplink direction |
-| Downlink delay | `simulated_downlink_delay_ms` | Latency + BW delay on the downlink direction |
+| Metric | Field | Why it matters |
+|--------|-------|----------------|
+| Acceptance ratio | `acceptance_ratio` | Quality of draft model |
+| **Net useful tokens/round** | derived: `accepted / rounds` | Actual amortisation per RTT |
+| Total rounds | `total_rounds` | Determines total network overhead |
+| Draft time | `total_draft_time_ms` | Edge compute cost |
+| Verify time | `total_verify_time_ms` | Should be ~30 ms/round after fix |
+| Average RTT | `average_rtt_ms` | verify + network |
+| Simulated overhead | `simulated_overhead_ms` | Pure injected network delay |
 
 ---
 
 ## Output Files
 
-All outputs go to `experiments/outputs_network/`:
-
 ```
 outputs_network/
-├── results_YYYYMMDD_HHMMSS.json    # raw per-observation records
-├── results_YYYYMMDD_HHMMSS.csv     # same data, spreadsheet-friendly
-├── summary_YYYYMMDD_HHMMSS.json    # aggregated per-(method × condition)
-├── results_latest.json             # symlink → most recent JSON
-└── results_latest.csv              # symlink → most recent CSV
-```
-
-### Programmatic access
-
-```python
-from experiments.metrics_collector import MetricsCollector, ExperimentResult
-import json
-
-with open("experiments/outputs_network/results_latest.json") as f:
-    records = [ExperimentResult(**r) for r in json.load(f)]
-
-# Filter async results under WAN_High
-async_wan = [r for r in records
-             if r.mode == "async" and r.network_condition == "WAN_High"]
+├── results_YYYYMMDD_HHMMSS.json
+├── results_YYYYMMDD_HHMMSS.csv
+├── summary_YYYYMMDD_HHMMSS.json
+├── results_latest.json          ← symlink
+├── results_latest.csv           ← symlink
+└── report.md                    ← full analysis
 ```
 
 ---
@@ -196,55 +135,100 @@ async_wan = [r for r in records
 ## Architecture
 
 ```
-run_network_experiment.py
-│
-├── NetworkCondition          (network_conditions.py)
-│   └── ThrottledCloudClient  wraps base_client, injects latency + BW delay
-│
-├── EdgeClient                (client/edge_client.py)
-│   └── draft_generator → ThrottledCloudClient → verify server
-│
-├── AsyncEdgeClient           (client/async_edge_client.py)
-│   └── draft_generator → ThrottledCloudClient (via background thread)
-│
-└── MetricsCollector          (metrics_collector.py)
-    ├── add(ExperimentResult)
-    ├── save_json / save_csv / save_summary_json
-    └── print_table / print_metric_spotlight
+EdgeClient (GPU 1 — edge)
+  │  draft_generator (3B)
+  │  cloud_client = ThrottledCloudClient
+  │      └─► HTTP /verify ──► verify server (GPU 0 — cloud)
+  │                               └─► CloudVerifier.verify()
+  │                                     one prefill(prefix+draft) + 1 decode
+  │                                     ≈ 30 ms/round  (vs 196 ms before fix)
+  └─► metrics
 ```
 
-The **draft model is loaded once** at startup; only the `cloud_client` reference on
-`EdgeClient` / `AsyncEdgeClient` is swapped between conditions, so GPU memory and
-model state are never reloaded mid-experiment.
+**Key implementation detail — `verify()` method:**
+Feed `prefix_ids + draft_ids` as a single prompt with `prompt_logprobs=K,
+max_tokens=1`. vLLM runs **one prefill** over all tokens (prefix KV cache hit)
+then **one decode** for the correction token. Total GPU work per round ≈ 30 ms,
+vs the broken approach of `generate(prefix, max_tokens=K+1)` which did K+1
+sequential decode steps ≈ 196 ms/round.
 
 ---
 
-## Reusing Individual Modules
+## Performance Results (2× 4090, 3B draft → 14B verify)
 
-### Simulate network in any existing script
+### After verify fix (prompt_logprobs single-prefill approach)
 
-```python
-from experiments.network_conditions import NetworkCondition, ThrottledCloudClient
-from client.http_cloud_client import create_http_cloud_client
+| Network | direct tok/s | spec_k7 tok/s | speedup | verify ms/round |
+|---------|-------------|---------------|---------|-----------------|
+| good    | 37          | 24            | 0.65×   | ~30 ms          |
+| medium  | 37          | 21            | 0.57×   | ~30 ms          |
+| bursty  | 37          | 22            | 0.60×   | ~30 ms          |
 
-base = create_http_cloud_client("http://localhost:6006")
-wan  = ThrottledCloudClient(base, NetworkCondition.wan_high())
+Simple prompts reach **0.77–0.96×** of direct. Complex prompts (500+ token prefix)
+remain slower due to O(n) attention over the growing KV cache.
 
-# Pass `wan` anywhere a cloud_client callable is expected
-edge_client.cloud_client = wan
+### Break-even analysis
+
+For spec_k7 to reach parity with direct (37 tok/s):
+
+```
+net_useful_toks/round ≥ verify_rtt_ms × direct_tps / 1000
+≥ 30 ms × 37 tok/s / 1000 = 1.11 tok/round   ← already satisfied (we get ~4)
+
+But also: total_spec_time = rounds × (draft + verify + net)
+         total_direct_time = tokens / direct_tps
+
+For 128 tokens, ~25 rounds:
+  spec:   25 × (28ms draft + 30ms verify + 25ms net) = 25 × 83ms = 2075ms
+  direct: 128 / 37 × 1000 = 3459ms
 ```
 
-### Record results in any existing script
+Wait — the math says spec should win. Why doesn't it in practice?  
+The **complex prompt RTT is 250–400 ms**, not 30 ms. The long prefix attention
+(500–900 tokens) inflates verify time from 30 ms (short prefix) to 200+ ms.
 
-```python
-from experiments.metrics_collector import MetricsCollector, from_sync_metrics
+---
 
-collector = MetricsCollector()
+## What to Change to Make Speculative Decoding Win
 
-metrics = edge_client.generate(prompt, policy=lambda *_: 5)
-collector.add(from_sync_metrics(metrics, k=5, network_condition="custom",
-                                prompt_id=1, prompt_type="Simple"))
+### Option 1 — Better draft model (highest impact, easy)
 
-collector.save_json(Path("my_results.json"))
-collector.print_table()
-```
+The 3B draft achieves ~55–64% acceptance. A stronger draft model in the same
+memory budget would increase `net_useful_toks/round` and reduce rounds:
+
+| Draft model | VRAM | Expected acceptance | Rounds (128 tok) |
+|-------------|------|---------------------|-----------------|
+| Qwen2.5-1.5B-AWQ | ~2 GB | ~45% | ~35 |
+| **Qwen2.5-3B-AWQ** (current) | ~4 GB | ~57% | ~27 |
+| Qwen2.5-7B-AWQ | ~8 GB | ~70–75% | ~20 |
+| Qwen2.5-14B-AWQ (same as verify) | ~12 GB | ~90%+ | ~15 |
+
+**Recommendation:** try `Qwen2.5-7B-Instruct-AWQ` as draft on GPU 1.
+At 70–75% acceptance and ~20 rounds, total spec time ≈ 20 × 83ms = 1660ms
+vs direct 3460ms → **2.1× speedup**.
+
+### Option 2 — Sliding window / chunked attention for long prefixes
+
+The O(n) attention on 500+ token prefixes dominates verify time for complex prompts.
+Setting `--max-tokens 64` (shorter responses) reduces rounds proportionally.
+
+### Option 3 — Larger verify model (research value, not perf)
+
+If the research goal is to study the network overhead under realistic cloud
+conditions, use a 72B verify model (needs tensor parallelism or quantisation).
+Per-token latency rises to ~150 ms → spec wins more easily, but requires
+multi-GPU cloud setup.
+
+### Option 4 — Reduce prefix payload size (network optimisation)
+
+Currently `prefix_ids` (the full growing token list) is sent every round. For
+a 500-token prompt at round 25, that's ~2 KB uplink per round. Sending only a
+delta (the newly accepted tokens) would cut uplink by ~20×. This requires a
+stateful server that maintains per-request KV state, but would also eliminate
+the re-prefill cost entirely.
+
+### TL;DR recommendation for current 2× 4090 setup
+
+> **Swap the draft model to `Qwen2.5-7B-Instruct-AWQ`.**  
+> It fits on GPU 1 (~8 GB), should raise acceptance to ~70–75%, reduce rounds
+> by ~25%, and push spec_k7 to ~1.5–2× faster than direct on simple prompts.
