@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 def _env(name: str, default: str) -> str:
     return os.getenv(name, default)
 
-_DEFAULT_MODEL_PATH = "/root/code/Qwen2.5-7B-Instruct-AWQ"
+_DEFAULT_MODEL_PATH = "/root/code/draft/models/Qwen2.5-14B-Instruct-AWQ"
 
 
 # ---------------------------------------------------------------------------

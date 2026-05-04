@@ -58,6 +58,9 @@ htmlcov/
 # Model and benchmark artifacts
 /models/Qwen3-8B/
 /models/qwen3_8b_eagle3/
+/models/Qwen2.5-14B-Instruct-AWQ
+/models/Qwen2.5-3B-Instruct-AWQ
+models/hf.txt
 /experiments/outputs*/
 
 # Local data artifacts

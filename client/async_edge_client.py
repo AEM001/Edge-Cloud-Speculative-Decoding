@@ -573,7 +573,6 @@ class AsyncEdgeClient:
             metrics.total_rounds += 1
             metrics.total_drafted_tokens += len(draft_resp.draft_token_ids)
             metrics.total_edge_draft_time_ms += draft_ms
-            metrics.uplink_bytes += len(json.dumps(edge_req.to_dict()).encode('utf-8'))
 
             # Submit to verifier (non-blocking)
             edge_req = EdgeRequest(
@@ -585,6 +584,7 @@ class AsyncEdgeClient:
                 edge_draft_time_ms=draft_ms,
                 policy_metadata={"policy_name": policy_name, "K": K},
             )
+            metrics.uplink_bytes += len(json.dumps(edge_req.to_dict()).encode('utf-8'))
             draft_queue.put(_VerifyJob(slot_id=slot_id, request=edge_req))
 
             # Advance speculative prefix (assume full acceptance)
