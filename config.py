@@ -27,7 +27,7 @@ DRAFT_MODEL_NAME: str = os.getenv(
 DRAFT_MODEL_PATH: Path = Path(
     os.getenv("DRAFT_MODEL_PATH", "/root/code/draft/models/Qwen2.5-3B-Instruct-AWQ")
 )
-DRAFT_GPU_MEM: float = _float("DRAFT_GPU_MEM", 0.90)
+DRAFT_GPU_MEM: float = _float("DRAFT_GPU_MEM", 0.60)
 DRAFT_MAX_LEN: int = _int("DRAFT_MAX_LEN", 4096)
 
 # ---------------------------------------------------------------------------

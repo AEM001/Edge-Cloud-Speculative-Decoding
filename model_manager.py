@@ -46,9 +46,6 @@ class VLLMModelManager:
                 "vLLM not installed. Run: pip install vllm"
             )
 
-        import os
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(self.gpu_id)
-
         logger.info(f"Loading vLLM model from: {self.model_path} on GPU {self.gpu_id}")
 
         # Load HuggingFace format model with vLLM
@@ -58,6 +55,8 @@ class VLLMModelManager:
             gpu_memory_utilization=self.gpu_memory_utilization,
             max_model_len=self.max_model_len,
             trust_remote_code=True,
+            enable_prefix_caching=True,
+            disable_log_stats=True,
         )
         
         # Get tokenizer from vLLM

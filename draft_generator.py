@@ -93,7 +93,7 @@ class VLLMDraftGenerator:
             temperature=temperature if temperature > 0 else 0.0,
             top_p=top_p,
             max_tokens=k,
-            logprobs=5,
+            logprobs=1,
         )
 
         # Pass token IDs directly to avoid decode → re-tokenize round-trip

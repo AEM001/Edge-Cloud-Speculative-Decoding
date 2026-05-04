@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 
 SERVER_URL = "http://localhost:6006"
 MAX_TOKENS = 128
-K = 7                # only large K — best speculative performer
-PROMPT_COUNT = 2    # prompts per type (simple + complex)
+K_VALUES = [7, 9]    # test K=7 and K=9
+PROMPT_COUNT = 2    # prompts per type (simple only)
 
 
 @dataclass
@@ -59,9 +59,9 @@ class QuickResult:
 
 
 def load_prompts():
-    simple_prompts, complex_prompts = load_prompts_by_type(count_per_type=PROMPT_COUNT)
-    logger.info("Loaded %d simple + %d complex prompts", len(simple_prompts), len(complex_prompts))
-    return [(p, "simple") for p in simple_prompts] + [(p, "complex") for p in complex_prompts]
+    simple_prompts, _ = load_prompts_by_type(count_per_type=PROMPT_COUNT)
+    logger.info("Loaded %d simple prompts (complex skipped)", len(simple_prompts))
+    return [(p, "simple") for p in simple_prompts]
 
 
 def _direct_with_throttle(prompt: str, throttled: ThrottledCloudClient) -> Tuple[int, float, float]:
@@ -100,15 +100,15 @@ def _direct_with_throttle(prompt: str, throttled: ThrottledCloudClient) -> Tuple
     return tokens, total_ms, overhead_ms
 
 
-def _speculative(edge_client: EdgeClient, prompt: str) -> Optional[object]:
+def _speculative(edge_client: EdgeClient, prompt: str, k: int) -> Optional[object]:
     try:
         return edge_client.generate(
             prompt=prompt,
-            policy=lambda _rid, _toks: K,
-            policy_name=f"StaticK{K}",
+            policy=lambda _rid, _toks: k,
+            policy_name=f"StaticK{k}",
         )
     except Exception as exc:
-        logger.error("Speculative K=%d failed: %s", K, exc)
+        logger.error("Speculative K=%d failed: %s", k, exc)
         return None
 
 
@@ -117,7 +117,7 @@ def _avg(lst): return sum(lst) / len(lst) if lst else 0.0
 
 def run_quick_test():
     logger.info("=" * 70)
-    logger.info("QUICK TEST  —  Direct (throttled) vs Speculative K=%d (throttled)", K)
+    logger.info("QUICK TEST  —  Direct (throttled) vs Speculative K=%s (throttled)", K_VALUES)
     logger.info("Draft model : %s", MODEL_NAME)
     logger.info("=" * 70)
 
@@ -167,56 +167,64 @@ def run_quick_test():
                             tokens, total_ms, tps, overhead_ms)
             time.sleep(0.3)
 
-            # ── Speculative K=7 (with throttle) ────────────────────────
-            throttled.reset_stats()
-            m = _speculative(edge_client, text)
-            net_stats = throttled.get_stats_dict()
-            if m and m.generated_tokens > 0:
-                total_ms_s = m.total_latency_ms
-                tps_s = m.generated_tokens / (total_ms_s / 1000)
-                accepted = round(m.acceptance_ratio * m.total_rounds * K)
-                net_useful = accepted / m.total_rounds if m.total_rounds else 0
-                results.append(QuickResult(
-                    method="spec_k7", network=condition.name,
-                    prompt_type=ptype, prompt_id=pid,
-                    tokens_generated=m.generated_tokens,
-                    total_time_ms=total_ms_s,
-                    tokens_per_second=tps_s,
-                    acceptance_rate=m.acceptance_ratio,
-                    num_rounds=m.total_rounds,
-                    net_useful_toks_per_round=net_useful,
-                    draft_time_ms=m.total_edge_draft_time_ms,
-                    verify_time_ms=m.total_server_verify_time_ms,
-                    avg_rtt_ms=m.average_rtt_ms,
-                    sim_overhead_ms=net_stats["total_simulated_overhead_ms"],
-                ))
-                logger.info(
-                    "    spec_k7 : %d tok  %5.0f ms  %5.1f tok/s  "
-                    "accept=%4.1f%%  net_useful=%.2f tok/round  "
-                    "rounds=%d  rtt=%d ms  overhead=%d ms",
-                    m.generated_tokens, total_ms_s, tps_s,
-                    m.acceptance_ratio * 100, net_useful,
-                    m.total_rounds, m.average_rtt_ms,
-                    net_stats["total_simulated_overhead_ms"],
-                )
-            time.sleep(0.3)
+            # ── Speculative (each K) ─────────────────────────────────────────────
+            for k in K_VALUES:
+                throttled.reset_stats()
+                m = _speculative(edge_client, text, k)
+                net_stats = throttled.get_stats_dict()
+                if m and m.generated_tokens > 0:
+                    total_ms_s = m.total_latency_ms
+                    tps_s = m.generated_tokens / (total_ms_s / 1000)
+                    accepted = round(m.acceptance_ratio * m.total_rounds * k)
+                    net_useful = accepted / m.total_rounds if m.total_rounds else 0
+                    method_name = f"spec_k{k}"
+                    results.append(QuickResult(
+                        method=method_name, network=condition.name,
+                        prompt_type=ptype, prompt_id=pid,
+                        tokens_generated=m.generated_tokens,
+                        total_time_ms=total_ms_s,
+                        tokens_per_second=tps_s,
+                        acceptance_rate=m.acceptance_ratio,
+                        num_rounds=m.total_rounds,
+                        net_useful_toks_per_round=net_useful,
+                        draft_time_ms=m.total_edge_draft_time_ms,
+                        verify_time_ms=m.total_server_verify_time_ms,
+                        avg_rtt_ms=m.average_rtt_ms,
+                        sim_overhead_ms=net_stats["total_simulated_overhead_ms"],
+                    ))
+                    logger.info(
+                        "    spec_k%-2d: %d tok  %5.0f ms  %5.1f tok/s  "
+                        "accept=%4.1f%%  net_useful=%.2f tok/round  "
+                        "rounds=%d  rtt=%d ms  overhead=%d ms",
+                        k, m.generated_tokens, total_ms_s, tps_s,
+                        m.acceptance_ratio * 100, net_useful,
+                        m.total_rounds, m.average_rtt_ms,
+                        net_stats["total_simulated_overhead_ms"],
+                    )
+                time.sleep(0.3)
 
     # ── Summary table ────────────────────────────────────────────────────
     logger.info("")
     logger.info("=" * 70)
     logger.info("SUMMARY  —  tok/s and speedup per network condition")
     logger.info("=" * 70)
-    header = f"{'Network':<10}  {'direct tok/s':>13}  {'spec_k7 tok/s':>14}  {'speedup':>8}  {'net_useful tok/rd':>18}"
+    spec_methods = [f"spec_k{k}" for k in K_VALUES]
+    header = f"{'Network':<10}  {'direct tok/s':>13}" + "".join(
+        f"  {f'k{k} tok/s':>10}  {'speedup':>7}  {'net_u/rnd':>9}" for k in K_VALUES
+    )
     logger.info(header)
     logger.info("-" * len(header))
     for net in [c.name for c in NetworkCondition.all_profiles()]:
-        d_tps  = _avg([r.tokens_per_second for r in results if r.method == "direct"  and r.network == net])
-        s_tps  = _avg([r.tokens_per_second for r in results if r.method == "spec_k7" and r.network == net])
-        nu     = _avg([r.net_useful_toks_per_round for r in results if r.method == "spec_k7" and r.network == net])
-        speedup = s_tps / d_tps if d_tps else 0
-        flag = "✓ FASTER" if speedup >= 1.0 else "✗ slower"
-        logger.info("%-10s  %13.2f  %14.2f  %7.3fx  %14.2f   %s",
-                    net, d_tps, s_tps, speedup, nu, flag)
+        d_tps = _avg([r.tokens_per_second for r in results if r.method == "direct" and r.network == net])
+        row = f"{net:<10}  {d_tps:>13.2f}"
+        for k in K_VALUES:
+            mname = f"spec_k{k}"
+            s_tps = _avg([r.tokens_per_second for r in results if r.method == mname and r.network == net])
+            nu    = _avg([r.net_useful_toks_per_round for r in results if r.method == mname and r.network == net])
+            speedup = s_tps / d_tps if d_tps else 0
+            flag = " ✓" if speedup >= 1.0 else ""
+            row += f"  {s_tps:>10.2f}  {speedup:>6.3f}x{flag}  {nu:>9.2f}"
+        logger.info(row)
 
     # ── Save ─────────────────────────────────────────────────────────────
     output_dir = Path(__file__).parent / "experiments" / "outputs_quick"

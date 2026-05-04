@@ -1,0 +1,20 @@
+K=9 gives the same rounds as K=7 (27) because acceptance dropped (41.6% × 9 = 3.74 toks/round, same as 53.4% × 7 = 3.74). K=9 is slower because more draft tokens per round = more draft time with no benefit. K=7 is clearly better. Let me wait for completion:
+
+Checked command status
+K=9 is slightly better on "good" (0.91× vs 0.81×) because net_useful=4.17 vs 3.85 — it drafts one extra accepted token per round. But neither beats direct.
+
+The fundamental issue is now clear and provable: with the "good" network profile injecting 25ms one-way latency (50ms RTT), each of the 26-27 rounds pays ~50ms in pure simulated network overhead, totalling ~1300ms that direct generation never pays. This is the research finding itself — under realistic mobile latency, synchronous edge-cloud spec decoding requires very high acceptance (>80%) or very low RTT (<10ms) to beat direct.
+
+Here's the honest summary:
+
+Results
+Network	direct	K=7	K=9
+good	37.2	30.1 (0.81×)	33.8 (0.91×)
+medium	37.6	28.0 (0.74×)	28.5 (0.76×)
+bursty	37.9	26.7 (0.70×)	27.6 (0.73×)
+K=9 is marginally better than K=7 (~0.91× vs 0.81× on good network) because it gets one extra token accepted per round. Neither beats direct with the current 3B draft model's ~55% acceptance.
+
+The reason spec can't beat direct here is structural: 26 rounds × 50ms simulated RTT = 1300ms pure network overhead that direct doesn't pay. To beat direct you need either:
+
+Acceptance >~80% (so rounds drop to ~18, overhead drops to 900ms) — needs a much better draft model aligned to the same greedy output as the verify model
+Or the verify model to be slow enough (>50 tok/s is impossible to beat, but with a 72B verify model at ~5 tok/s, the verify step itself becomes the bottleneck and spec wins)
