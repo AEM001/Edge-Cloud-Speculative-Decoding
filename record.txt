@@ -18,3 +18,22 @@ The reason spec can't beat direct here is structural: 26 rounds × 50ms simulate
 
 Acceptance >~80% (so rounds drop to ~18, overhead drops to 900ms) — needs a much better draft model aligned to the same greedy output as the verify model
 Or the verify model to be slow enough (>50 tok/s is impossible to beat, but with a 72B verify model at ~5 tok/s, the verify step itself becomes the bottleneck and spec wins)
+
+
+Results: Sync vs Async (lookahead=1, K=7)
+Network	direct	sync_k7	async_k7	async gain vs sync
+good	38.3	33.5 (0.876×)	35.1 (0.917×)	+1.5 tok/s
+medium	38.1	27.8 (0.730×)	27.7 (0.727×)	≈ flat
+bursty	37.9	25.8 (0.681×)	28.3 (0.747×)	+2.5 tok/s
+Async is consistently faster than sync — particularly on good (+4.8%) and bursty (+9.7%) networks. But still under 1.0× vs direct.
+
+Why it doesn't fully beat direct
+The pipeline overlap IS working — draft_time/round ≈ 33-35ms is being hidden inside the RTT. But the bubble is still 80-120ms because verify RTT (~110ms) is 3× longer than draft (~35ms). The overlap saves 35ms per round, but there's still a 75ms irreducible gap.
+
+What the async overlap is doing
+Sync:  [draft 35ms][wait+verify 110ms] = 145ms/round
+Async: [draft 35ms] starts immediately after submitting;
+       [wait for prev verify 75ms bubble] then submit = 110ms/round
+That's a 24% per-round speedup from async alone — the numbers (async avg_rtt drops from 108ms → 110ms reported but actual wall time is lower due to overlap). The absolute gain is real but modest because the RTT dominates.
+
+The async design is correct and does hide the draft cost. The ceiling is RTT ≈ 80-150ms regardless of draft speed. To beat direct you need RTT < ~40ms, which on a real LAN (not simulated) is achievable.

@@ -22,6 +22,7 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from client.async_edge_client import AsyncEdgeClient
 from client.edge_client import EdgeClient
 from client.http_cloud_client import create_http_cloud_client
 from config import DRAFT_GPU_MEM as GPU_MEMORY_UTILIZATION, DRAFT_MAX_LEN as MAX_MODEL_LEN, DRAFT_MODEL_NAME as MODEL_NAME, DRAFT_MODEL_PATH as MODEL_PATH
@@ -35,7 +36,8 @@ logger = logging.getLogger(__name__)
 
 SERVER_URL = "http://localhost:6006"
 MAX_TOKENS = 128
-K_VALUES = [7, 9]    # test K=7 and K=9
+K_VALUES  = [7]      # draft length
+LOOKAHEAD = 1        # 1 verify in flight while 1 draft runs concurrently
 PROMPT_COUNT = 2    # prompts per type (simple only)
 
 
@@ -112,6 +114,18 @@ def _speculative(edge_client: EdgeClient, prompt: str, k: int) -> Optional[objec
         return None
 
 
+def _async_speculative(async_client: AsyncEdgeClient, prompt: str, k: int) -> Optional[object]:
+    try:
+        return async_client.generate(
+            prompt=prompt,
+            policy=lambda _rid, _toks: k,
+            policy_name=f"AsyncK{k}",
+        )
+    except Exception as exc:
+        logger.error("Async speculative K=%d failed: %s", k, exc)
+        return None
+
+
 def _avg(lst): return sum(lst) / len(lst) if lst else 0.0
 
 
@@ -136,13 +150,22 @@ def run_quick_test():
         max_new_tokens=MAX_TOKENS,
         temperature=0.0,
     )
+    async_client = AsyncEdgeClient(
+        model_manager=model_manager,
+        draft_generator=draft_generator,
+        cloud_client=base_client,   # swapped per condition below
+        max_new_tokens=MAX_TOKENS,
+        temperature=0.0,
+        lookahead=LOOKAHEAD,
+    )
     logger.info("Draft model loaded.")
 
     results: List[QuickResult] = []
 
     for condition in NetworkCondition.all_profiles():
         throttled = ThrottledCloudClient(base_client, condition)
-        edge_client.cloud_client = throttled
+        edge_client.cloud_client  = throttled
+        async_client.cloud_client = throttled
 
         logger.info("")
         logger.info("── Network: %s", condition)
@@ -167,7 +190,7 @@ def run_quick_test():
                             tokens, total_ms, tps, overhead_ms)
             time.sleep(0.3)
 
-            # ── Speculative (each K) ─────────────────────────────────────────────
+            # ── Sync Speculative (each K) ─────────────────────────────────────
             for k in K_VALUES:
                 throttled.reset_stats()
                 m = _speculative(edge_client, text, k)
@@ -177,7 +200,7 @@ def run_quick_test():
                     tps_s = m.generated_tokens / (total_ms_s / 1000)
                     accepted = round(m.acceptance_ratio * m.total_rounds * k)
                     net_useful = accepted / m.total_rounds if m.total_rounds else 0
-                    method_name = f"spec_k{k}"
+                    method_name = f"sync_k{k}"
                     results.append(QuickResult(
                         method=method_name, network=condition.name,
                         prompt_type=ptype, prompt_id=pid,
@@ -193,13 +216,48 @@ def run_quick_test():
                         sim_overhead_ms=net_stats["total_simulated_overhead_ms"],
                     ))
                     logger.info(
-                        "    spec_k%-2d: %d tok  %5.0f ms  %5.1f tok/s  "
+                        "    sync_k%-2d: %d tok  %5.0f ms  %5.1f tok/s  "
                         "accept=%4.1f%%  net_useful=%.2f tok/round  "
-                        "rounds=%d  rtt=%d ms  overhead=%d ms",
+                        "rounds=%d  rtt=%d ms",
                         k, m.generated_tokens, total_ms_s, tps_s,
                         m.acceptance_ratio * 100, net_useful,
                         m.total_rounds, m.average_rtt_ms,
-                        net_stats["total_simulated_overhead_ms"],
+                    )
+                time.sleep(0.3)
+
+            # ── Async Speculative (each K) ────────────────────────────────────
+            for k in K_VALUES:
+                throttled.reset_stats()
+                m = _async_speculative(async_client, text, k)
+                net_stats = throttled.get_stats_dict()
+                if m and m.generated_tokens > 0:
+                    total_ms_a = m.total_latency_ms
+                    tps_a = m.generated_tokens / (total_ms_a / 1000)
+                    accepted = m.total_accepted_tokens
+                    net_useful = accepted / m.total_rounds if m.total_rounds else 0
+                    method_name = f"async_k{k}"
+                    results.append(QuickResult(
+                        method=method_name, network=condition.name,
+                        prompt_type=ptype, prompt_id=pid,
+                        tokens_generated=m.generated_tokens,
+                        total_time_ms=total_ms_a,
+                        tokens_per_second=tps_a,
+                        acceptance_rate=m.acceptance_ratio,
+                        num_rounds=m.total_rounds,
+                        net_useful_toks_per_round=net_useful,
+                        draft_time_ms=m.total_edge_draft_time_ms,
+                        verify_time_ms=m.total_server_verify_time_ms,
+                        avg_rtt_ms=m.average_rtt_ms,
+                        sim_overhead_ms=net_stats["total_simulated_overhead_ms"],
+                    ))
+                    logger.info(
+                        "    async_k%-1d: %d tok  %5.0f ms  %5.1f tok/s  "
+                        "accept=%4.1f%%  net_useful=%.2f tok/round  "
+                        "rounds=%d  rtt=%d ms  bubble=%.0fms",
+                        k, m.generated_tokens, total_ms_a, tps_a,
+                        m.acceptance_ratio * 100, net_useful,
+                        m.total_rounds, m.average_rtt_ms,
+                        m.avg_bubble_ms,
                     )
                 time.sleep(0.3)
 
@@ -208,22 +266,22 @@ def run_quick_test():
     logger.info("=" * 70)
     logger.info("SUMMARY  —  tok/s and speedup per network condition")
     logger.info("=" * 70)
-    spec_methods = [f"spec_k{k}" for k in K_VALUES]
-    header = f"{'Network':<10}  {'direct tok/s':>13}" + "".join(
-        f"  {f'k{k} tok/s':>10}  {'speedup':>7}  {'net_u/rnd':>9}" for k in K_VALUES
+    methods_to_show = [f"sync_k{k}" for k in K_VALUES] + [f"async_k{k}" for k in K_VALUES]
+    col_w = 28
+    header = f"{'Network':<10}  {'direct':>8}" + "".join(
+        f"  {m:>{col_w}}" for m in methods_to_show
     )
     logger.info(header)
     logger.info("-" * len(header))
     for net in [c.name for c in NetworkCondition.all_profiles()]:
         d_tps = _avg([r.tokens_per_second for r in results if r.method == "direct" and r.network == net])
-        row = f"{net:<10}  {d_tps:>13.2f}"
-        for k in K_VALUES:
-            mname = f"spec_k{k}"
-            s_tps = _avg([r.tokens_per_second for r in results if r.method == mname and r.network == net])
-            nu    = _avg([r.net_useful_toks_per_round for r in results if r.method == mname and r.network == net])
+        row = f"{net:<10}  {d_tps:>8.1f}"
+        for mname in methods_to_show:
+            s_tps   = _avg([r.tokens_per_second for r in results if r.method == mname and r.network == net])
             speedup = s_tps / d_tps if d_tps else 0
-            flag = " ✓" if speedup >= 1.0 else ""
-            row += f"  {s_tps:>10.2f}  {speedup:>6.3f}x{flag}  {nu:>9.2f}"
+            flag    = " ✓" if speedup >= 1.0 else ""
+            col     = f"{s_tps:.1f} ({speedup:.3f}x{flag})"
+            row    += f"  {col:>{col_w}}"
         logger.info(row)
 
     # ── Save ─────────────────────────────────────────────────────────────

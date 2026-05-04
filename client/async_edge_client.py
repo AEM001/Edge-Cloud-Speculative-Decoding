@@ -342,6 +342,104 @@ class AsyncEdgeClient:
     # Core pipeline loop
     # ------------------------------------------------------------------
 
+    def _apply_result(
+        self,
+        vr: "_VerifyResult",
+        slot: "PipelineSlot",
+        committed_prefix: List[int],
+        speculative_prefix: List[int],
+        in_flight: "Dict[int, PipelineSlot]",
+        metrics: "AsyncRequestMetrics",
+    ) -> bool:
+        """
+        Apply one verification result to committed_prefix.
+
+        Returns True if a rollback occurred (caller must stop draining
+        and re-draft from the corrected committed_prefix).
+
+        Committed-prefix advancement rule
+        ----------------------------------
+        A slot can only advance the committed prefix if it starts exactly
+        where the committed prefix currently ends — i.e. it is the *next*
+        slot in logical order.  Slots that assumed a prefix beyond the
+        current committed point are downstream of a rollback and are
+        discarded.
+        """
+        resp = vr.cloud_response
+        accepted = resp.accepted_len
+        drafted  = len(slot.draft_ids)
+        full_hit = (accepted == drafted)
+
+        slot.accepted_len     = accepted
+        slot.correction_token = resp.correction_token_id
+        slot.verify_time_ms   = resp.server_verify_time_ms
+        slot.rtt_ms           = vr.rtt_ms
+
+        metrics.total_server_verify_time_ms += resp.server_verify_time_ms
+        metrics.total_network_time_ms       += max(0.0, vr.rtt_ms - resp.server_verify_time_ms)
+        n = max(metrics.total_rounds, 1)
+        metrics.average_rtt_ms = (metrics.average_rtt_ms * (n - 1) + vr.rtt_ms) / n
+        metrics.uplink_bytes   += len(json.dumps({"accepted_token_ids": resp.accepted_token_ids}).encode())
+        metrics.downlink_bytes += len(json.dumps({"correction_token_id": resp.correction_token_id}).encode())
+
+        # Only advance committed prefix if this slot is the immediate next
+        slot_start = len(slot.assumed_prefix)
+        committed_end = len(committed_prefix)
+
+        if slot_start != committed_end:
+            # This slot is downstream of an already-processed rollback — skip
+            metrics.slot_details.append({
+                "slot_id": vr.slot_id, "drafted": drafted, "accepted": 0,
+                "full_hit": False, "wasted_tokens": drafted,
+                "draft_ms": slot.draft_time_ms, "verify_ms": slot.verify_time_ms,
+                "rtt_ms": slot.rtt_ms, "rollback": False,
+            })
+            return False
+
+        if full_hit:
+            slot.state = SlotState.HIT
+            committed_prefix.extend(slot.draft_ids)
+            metrics.total_accepted_tokens += accepted
+            metrics.slot_details.append({
+                "slot_id": vr.slot_id, "drafted": drafted, "accepted": accepted,
+                "full_hit": True, "wasted_tokens": 0,
+                "draft_ms": slot.draft_time_ms, "verify_ms": slot.verify_time_ms,
+                "rtt_ms": slot.rtt_ms, "rollback": False,
+            })
+            logger.debug("Slot %d: HIT accepted=%d committed=%d",
+                         vr.slot_id, accepted, len(committed_prefix))
+            return False
+        else:
+            slot.state = SlotState.REJECTED
+            new_committed = slot.assumed_prefix + slot.draft_ids[:accepted]
+            if resp.correction_token_id is not None:
+                new_committed.append(resp.correction_token_id)
+
+            wasted_downstream = sum(len(s.draft_ids) for s in in_flight.values())
+            metrics.total_accepted_tokens += accepted
+            metrics.total_rollbacks       += 1
+            metrics.slot_details.append({
+                "slot_id": vr.slot_id, "drafted": drafted, "accepted": accepted,
+                "full_hit": False,
+                "wasted_tokens": (drafted - accepted) + wasted_downstream,
+                "draft_ms": slot.draft_time_ms, "verify_ms": slot.verify_time_ms,
+                "rtt_ms": slot.rtt_ms, "rollback": True,
+            })
+            logger.debug("Slot %d: REJECT accepted=%d/%d correction=%s wasted_downstream=%d",
+                         vr.slot_id, accepted, drafted, resp.correction_token_id, wasted_downstream)
+
+            # Advance committed to rollback point
+            committed_prefix.clear()
+            committed_prefix.extend(new_committed)
+
+            # Reset speculative prefix and flush all downstream slots
+            for s in in_flight.values():
+                s.state = SlotState.FLUSHED
+            in_flight.clear()
+            speculative_prefix.clear()
+            speculative_prefix.extend(committed_prefix)
+            return True   # rollback — caller must re-draft
+
     def _pipeline_loop(
         self,
         prompt_ids: List[int],
@@ -357,210 +455,79 @@ class AsyncEdgeClient:
         metrics: AsyncRequestMetrics,
     ) -> None:
         max_tokens = self.max_new_tokens
-        eos = self.eos_token_id
+        eos        = self.eos_token_id
 
-        while len(committed_prefix) - len(prompt_ids) < max_tokens:
-            # ── Check EOS in committed prefix ────────────────────────
+        def _done() -> bool:
+            if len(committed_prefix) - len(prompt_ids) >= max_tokens:
+                return True
             if eos and eos in committed_prefix[len(prompt_ids):]:
-                break
+                return True
+            return False
 
-            # ── Phase A: drain available verification results ─────────
-            rollback_triggered = False
+        while not _done():
+
+            # ── Phase A: drain any already-available results (non-blocking)
             while True:
                 try:
                     vr: _VerifyResult = result_queue.get_nowait()
                 except queue.Empty:
                     break
-
                 slot = in_flight.pop(vr.slot_id, None)
                 if slot is None:
-                    continue  # already flushed
+                    continue
+                rollback = self._apply_result(
+                    vr, slot, committed_prefix, speculative_prefix, in_flight, metrics
+                )
+                if rollback:
+                    break   # speculative_prefix reset; re-draft from correct base
 
-                resp = vr.cloud_response
-                accepted = resp.accepted_len
-                drafted = len(slot.draft_ids)
-                full_hit = (accepted == drafted)
-
-                slot.accepted_len = accepted
-                slot.correction_token = resp.correction_token_id
-                slot.verify_time_ms = resp.server_verify_time_ms
-                slot.rtt_ms = vr.rtt_ms
-
-                # Update aggregate timing
-                metrics.total_server_verify_time_ms += resp.server_verify_time_ms
-                metrics.total_network_time_ms += max(0.0, vr.rtt_ms - resp.server_verify_time_ms)
-                if metrics.total_rounds > 0:
-                    n = metrics.total_rounds
-                    metrics.average_rtt_ms = (
-                        metrics.average_rtt_ms * (n - 1) + vr.rtt_ms
-                    ) / n
-                else:
-                    metrics.average_rtt_ms = vr.rtt_ms
-
-                metrics.uplink_bytes += len(json.dumps({"accepted_token_ids": resp.accepted_token_ids}).encode('utf-8'))
-                metrics.downlink_bytes += len(json.dumps({"correction_token_id": resp.correction_token_id}).encode('utf-8'))
-
-                if full_hit:
-                    slot.state = SlotState.HIT
-                    new_committed = slot.assumed_prefix + slot.draft_ids
-                    tokens_added = len(new_committed) - len(committed_prefix)
-                    if tokens_added > 0:
-                        committed_prefix.extend(slot.draft_ids[len(committed_prefix) - len(slot.assumed_prefix):])
-                    metrics.total_accepted_tokens += accepted
-                    metrics.slot_details.append({
-                        "slot_id": vr.slot_id,
-                        "drafted": drafted,
-                        "accepted": accepted,
-                        "full_hit": True,
-                        "wasted_tokens": 0,
-                        "draft_ms": slot.draft_time_ms,
-                        "verify_ms": slot.verify_time_ms,
-                        "rtt_ms": slot.rtt_ms,
-                        "rollback": False,
-                    })
-                    logger.debug("Slot %d: HIT accepted=%d", vr.slot_id, accepted)
-                else:
-                    slot.state = SlotState.REJECTED
-                    # Build the rollback prefix
-                    rollback = slot.assumed_prefix + slot.draft_ids[:accepted]
-                    if resp.correction_token_id is not None:
-                        rollback = rollback + [resp.correction_token_id]
-
-                    tokens_added = len(rollback) - len(committed_prefix)
-                    if tokens_added > 0:
-                        committed_prefix.clear()
-                        committed_prefix.extend(rollback)
-                    elif tokens_added < 0:
-                        # correction moved us backward — keep committed as is
-                        pass
-
-                    wasted = sum(
-                        len(s.draft_ids)
-                        for s in in_flight.values()
-                    )
-                    metrics.total_accepted_tokens += accepted
-                    metrics.total_rollbacks += 1
-                    metrics.slot_details.append({
-                        "slot_id": vr.slot_id,
-                        "drafted": drafted,
-                        "accepted": accepted,
-                        "full_hit": False,
-                        "wasted_tokens": drafted - accepted + wasted,
-                        "draft_ms": slot.draft_time_ms,
-                        "verify_ms": slot.verify_time_ms,
-                        "rtt_ms": slot.rtt_ms,
-                        "rollback": True,
-                    })
-                    logger.debug(
-                        "Slot %d: REJECT accepted=%d correction=%s wasted=%d",
-                        vr.slot_id, accepted, resp.correction_token_id, wasted,
-                    )
-                    # Flush all downstream speculative slots
-                    for s in in_flight.values():
-                        s.state = SlotState.FLUSHED
-                    in_flight.clear()
-                    speculative_prefix.clear()
-                    speculative_prefix.extend(committed_prefix)
-                    rollback_triggered = True
-                    break   # stop draining; must re-draft from correct prefix
-
-            # ── Check stopping after draining ─────────────────────────
-            if len(committed_prefix) - len(prompt_ids) >= max_tokens:
-                break
-            if eos and eos in committed_prefix[len(prompt_ids):]:
+            if _done():
                 break
 
-            # ── Phase B: block if at lookahead capacity ───────────────
-            if len(in_flight) >= self.lookahead:
-                bubble_start = time.perf_counter()
-                vr = result_queue.get()     # blocking wait
-                bubble_ms = (time.perf_counter() - bubble_start) * 1000
-                metrics.total_bubble_ms += bubble_ms
-
-                slot = in_flight.pop(vr.slot_id, None)
-                if slot is not None:
-                    resp = vr.cloud_response
-                    accepted = resp.accepted_len
-                    drafted = len(slot.draft_ids)
-                    full_hit = (accepted == drafted)
-
-                    slot.accepted_len = accepted
-                    slot.correction_token = resp.correction_token_id
-                    slot.verify_time_ms = resp.server_verify_time_ms
-                    slot.rtt_ms = vr.rtt_ms
-
-                    metrics.total_server_verify_time_ms += resp.server_verify_time_ms
-                    metrics.total_network_time_ms += max(0.0, vr.rtt_ms - resp.server_verify_time_ms)
-                    n = metrics.total_rounds or 1
-                    metrics.average_rtt_ms = (metrics.average_rtt_ms * (n - 1) + vr.rtt_ms) / n
-
-                    if full_hit:
-                        slot.state = SlotState.HIT
-                        committed_prefix.extend(
-                            slot.draft_ids[len(committed_prefix) - len(slot.assumed_prefix):]
-                        )
-                        metrics.total_accepted_tokens += accepted
-                        metrics.slot_details.append({
-                            "slot_id": vr.slot_id,
-                            "drafted": drafted,
-                            "accepted": accepted,
-                            "full_hit": True,
-                            "wasted_tokens": 0,
-                            "draft_ms": slot.draft_time_ms,
-                            "verify_ms": slot.verify_time_ms,
-                            "rtt_ms": slot.rtt_ms,
-                            "rollback": False,
-                        })
-                    else:
-                        slot.state = SlotState.REJECTED
-                        rollback = slot.assumed_prefix + slot.draft_ids[:accepted]
-                        if resp.correction_token_id is not None:
-                            rollback.append(resp.correction_token_id)
-                        tokens_added = len(rollback) - len(committed_prefix)
-                        if tokens_added > 0:
-                            committed_prefix.clear()
-                            committed_prefix.extend(rollback)
-                        wasted = sum(len(s.draft_ids) for s in in_flight.values())
-                        metrics.total_accepted_tokens += accepted
-                        metrics.total_rollbacks += 1
-                        metrics.slot_details.append({
-                            "slot_id": vr.slot_id,
-                            "drafted": drafted,
-                            "accepted": accepted,
-                            "full_hit": False,
-                            "wasted_tokens": drafted - accepted + wasted,
-                            "draft_ms": slot.draft_time_ms,
-                            "verify_ms": slot.verify_time_ms,
-                            "rtt_ms": slot.rtt_ms,
-                            "rollback": True,
-                        })
-                        for s in in_flight.values():
-                            s.state = SlotState.FLUSHED
-                        in_flight.clear()
-                        speculative_prefix.clear()
-                        speculative_prefix.extend(committed_prefix)
-                        continue   # restart loop, skip drafting this iteration
-
-            # ── Phase C: draft next batch ──────────────────────────────
+            # ── Phase B: draft the next batch NOW (overlaps in-flight verify)
+            # Draft runs on GPU while the previous verify call travels over
+            # the network — this is where the latency hiding happens.
             slot_id = next_slot_id_ref[0]
             next_slot_id_ref[0] += 1
             K = policy(slot_id, [])
 
-            draft_start = time.perf_counter()
+            draft_t0 = time.perf_counter()
             draft_req = DraftRequest(
                 verified_prefix=list(speculative_prefix),
                 num_draft_tokens=K,
             )
             draft_resp: DraftResponse = self.draft_generator.generate_draft_tokens(
-                draft_req,
-                temperature=self.temperature,
+                draft_req, temperature=self.temperature,
             )
-            draft_ms = (time.perf_counter() - draft_start) * 1000
+            draft_ms = (time.perf_counter() - draft_t0) * 1000
 
             if not draft_resp.draft_token_ids:
                 logger.warning("Empty draft at slot %d — stopping", slot_id)
                 break
 
+            # ── Phase C: if at max in-flight, wait for one result before
+            # submitting (keeps at most `lookahead` outstanding verifies)
+            if len(in_flight) >= self.lookahead:
+                bubble_t0 = time.perf_counter()
+                vr = result_queue.get()   # blocking — draft already done above
+                metrics.total_bubble_ms += (time.perf_counter() - bubble_t0) * 1000
+
+                slot = in_flight.pop(vr.slot_id, None)
+                if slot is not None:
+                    rollback = self._apply_result(
+                        vr, slot, committed_prefix, speculative_prefix, in_flight, metrics
+                    )
+                    if rollback:
+                        # Speculative prefix was wrong — discard this draft,
+                        # loop back to re-draft from the corrected prefix.
+                        # (The slot_id is already incremented; that's fine —
+                        # slot IDs are just labels, not indices.)
+                        continue
+
+            if _done():
+                break
+
+            # ── Phase D: submit the prepared draft to the verifier ────
             slot = PipelineSlot(
                 slot_id=slot_id,
                 assumed_prefix=list(speculative_prefix),
@@ -570,11 +537,10 @@ class AsyncEdgeClient:
             )
             in_flight[slot_id] = slot
 
-            metrics.total_rounds += 1
-            metrics.total_drafted_tokens += len(draft_resp.draft_token_ids)
+            metrics.total_rounds             += 1
+            metrics.total_drafted_tokens     += len(draft_resp.draft_token_ids)
             metrics.total_edge_draft_time_ms += draft_ms
 
-            # Submit to verifier (non-blocking)
             edge_req = EdgeRequest(
                 request_id=request_id,
                 round_id=slot_id,
@@ -584,63 +550,30 @@ class AsyncEdgeClient:
                 edge_draft_time_ms=draft_ms,
                 policy_metadata={"policy_name": policy_name, "K": K},
             )
-            metrics.uplink_bytes += len(json.dumps(edge_req.to_dict()).encode('utf-8'))
+            metrics.uplink_bytes += len(json.dumps(edge_req.to_dict()).encode())
             draft_queue.put(_VerifyJob(slot_id=slot_id, request=edge_req))
 
-            # Advance speculative prefix (assume full acceptance)
+            # Optimistically advance speculative prefix (assume full hit)
             speculative_prefix.extend(draft_resp.draft_token_ids)
 
             logger.debug(
-                "Slot %d drafted K=%d  spec_len=%d  committed_len=%d  in_flight=%d",
-                slot_id,
-                K,
-                len(speculative_prefix),
-                len(committed_prefix),
-                len(in_flight),
+                "Slot %d drafted K=%d  spec=%d  committed=%d  in_flight=%d",
+                slot_id, K, len(speculative_prefix),
+                len(committed_prefix), len(in_flight),
             )
 
-        # ── Drain remaining in-flight slots ───────────────────────────
-        if in_flight:
-            logger.info("Draining %d remaining in-flight slots...", len(in_flight))
-            while in_flight:
-                try:
-                    vr = result_queue.get(timeout=120)
-                except queue.Empty:
-                    logger.warning("Timeout draining in-flight slots")
-                    break
-                slot = in_flight.pop(vr.slot_id, None)
-                if slot is None:
-                    continue
-                resp = vr.cloud_response
-                accepted = resp.accepted_len
-                drafted = len(slot.draft_ids)
-                full_hit = (accepted == drafted)
-                metrics.total_accepted_tokens += accepted
-                metrics.total_server_verify_time_ms += resp.server_verify_time_ms
-                metrics.slot_details.append({
-                    "slot_id": vr.slot_id,
-                    "drafted": drafted,
-                    "accepted": accepted,
-                    "full_hit": full_hit,
-                    "wasted_tokens": drafted - accepted if not full_hit else 0,
-                    "draft_ms": slot.draft_time_ms,
-                    "verify_ms": resp.server_verify_time_ms,
-                    "rtt_ms": vr.rtt_ms,
-                    "rollback": not full_hit,
-                })
-                if full_hit:
-                    committed_prefix.extend(
-                        slot.draft_ids[len(committed_prefix) - len(slot.assumed_prefix):]
-                    )
-                else:
-                    rollback = slot.assumed_prefix + slot.draft_ids[:accepted]
-                    if resp.correction_token_id is not None:
-                        rollback.append(resp.correction_token_id)
-                    if len(rollback) > len(committed_prefix):
-                        committed_prefix.clear()
-                        committed_prefix.extend(rollback)
-                    metrics.total_rollbacks += 1
-                    for s in in_flight.values():
-                        s.state = SlotState.FLUSHED
-                    in_flight.clear()
-                    break
+        # ── Drain any remaining in-flight slots ───────────────────────
+        while in_flight:
+            try:
+                vr = result_queue.get(timeout=120)
+            except queue.Empty:
+                logger.warning("Timeout draining in-flight slots")
+                break
+            slot = in_flight.pop(vr.slot_id, None)
+            if slot is None:
+                continue
+            rollback = self._apply_result(
+                vr, slot, committed_prefix, speculative_prefix, in_flight, metrics
+            )
+            if rollback:
+                break   # remaining slots already flushed by _apply_result
