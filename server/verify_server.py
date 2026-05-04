@@ -100,7 +100,8 @@ class CloudVerifier:
             "trust_remote_code": True,
             "max_model_len": max_model_len,
             "enforce_eager": True,
-            "disable_log_stats": True,
+            "disable_log_stats": False,
+            "disable_custom_all_reduce": True,
         }
         if quantization and quantization.lower() != "none":
             llm_kwargs["quantization"] = quantization
@@ -121,24 +122,32 @@ class CloudVerifier:
     ):
         """
         Greedy verification.  Returns (accepted_len, accepted_ids, correction, ms).
+
+        Uses TokensPrompt to pass token IDs directly so vLLM can reuse the
+        KV cache for the prefix across rounds, and only requests logprobs
+        for the draft positions (not the entire prefix).
         """
         t0 = time.time()
 
         if not draft_ids:
             return 0, [], None, 0.0
 
+        # Only request logprobs for the draft portion of the input,
+        # not the entire prefix — this avoids re-processing the prefix.
+        num_draft = len(draft_ids)
         sampling_params = SamplingParams(
             temperature=temperature,
             max_tokens=1,
-            logprobs=len(draft_ids) + 1,
-            prompt_logprobs=len(draft_ids),
+            logprobs=num_draft + 1,
+            prompt_logprobs=num_draft,
         )
 
         input_ids = prefix_ids + draft_ids
-        prompt_text = self.tokenizer.decode(input_ids, skip_special_tokens=False)
 
+        # Pass token IDs directly to preserve KV cache reuse
+        from vllm import TokensPrompt
         outputs = self.llm.generate(
-            prompts=[prompt_text],
+            prompts=[TokensPrompt(prompt_token_ids=input_ids)],
             sampling_params=sampling_params,
             use_tqdm=False,
         )
@@ -258,6 +267,7 @@ def main():
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
+    
     parser = argparse.ArgumentParser(description="PicoSpec Verify Server")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=6006)

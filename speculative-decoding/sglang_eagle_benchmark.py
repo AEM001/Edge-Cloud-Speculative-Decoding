@@ -13,6 +13,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from prompt_loader import load_prompts_from_json
+
 
 @dataclass
 class PromptCase:
@@ -87,19 +91,20 @@ def setup_logging(log_path: Path) -> None:
 
 
 def load_prompts(prompt_file: Path, prompt_count: int) -> List[PromptCase]:
-    if not prompt_file.exists():
-        raise FileNotFoundError(f"Prompt file not found: {prompt_file}")
-    content = prompt_file.read_text()
-    matches = re.findall(
-        r"\[(\d+)\]\s+benchmark_[\d\-]+.*?Actual length:\s*(\d+)\s*chars.*?User:\s*(.*?)(?=\n\n\[|$)",
-        content,
-        re.DOTALL,
-    )
+    """Load prompts from data/prompt.json."""
+    # Use the centralized prompt loader
+    prompts_data = load_prompts_from_json(count=prompt_count)
+    
     prompts: List[PromptCase] = []
-    for idx, (_, length, text) in enumerate(matches[:prompt_count], 1):
-        prompts.append(PromptCase(prompt_id=idx, text=text.strip()[:2000], source_length=int(length)))
+    for p in prompts_data[:prompt_count]:
+        prompts.append(PromptCase(
+            prompt_id=p["id"],
+            text=p["text"][:2000],
+            source_length=p["length"]
+        ))
+    
     if not prompts:
-        raise RuntimeError(f"No prompts parsed from {prompt_file}")
+        raise RuntimeError(f"No prompts loaded from data/prompt.json")
     return prompts
 
 

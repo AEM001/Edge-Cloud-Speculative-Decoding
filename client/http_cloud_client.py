@@ -10,12 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class HTTPCloudClient:
-    """
-    HTTP client for communicating with cloud verification server.
-    
-    This client sends EdgeRequest to the cloud server and receives CloudResponse.
-    It handles network timing and error handling.
-    """
+
     
     def __init__(
         self,
@@ -23,14 +18,7 @@ class HTTPCloudClient:
         timeout: float = 60.0,
         retry_attempts: int = 3
     ):
-        """
-        Initialize HTTP cloud client.
-        
-        Args:
-            server_url: Base URL of cloud server (e.g., "http://49.234.57.210:8000")
-            timeout: Request timeout in seconds
-            retry_attempts: Number of retry attempts on failure
-        """
+ 
         self.server_url = server_url.rstrip('/')
         self.timeout = timeout
         self.retry_attempts = retry_attempts
@@ -53,33 +41,15 @@ class HTTPCloudClient:
             logger.warning("Will retry on first verification request")
     
     def __call__(self, request: EdgeRequest) -> CloudResponse:
-        """
-        Send verification request to cloud server.
         
-        Args:
-            request: EdgeRequest with draft tokens to verify
-        
-        Returns:
-            CloudResponse with verification results
-        """
         return self.verify(request)
     
     def verify(self, request: EdgeRequest) -> CloudResponse:
-        """
-        Send verification request to cloud server.
         
-        Args:
-            request: EdgeRequest with draft tokens to verify
-        
-        Returns:
-            CloudResponse with verification results
-        """
         request_start = time.time()
-        
-        # Convert request to dict
+ 
         request_data = request.to_dict()
         
-        # Try with retries
         last_error = None
         for attempt in range(self.retry_attempts):
             try:

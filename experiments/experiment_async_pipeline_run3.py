@@ -20,7 +20,6 @@ Network tiers:
 
 import json
 import logging
-import re
 import sys
 import time
 import threading
@@ -42,6 +41,7 @@ from client.http_cloud_client import create_http_cloud_client
 from config import DRAFT_GPU_MEM as GPU_MEMORY_UTILIZATION, DRAFT_MAX_LEN as MAX_MODEL_LEN, DRAFT_MODEL_NAME as MODEL_NAME, DRAFT_MODEL_PATH as MODEL_PATH
 from draft_generator import VLLMDraftGenerator
 from model_manager import VLLMModelManager
+from prompt_loader import load_prompts_by_type
 
 VERIFY_MODEL = "Qwen2.5-7B-Instruct-AWQ"
 
@@ -111,48 +111,16 @@ class TestResult:
 
 # ─── Prompt loading ───────────────────────────────────────────────────────────
 
-def load_prompts(filepath: Path, count: int = PROMPT_COUNT) -> Tuple[List[Dict], List[Dict]]:
-    easy, hard = [], []
-    with open(filepath) as f:
-        content = f.read()
-
-    easy_sec = re.search(r"EASY BENCHMARKS.*?HARD BENCHMARKS", content, re.DOTALL)
-    if easy_sec:
-        for idx, (_, length, text) in enumerate(
-            re.findall(
-                r"\[(\d+)\]\s+benchmark_[\d\-]+.*?Actual length:\s*(\d+)\s*chars.*?User:\s*(.*?)(?=\n\n\[|$)",
-                easy_sec.group(),
-                re.DOTALL,
-            )[: count * 2],
-            1,
-        ):
-            easy.append({"id": idx, "length": int(length), "text": text.strip()[:400]})
-
-    hard_sec = re.search(r"HARD BENCHMARKS.*?(?=$)", content, re.DOTALL)
-    if hard_sec:
-        for idx, (_, length, text) in enumerate(
-            re.findall(
-                r"\[(\d+)\]\s+benchmark_[\d\-]+.*?Actual length:\s*(\d+)\s*chars.*?User:\s*(.*?)(?=\n\n\[|$)",
-                hard_sec.group(),
-                re.DOTALL,
-            )[: count * 2],
-            1,
-        ):
-            hard.append({"id": idx, "length": int(length), "text": text.strip()[:400]})
-
-    def pick(lst, n, target):
-        lst = sorted(lst, key=lambda x: abs(x["length"] - target))[:n]
-        for i, p in enumerate(sorted(lst, key=lambda x: x["id"]), 1):
-            p["id"] = i
-        return lst
-
-    easy_sel = pick(easy, count, 300)
-    hard_sel = pick(hard, count, 500)
-    logger.info("Prompts loaded: %d easy, %d hard", len(easy_sel), len(hard_sel))
-    return easy_sel, hard_sel
-
-
-PROMPTS_FILE = Path(__file__).parent.parent / "benchmarks" / "prompts.txt"
+def load_prompts(count: int = PROMPT_COUNT) -> Tuple[List[Dict], List[Dict]]:
+    """Load prompts from data/prompt.json by type (Simple/Complex)."""
+    simple_prompts, complex_prompts = load_prompts_by_type(count_per_type=count)
+    
+    # Map Simple -> easy, Complex -> hard for compatibility
+    easy_prompts = [{"id": p["id"], "length": p["length"], "text": p["text"][:400]} for p in simple_prompts]
+    hard_prompts = [{"id": p["id"], "length": p["length"], "text": p["text"][:400]} for p in complex_prompts]
+    
+    logger.info("Prompts loaded from data/prompt.json: %d easy, %d hard", len(easy_prompts), len(hard_prompts))
+    return easy_prompts, hard_prompts
 
 
 # ─── Network latency simulation ───────────────────────────────────────────────
@@ -375,7 +343,7 @@ def save_charts(results: List[TestResult], out_dir: Path) -> None:
 # ─── Main experiment ──────────────────────────────────────────────────────────
 
 def run_experiment():
-    easy_prompts, hard_prompts = load_prompts(PROMPTS_FILE, count=PROMPT_COUNT)
+    easy_prompts, hard_prompts = load_prompts(count=PROMPT_COUNT)
 
     logger.info("=" * 80)
     logger.info("ASYNC PIPELINE EXPERIMENT — RUN 3 (revised)")
@@ -387,7 +355,7 @@ def run_experiment():
     logger.info("=" * 80)
 
     logger.info("[Setup] Loading draft model (CUDA Graph enabled)...")
-    model_manager = VLLMModelManager(MODEL_PATH, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN)
+    model_manager = VLLMModelManager(MODEL_PATH, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN, gpu_id=1)
     llm, tokenizer = model_manager.load()
     draft_generator = VLLMDraftGenerator(llm, tokenizer)
     base_cloud_client = create_http_cloud_client(SERVER_URL, timeout=300.0)

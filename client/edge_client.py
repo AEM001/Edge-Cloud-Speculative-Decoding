@@ -1,4 +1,5 @@
 """Edge client for speculative decoding on Mac."""
+import json
 import time
 import uuid
 import logging
@@ -102,17 +103,6 @@ class EdgeClient:
         policy: Callable[[int, List[TokenInfo]], int],
         policy_name: str = "unknown"
     ) -> RequestMetrics:
-        """
-        Generate text using speculative decoding with a given policy.
-        
-        Args:
-            prompt: Input prompt text
-            policy: Function that takes (round_id, draft_tokens) and returns K
-            policy_name: Name of the policy for logging
-        
-        Returns:
-            RequestMetrics with all collected metrics
-        """
         request_id = str(uuid.uuid4())
         metrics = RequestMetrics(request_id=request_id, prompt=prompt)
         
@@ -184,8 +174,8 @@ class EdgeClient:
                 policy_metadata={"policy_name": policy_name, "K": K}
             )
             
-            # Estimate payload size
-            uplink_size = len(str(edge_request.to_dict()))  # Rough estimate
+            # Measure actual serialized payload size (bytes)
+            uplink_size = len(json.dumps(edge_request.to_dict()).encode('utf-8'))
             metrics.uplink_bytes += uplink_size
             
             # Send to cloud
@@ -193,8 +183,8 @@ class EdgeClient:
             
             request_time_ms = (time.time() - request_start) * 1000
             
-            # Estimate response size
-            downlink_size = len(str(cloud_response.to_dict()))  # Rough estimate
+            # Measure actual serialized response size (bytes)
+            downlink_size = len(json.dumps(cloud_response.to_dict()).encode('utf-8'))
             metrics.downlink_bytes += downlink_size
             
             # Step 3: Update prefix based on verification
@@ -216,7 +206,13 @@ class EdgeClient:
             metrics.total_accepted_drafted_tokens += accepted_len
             metrics.total_edge_draft_time_ms += draft_time_ms
             metrics.total_server_verify_time_ms += cloud_response.server_verify_time_ms
-            metrics.total_network_time_ms += (request_time_ms - cloud_response.server_verify_time_ms)
+            # Network time = RTT (client-measured round-trip) - server verify time
+            # rtt_ms is set by http_cloud_client as total round-trip including server
+            if cloud_response.rtt_ms is not None:
+                network_time_ms = cloud_response.rtt_ms - cloud_response.server_verify_time_ms
+            else:
+                network_time_ms = request_time_ms - cloud_response.server_verify_time_ms
+            metrics.total_network_time_ms += max(0.0, network_time_ms)
             
             if cloud_response.rtt_ms:
                 # Update average RTT

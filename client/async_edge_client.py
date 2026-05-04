@@ -30,6 +30,7 @@ Pipeline metrics tracked (beyond what sync EdgeClient tracks):
   - overlap_time_ms       : total time where draft + verify ran concurrently
 """
 
+import json
 import logging
 import queue
 import threading
@@ -396,8 +397,8 @@ class AsyncEdgeClient:
                 else:
                     metrics.average_rtt_ms = vr.rtt_ms
 
-                metrics.uplink_bytes += len(str(resp.accepted_token_ids))
-                metrics.downlink_bytes += 4 if resp.correction_token_id else 0
+                metrics.uplink_bytes += len(json.dumps({"accepted_token_ids": resp.accepted_token_ids}).encode('utf-8'))
+                metrics.downlink_bytes += len(json.dumps({"correction_token_id": resp.correction_token_id}).encode('utf-8'))
 
                 if full_hit:
                     slot.state = SlotState.HIT
@@ -572,7 +573,7 @@ class AsyncEdgeClient:
             metrics.total_rounds += 1
             metrics.total_drafted_tokens += len(draft_resp.draft_token_ids)
             metrics.total_edge_draft_time_ms += draft_ms
-            metrics.uplink_bytes += len(str(draft_resp.draft_token_ids))
+            metrics.uplink_bytes += len(json.dumps(edge_req.to_dict()).encode('utf-8'))
 
             # Submit to verifier (non-blocking)
             edge_req = EdgeRequest(

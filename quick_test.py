@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Quick test: 2 easy + 2 hard prompts comparing Direct vs K=2,4"""
+"""Quick test: Direct vs StaticK3 vs StaticK5 vs AsyncK3"""
 import json
 import logging
 import sys
@@ -13,17 +13,20 @@ import requests
 sys.path.insert(0, str(Path(__file__).parent))
 
 from client.edge_client import EdgeClient
+from client.async_edge_client import AsyncEdgeClient
 from client.http_cloud_client import create_http_cloud_client
 from config import DRAFT_GPU_MEM as GPU_MEMORY_UTILIZATION, DRAFT_MAX_LEN as MAX_MODEL_LEN, DRAFT_MODEL_NAME as MODEL_NAME, DRAFT_MODEL_PATH as MODEL_PATH
 from draft_generator import VLLMDraftGenerator
 from model_manager import VLLMModelManager
+from prompt_loader import load_prompts_by_type
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 SERVER_URL = "http://localhost:6006"
-MAX_TOKENS = 128  # Increased for better comparison
-K_VALUES = [2, 4]
+MAX_TOKENS = 128
+K_VALUES = [3, 5]
+ASYNC_K = 3
 PROMPT_COUNT = 2  # 2 easy + 2 hard
 
 
@@ -37,36 +40,24 @@ class QuickResult:
     tokens_per_second: float
     acceptance_rate: float = 0.0
     num_rounds: int = 0
+    draft_time_ms: float = 0.0
+    verify_time_ms: float = 0.0
+    network_time_ms: float = 0.0
+    avg_rtt_ms: float = 0.0
+    pipeline_efficiency: float = 0.0  # async only
 
 
 def load_prompts():
-    """Load 2 easy + 2 hard prompts."""
-    prompts_file = Path(__file__).parent / "benchmarks" / "prompts.txt"
-    
-    with open(prompts_file, "r") as f:
-        content = f.read()
-    
-    import re
-    
-    # Extract easy prompts
-    easy_section = re.search(r"EASY BENCHMARKS.*?HARD BENCHMARKS", content, re.DOTALL)
-    easy_matches = re.findall(
-        r"\[(\d+)\]\s+benchmark_[\d\-]+.*?User:\s*(.*?)(?=\n\n\[|$)",
-        easy_section.group() if easy_section else "",
-        re.DOTALL,
+    """Load PROMPT_COUNT easy + PROMPT_COUNT hard prompts from data/prompt.json."""
+    simple_prompts, complex_prompts = load_prompts_by_type(
+        count_per_type=PROMPT_COUNT
     )
-    easy_prompts = [{"id": i+1, "text": text.strip()[:300]} for i, (_, text) in enumerate(easy_matches[:2])]
     
-    # Extract hard prompts
-    hard_section = re.search(r"HARD BENCHMARKS.*?(?=$)", content, re.DOTALL)
-    hard_matches = re.findall(
-        r"\[(\d+)\]\s+benchmark_[\d\-]+.*?User:\s*(.*?)(?=\n\n\[|$)",
-        hard_section.group() if hard_section else "",
-        re.DOTALL,
-    )
-    hard_prompts = [{"id": i+1, "text": text.strip()[:300]} for i, (_, text) in enumerate(hard_matches[:2])]
+    # Map Simple -> easy, Complex -> hard for compatibility
+    easy_prompts = [{"id": p["id"], "text": p["text"][:300]} for p in simple_prompts]
+    hard_prompts = [{"id": p["id"], "text": p["text"][:300]} for p in complex_prompts]
     
-    logger.info(f"Loaded {len(easy_prompts)} easy + {len(hard_prompts)} hard prompts")
+    logger.info(f"Loaded {len(easy_prompts)} easy + {len(hard_prompts)} hard prompts from data/prompt.json")
     return easy_prompts, hard_prompts
 
 
@@ -88,8 +79,8 @@ def test_direct(prompt: str) -> Tuple[int, float]:
         return 0, 0
 
 
-def test_speculative(client: EdgeClient, prompt: str, k: int) -> Tuple[int, float, float, int]:
-    """Test speculative decoding."""
+def test_speculative(client: EdgeClient, prompt: str, k: int) -> Tuple[int, float, float, int, float, float, float, float]:
+    """Test sync speculative decoding. Returns (tokens, time_ms, accept_rate, rounds, draft_ms, verify_ms, net_ms, rtt_ms)"""
     start = time.time()
     try:
         metrics = client.generate(
@@ -102,17 +93,21 @@ def test_speculative(client: EdgeClient, prompt: str, k: int) -> Tuple[int, floa
             metrics.generated_tokens,
             total_ms,
             metrics.acceptance_ratio,
-            metrics.total_rounds
+            metrics.total_rounds,
+            metrics.total_edge_draft_time_ms,
+            metrics.total_server_verify_time_ms,
+            metrics.total_network_time_ms,
+            metrics.average_rtt_ms,
         )
     except Exception as e:
         logger.error(f"Speculative K={k} failed: {e}")
-        return 0, 0, 0, 0
+        return 0, 0, 0, 0, 0, 0, 0, 0
 
 
 def run_quick_test():
     """Run quick comparison test."""
     logger.info("=" * 70)
-    logger.info("QUICK TEST: Direct vs Speculative (K=2,4)")
+    logger.info("QUICK TEST: Direct vs StaticK3 vs StaticK5 vs AsyncK3")
     logger.info(f"Draft model: {MODEL_NAME}")
     logger.info(f"GPU util: {GPU_MEMORY_UTILIZATION}, Max len: {MAX_MODEL_LEN}")
     logger.info("=" * 70)
@@ -124,15 +119,27 @@ def run_quick_test():
     
     # Load draft model
     logger.info("Loading draft model...")
-    model_manager = VLLMModelManager(MODEL_PATH, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN)
+    model_manager = VLLMModelManager(MODEL_PATH, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN, gpu_id=1)
     llm, tokenizer = model_manager.load()
     draft_generator = VLLMDraftGenerator(llm, tokenizer)
+    
+    # Sync client
     edge_client = EdgeClient(
         model_manager=model_manager,
         draft_generator=draft_generator,
         cloud_client=cloud_client,
         max_new_tokens=MAX_TOKENS,
         temperature=0.0,
+    )
+    
+    # Async client (lookahead=2)
+    async_client = AsyncEdgeClient(
+        model_manager=model_manager,
+        draft_generator=draft_generator,
+        cloud_client=cloud_client,
+        max_new_tokens=MAX_TOKENS,
+        temperature=0.0,
+        lookahead=2,
     )
     logger.info("Draft model loaded!")
     
@@ -158,43 +165,83 @@ def run_quick_test():
                 logger.info(f"    -> {tokens} tokens, {time_ms:.0f}ms, {tps:.2f} tok/s")
             time.sleep(0.5)
             
-            # Speculative K=2,4
+            # Speculative K=3, K=5
             for k in K_VALUES:
                 logger.info(f"  Testing Speculative K={k}...")
-                tokens, time_ms, acc, rounds = test_speculative(edge_client, text, k)
+                tokens, time_ms, acc, rounds, draft_ms, verify_ms, net_ms, rtt_ms = test_speculative(edge_client, text, k)
                 if tokens > 0:
                     tps = tokens / (time_ms / 1000)
                     results.append(QuickResult(
-                        f"k{k}", prompt_type, pid, tokens, time_ms, tps, acc, rounds
+                        f"k{k}", prompt_type, pid, tokens, time_ms, tps, acc, rounds,
+                        draft_time_ms=draft_ms, verify_time_ms=verify_ms, network_time_ms=net_ms, avg_rtt_ms=rtt_ms
                     ))
                     logger.info(f"    -> {tokens} tokens, {time_ms:.0f}ms, {tps:.2f} tok/s, "
-                              f"accept={acc:.1%}, rounds={rounds}")
+                              f"accept={acc:.1%}, rounds={rounds}, "
+                              f"draft={draft_ms:.0f}ms, verify={verify_ms:.0f}ms, net={net_ms:.0f}ms")
                 time.sleep(0.5)
+            
+            # Async K=3
+            logger.info(f"  Testing Async K={ASYNC_K}...")
+            start = time.time()
+            try:
+                async_metrics = async_client.generate(
+                    prompt=text,
+                    policy=lambda _round_id, _draft_tokens: ASYNC_K,
+                    policy_name=f"AsyncK{ASYNC_K}"
+                )
+                total_ms = (time.time() - start) * 1000
+                if async_metrics.generated_tokens > 0:
+                    tps = async_metrics.generated_tokens / (total_ms / 1000)
+                    results.append(QuickResult(
+                        f"async_k{ASYNC_K}", prompt_type, pid, async_metrics.generated_tokens, total_ms, tps,
+                        async_metrics.acceptance_ratio, async_metrics.total_rounds,
+                        draft_time_ms=async_metrics.total_edge_draft_time_ms,
+                        verify_time_ms=async_metrics.total_server_verify_time_ms,
+                        network_time_ms=async_metrics.total_network_time_ms,
+                        avg_rtt_ms=async_metrics.average_rtt_ms,
+                        pipeline_efficiency=async_metrics.pipeline_efficiency,
+                    ))
+                    logger.info(f"    -> {async_metrics.generated_tokens} tokens, {total_ms:.0f}ms, {tps:.2f} tok/s, "
+                              f"accept={async_metrics.acceptance_ratio:.1%}, rounds={async_metrics.total_rounds}, "
+                              f"pipe_eff={async_metrics.pipeline_efficiency:.1%}, "
+                              f"draft={async_metrics.total_edge_draft_time_ms:.0f}ms, verify={async_metrics.total_server_verify_time_ms:.0f}ms, net={async_metrics.total_network_time_ms:.0f}ms")
+            except Exception as e:
+                logger.error(f"Async K={ASYNC_K} failed: {e}")
+            time.sleep(0.5)
     
     # Summary
     logger.info("\n" + "=" * 70)
     logger.info("SUMMARY")
     logger.info("=" * 70)
     
-    # Group by method and calculate averages
     from collections import defaultdict
-    method_stats = defaultdict(lambda: {"tps": [], "accept": []})
+    method_stats = defaultdict(lambda: {"tps": [], "accept": [], "draft_ms": [], "verify_ms": [], "net_ms": []})
     
     for r in results:
         method_stats[r.method]["tps"].append(r.tokens_per_second)
         if r.acceptance_rate > 0:
             method_stats[r.method]["accept"].append(r.acceptance_rate)
+        if r.draft_time_ms > 0:
+            method_stats[r.method]["draft_ms"].append(r.draft_time_ms)
+        if r.verify_time_ms > 0:
+            method_stats[r.method]["verify_ms"].append(r.verify_time_ms)
+        if r.network_time_ms > 0:
+            method_stats[r.method]["net_ms"].append(r.network_time_ms)
     
-    for method in ["direct", "k2", "k4"]:
+    method_order = ["direct"] + [f"k{k}" for k in K_VALUES] + [f"async_k{ASYNC_K}"]
+    for method in method_order:
         if method in method_stats:
             avg_tps = sum(method_stats[method]["tps"]) / len(method_stats[method]["tps"])
             avg_accept = sum(method_stats[method]["accept"]) / len(method_stats[method]["accept"]) if method_stats[method]["accept"] else 0
-            logger.info(f"{method:10s}: {avg_tps:6.2f} tok/s (accept: {avg_accept:.1%})")
+            avg_draft = sum(method_stats[method]["draft_ms"]) / len(method_stats[method]["draft_ms"]) if method_stats[method]["draft_ms"] else 0
+            avg_verify = sum(method_stats[method]["verify_ms"]) / len(method_stats[method]["verify_ms"]) if method_stats[method]["verify_ms"] else 0
+            avg_net = sum(method_stats[method]["net_ms"]) / len(method_stats[method]["net_ms"]) if method_stats[method]["net_ms"] else 0
+            logger.info(f"{method:10s}: {avg_tps:6.2f} tok/s (accept: {avg_accept:.1%}, draft: {avg_draft:.0f}ms, verify: {avg_verify:.0f}ms, net: {avg_net:.0f}ms)")
     
     # Speedup calculation
     if "direct" in method_stats:
         direct_tps = sum(method_stats["direct"]["tps"]) / len(method_stats["direct"]["tps"])
-        for method in ["k2", "k4"]:
+        for method in [f"k{k}" for k in K_VALUES] + [f"async_k{ASYNC_K}"]:
             if method in method_stats:
                 spec_tps = sum(method_stats[method]["tps"]) / len(method_stats[method]["tps"])
                 speedup = spec_tps / direct_tps
@@ -208,9 +255,6 @@ def run_quick_test():
         json.dump([asdict(r) for r in results], f, indent=2)
     logger.info(f"\nResults saved to: {out_file}")
 
-    # Note: on a single machine both models share PCIe bandwidth, so
-    # speculative decoding may not outperform direct generation here.
-    # Speedup is expected when verify is a remote (higher-latency) server.
     logger.info("\n(Speculative speedup requires network latency > draft latency — expected on remote setups)")
     return True
 
