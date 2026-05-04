@@ -12,17 +12,20 @@ Acceptance ratio alone is misleading because a 60% ratio on K=7 yields
 """
 import json
 import logging
+import math
+import queue
 import sys
 import time
+from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import requests
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from client.async_edge_client import AsyncEdgeClient
+from client.async_edge_client import AsyncEdgeClient, PipelineSlot, _VerifyJob, _VerifyResult
 from client.edge_client import EdgeClient
 from client.http_cloud_client import create_http_cloud_client
 from config import DRAFT_GPU_MEM as GPU_MEMORY_UTILIZATION, DRAFT_MAX_LEN as MAX_MODEL_LEN, DRAFT_MODEL_NAME as MODEL_NAME, DRAFT_MODEL_PATH as MODEL_PATH
@@ -30,6 +33,186 @@ from draft_generator import VLLMDraftGenerator
 from experiments.network_conditions import NetworkCondition, ThrottledCloudClient
 from model_manager import VLLMModelManager
 from prompt_loader import load_prompts_by_type
+from protocol import DraftRequest, EdgeRequest
+
+
+# ---------------------------------------------------------------------------
+# CQT (Conservative Quantile Tracking) Async Client — quick_test only
+# ---------------------------------------------------------------------------
+
+class CQTAsyncEdgeClient(AsyncEdgeClient):
+    """
+    AsyncEdgeClient with Conservative Quantile Tracking prefix selection.
+
+    Before each round, instead of assuming the full K draft tokens were
+    accepted (full speculative advance), we advance the speculative prefix
+    by only `prefix_len = p10(history_accepted_lens)` tokens — the 10th
+    percentile of the rolling acceptance-length window (last K_WINDOW rounds).
+
+    This guarantees >=90% of async drafts start from a prefix the verifier
+    will actually have committed, reducing wasted rollback work on high-RTT
+    connections at the cost of slightly shorter overlap windows.
+
+    When history is empty (first round), falls back to full optimistic advance.
+    """
+
+    CQT_WINDOW: int = 50       # rolling window size
+    CQT_PERCENTILE: float = 0.10   # 10th percentile
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._cqt_history: deque = deque(maxlen=self.CQT_WINDOW)
+
+    def _cqt_prefix_len(self, k: int) -> int:
+        """Return conservative prefix advance length based on history."""
+        if not self._cqt_history:
+            return k   # no history yet — full optimistic advance
+        sorted_h = sorted(self._cqt_history)
+        idx = int(math.floor(self.CQT_PERCENTILE * len(sorted_h)))
+        idx = max(0, min(idx, len(sorted_h) - 1))
+        return max(1, sorted_h[idx])
+
+    def _pipeline_loop(
+        self,
+        prompt_ids,
+        committed_prefix,
+        speculative_prefix,
+        in_flight,
+        next_slot_id_ref,
+        draft_queue,
+        result_queue,
+        policy,
+        policy_name,
+        request_id,
+        metrics,
+    ):
+        max_tokens = self.max_new_tokens
+        eos = self.eos_token_id
+
+        def _done():
+            if len(committed_prefix) - len(prompt_ids) >= max_tokens:
+                return True
+            if eos and eos in committed_prefix[len(prompt_ids):]:
+                return True
+            return False
+
+        while not _done():
+
+            # Phase A: drain non-blocking results
+            while True:
+                try:
+                    vr: _VerifyResult = result_queue.get_nowait()
+                except queue.Empty:
+                    break
+                slot = in_flight.pop(vr.slot_id, None)
+                if slot is None:
+                    continue
+                rollback = self._apply_result(
+                    vr, slot, committed_prefix, speculative_prefix, in_flight, metrics
+                )
+                # Record accepted length for CQT history
+                self._cqt_history.append(vr.cloud_response.accepted_len)
+                if rollback:
+                    break
+
+            if _done():
+                break
+
+            # Phase B: choose prefix for next draft using CQT
+            slot_id = next_slot_id_ref[0]
+            next_slot_id_ref[0] += 1
+            K = policy(slot_id, [])
+
+            # CQT: advance speculative_prefix by at most cqt_prefix_len tokens
+            # ahead of committed_prefix, rather than the full speculative extent.
+            cqt_len = self._cqt_prefix_len(K)
+            committed_end = len(committed_prefix)
+            full_spec_end = len(speculative_prefix)
+            # How far ahead of committed is the current speculative prefix?
+            spec_ahead = full_spec_end - committed_end
+            # We only draft from committed + min(spec_ahead, cqt_len) ahead
+            conservative_end = committed_end + min(spec_ahead, cqt_len)
+            conservative_prefix = speculative_prefix[:conservative_end]
+
+            draft_t0 = time.perf_counter()
+            draft_req = DraftRequest(
+                verified_prefix=list(conservative_prefix),
+                num_draft_tokens=K,
+            )
+            draft_resp = self.draft_generator.generate_draft_tokens(
+                draft_req, temperature=self.temperature,
+            )
+            draft_ms = (time.perf_counter() - draft_t0) * 1000
+
+            if not draft_resp.draft_token_ids:
+                break
+
+            # Phase C: wait for one result if at max in-flight
+            if len(in_flight) >= self.lookahead:
+                bubble_t0 = time.perf_counter()
+                vr = result_queue.get()
+                metrics.total_bubble_ms += (time.perf_counter() - bubble_t0) * 1000
+
+                slot = in_flight.pop(vr.slot_id, None)
+                if slot is not None:
+                    self._cqt_history.append(vr.cloud_response.accepted_len)
+                    rollback = self._apply_result(
+                        vr, slot, committed_prefix, speculative_prefix, in_flight, metrics
+                    )
+                    if rollback:
+                        continue
+
+            if _done():
+                break
+
+            # Phase D: submit draft
+            slot = PipelineSlot(
+                slot_id=slot_id,
+                assumed_prefix=list(conservative_prefix),
+                draft_ids=draft_resp.draft_token_ids,
+                draft_logprobs=draft_resp.logprobs,
+                draft_time_ms=draft_ms,
+            )
+            in_flight[slot_id] = slot
+
+            metrics.total_rounds             += 1
+            metrics.total_drafted_tokens     += len(draft_resp.draft_token_ids)
+            metrics.total_edge_draft_time_ms += draft_ms
+
+            edge_req = EdgeRequest(
+                request_id=request_id,
+                round_id=slot_id,
+                prefix_ids=list(conservative_prefix),
+                draft_ids=draft_resp.draft_token_ids,
+                draft_logprobs=draft_resp.logprobs,
+                edge_draft_time_ms=draft_ms,
+                policy_metadata={"policy_name": policy_name, "K": K, "cqt_prefix_len": cqt_len},
+            )
+            metrics.uplink_bytes += len(json.dumps(edge_req.to_dict()).encode())
+            draft_queue.put(_VerifyJob(slot_id=slot_id, request=edge_req))
+
+            # Optimistically extend speculative prefix by the full draft
+            # (CQT only constrains where we *start* drafting, not the
+            # assumption about how much of this new draft is accepted)
+            speculative_prefix.clear()
+            speculative_prefix.extend(conservative_prefix)
+            speculative_prefix.extend(draft_resp.draft_token_ids)
+
+        # Drain remaining in-flight slots
+        while in_flight:
+            try:
+                vr = result_queue.get(timeout=120)
+            except queue.Empty:
+                break
+            slot = in_flight.pop(vr.slot_id, None)
+            if slot is None:
+                continue
+            self._cqt_history.append(vr.cloud_response.accepted_len)
+            rollback = self._apply_result(
+                vr, slot, committed_prefix, speculative_prefix, in_flight, metrics
+            )
+            if rollback:
+                break
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -150,7 +333,7 @@ def run_quick_test():
         max_new_tokens=MAX_TOKENS,
         temperature=0.0,
     )
-    async_client = AsyncEdgeClient(
+    async_client = CQTAsyncEdgeClient(
         model_manager=model_manager,
         draft_generator=draft_generator,
         cloud_client=base_client,   # swapped per condition below
@@ -235,7 +418,7 @@ def run_quick_test():
                     tps_a = m.generated_tokens / (total_ms_a / 1000)
                     accepted = m.total_accepted_tokens
                     net_useful = accepted / m.total_rounds if m.total_rounds else 0
-                    method_name = f"async_k{k}"
+                    method_name = f"cqt_k{k}"
                     results.append(QuickResult(
                         method=method_name, network=condition.name,
                         prompt_type=ptype, prompt_id=pid,
@@ -251,7 +434,7 @@ def run_quick_test():
                         sim_overhead_ms=net_stats["total_simulated_overhead_ms"],
                     ))
                     logger.info(
-                        "    async_k%-1d: %d tok  %5.0f ms  %5.1f tok/s  "
+                        "    cqt_k%-2d : %d tok  %5.0f ms  %5.1f tok/s  "
                         "accept=%4.1f%%  net_useful=%.2f tok/round  "
                         "rounds=%d  rtt=%d ms  bubble=%.0fms",
                         k, m.generated_tokens, total_ms_a, tps_a,
@@ -266,7 +449,7 @@ def run_quick_test():
     logger.info("=" * 70)
     logger.info("SUMMARY  —  tok/s and speedup per network condition")
     logger.info("=" * 70)
-    methods_to_show = [f"sync_k{k}" for k in K_VALUES] + [f"async_k{k}" for k in K_VALUES]
+    methods_to_show = [f"sync_k{k}" for k in K_VALUES] + [f"cqt_k{k}" for k in K_VALUES]
     col_w = 28
     header = f"{'Network':<10}  {'direct':>8}" + "".join(
         f"  {m:>{col_w}}" for m in methods_to_show
