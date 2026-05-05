@@ -146,18 +146,13 @@ class EdgeClient:
             
             # Build token info list
             draft_tokens_info = []
-            for i, (token_id, logprob, prob) in enumerate(zip(
+            for token_id, logprob in zip(
                 draft_response.draft_token_ids,
-                draft_response.logprobs,
-                draft_response.probabilities
-            )):
+                draft_response.logprobs
+            ):
                 token_info = TokenInfo(
                     token_id=token_id,
-                    logprob=logprob,
-                    probability=prob,
-                    max_prob=draft_response.confidence_stats["max_probs"][i],
-                    entropy=draft_response.confidence_stats["entropies"][i],
-                    top_margin=draft_response.confidence_stats["top_margins"][i]
+                    logprob=logprob
                 )
                 draft_tokens_info.append(token_info)
             
