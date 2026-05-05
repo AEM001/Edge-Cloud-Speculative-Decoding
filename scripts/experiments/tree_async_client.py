@@ -8,11 +8,11 @@ all of quick_test's orchestration code.
 from __future__ import annotations
 
 import logging
-import math
 import queue
+import threading
 import time
 import uuid
-from collections import deque
+from collections import Counter, deque
 from dataclasses import dataclass
 from typing import Callable, List
 
@@ -91,13 +91,12 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
             return [0]
         max_offset = min(k, spec_ahead)
         if not self._history:
-            seeds = [max(0, k - 2), max(0, k - 1), k]
+            center = max(0, min(max_offset, int(round(0.6 * k))))
+            seeds = [center, center - 1, center + 1]
         else:
-            sorted_h = sorted(self._history)
-            seeds = []
-            for p in (0.10, 0.50, 0.90):
-                idx = int(math.floor(p * (len(sorted_h) - 1)))
-                seeds.append(sorted_h[max(0, min(idx, len(sorted_h) - 1))])
+            counts = Counter(self._history)
+            mode = counts.most_common(1)[0][0]
+            seeds = [mode, mode - 1, mode + 1]
 
         offsets: List[int] = []
         for offset in seeds:
@@ -132,6 +131,8 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
         max_tokens = self.max_new_tokens
         eos = self.eos_token_id
         next_tree_id = 0
+        prefetched_ids: List[int] = []
+        prefetched_logprobs: List[float] = []
 
         def _done():
             if len(committed_prefix) - len(prompt_ids) >= max_tokens:
@@ -154,26 +155,60 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
             next_tree_id += 1
             k = policy(tree_id, [])
             branches: List[TreeBranch] = []
-            base_t0 = time.perf_counter()
-            base_resp = self.draft_generator.generate_draft_tokens(
-                DraftRequest(verified_prefix=list(committed_prefix), num_draft_tokens=k),
-                temperature=self.temperature,
-            )
-            base_draft_ms = (time.perf_counter() - base_t0) * 1000
-            if not base_resp.draft_token_ids:
-                break
-            base_draft = list(base_resp.draft_token_ids)
+            if prefetched_ids:
+                base_draft = prefetched_ids[:k]
+                base_logprobs = prefetched_logprobs[:len(base_draft)]
+                base_draft_ms = 0.0
+                prefetched_ids = prefetched_ids[len(base_draft):]
+                prefetched_logprobs = prefetched_logprobs[len(base_draft):]
+            else:
+                base_t0 = time.perf_counter()
+                base_resp = self.draft_generator.generate_draft_tokens(
+                    DraftRequest(verified_prefix=list(committed_prefix), num_draft_tokens=k),
+                    temperature=self.temperature,
+                )
+                base_draft_ms = (time.perf_counter() - base_t0) * 1000
+                if not base_resp.draft_token_ids:
+                    break
+                base_draft = list(base_resp.draft_token_ids)
+                base_logprobs = list(base_resp.logprobs)
             branches.append(
                 TreeBranch(
                     branch_id=tree_id * 100,
                     offset=0,
                     prefix=list(committed_prefix),
                     draft_ids=base_draft,
-                    draft_logprobs=base_resp.logprobs,
+                    draft_logprobs=base_logprobs,
                     draft_time_ms=base_draft_ms,
                 )
             )
 
+            # ── Fire base verify in background immediately ──────────────────
+            # The base branch verify travels over the network while we draft
+            # the speculative branches — this is the core latency hiding.
+            base_edge_req = EdgeRequest(
+                request_id=request_id,
+                round_id=tree_id * 100,
+                prefix_ids=list(committed_prefix),
+                draft_ids=base_draft,
+                draft_logprobs=base_logprobs,
+                edge_draft_time_ms=base_draft_ms,
+                policy_metadata={"policy_name": policy_name, "K": k,
+                                  "tree_id": tree_id, "branch_offset": 0},
+            )
+            base_verify_result: List = []   # filled by thread
+
+            def _run_base_verify(req=base_edge_req, out=base_verify_result):
+                try:
+                    resp = self.cloud_client(req)
+                    out.append(resp)
+                except Exception as exc:
+                    logger.error("Base verify error: %s", exc)
+
+            verify_thread = threading.Thread(target=_run_base_verify, daemon=True)
+            verify_thread.start()
+
+            # ── Draft speculative branches while verify is in-flight ─────────
             offsets = self._tree_offsets(k, len(base_draft))
             branch_offsets = [o for o in offsets if o > 0][: max(0, self.branch_width - 1)]
             branch_prefixes = []
@@ -222,52 +257,29 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
                 )
 
             if not branches:
+                verify_thread.join(timeout=120)
                 break
 
             metrics.total_rounds += 1
-            metrics.total_drafted_tokens += k
+            metrics.total_drafted_tokens += len(base_draft)
             metrics.total_edge_draft_time_ms += base_draft_ms + batch_draft_ms
 
-            edge_reqs = []
-            for branch in branches:
-                edge_req = EdgeRequest(
-                    request_id=request_id,
-                    round_id=branch.branch_id,
-                    prefix_ids=list(branch.prefix),
-                    draft_ids=branch.draft_ids,
-                    draft_logprobs=branch.draft_logprobs,
-                    edge_draft_time_ms=branch.draft_time_ms,
-                    policy_metadata={
-                        "policy_name": policy_name,
-                        "K": k,
-                        "tree_id": tree_id,
-                        "branch_offset": branch.offset,
-                        "branch_width": len(branches),
-                    },
-                )
-                edge_reqs.append(edge_req)
-            metrics.uplink_bytes += sum(len(b.prefix) + len(b.draft_ids) for b in branches) * 4
-
             bubble_t0 = time.perf_counter()
-            try:
-                if hasattr(self.cloud_client, "verify_batch"):
-                    responses = self.cloud_client.verify_batch(edge_reqs)
-                else:
-                    responses = [self.cloud_client(edge_req) for edge_req in edge_reqs]
-                branch_results = [
-                    (branch, _VerifyResult(branch.branch_id, resp, resp.rtt_ms or 0.0))
-                    for branch, resp in zip(branches, responses)
-                ]
-            except Exception as exc:
-                logger.error("Tree verifier batch error: %s", exc)
-                branch_results = []
-            metrics.total_bubble_ms += (time.perf_counter() - bubble_t0) * 1000
-            if len(branch_results) < len(branches):
-                try:
-                    while len(branch_results) < len(branches):
-                        branch_results.append(result_queue.get_nowait())
-                except queue.Empty:
-                    pass
+            verify_thread.join(timeout=120)
+            base_wait_ms = (time.perf_counter() - bubble_t0) * 1000
+            total_wait_ms = (time.perf_counter() - bubble_t0) * 1000
+            metrics.total_bubble_ms += total_wait_ms
+
+            if not base_verify_result:
+                break
+            base_resp_cloud = base_verify_result[0]
+            base_accepted = base_resp_cloud.accepted_len
+            correction = base_resp_cloud.correction_token_id
+            branch_results = [
+                (branches[0], _VerifyResult(branches[0].branch_id, base_resp_cloud,
+                                            base_resp_cloud.rtt_ms or 0.0))
+            ]
+            metrics.uplink_bytes += sum(len(b.prefix) + len(b.draft_ids) for b in branches) * 4
 
             if not branch_results:
                 break
@@ -279,49 +291,52 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
                 metrics.total_network_time_ms += max(0.0, vr.rtt_ms - resp.server_verify_time_ms)
                 metrics.downlink_bytes += len(resp.accepted_token_ids) * 4 + 32
 
-            base_branch, base_vr = next(
-                ((branch, vr) for branch, vr in branch_results if branch.offset == 0),
-                min(branch_results, key=lambda item: item[0].offset),
-            )
-            base_accept = base_vr.cloud_response.accepted_len
-            valid_results = [
-                (branch, vr)
-                for branch, vr in branch_results
-                if branch.offset <= base_accept
-            ]
-            selected_branch, selected_vr = max(
-                valid_results,
-                key=lambda item: item[0].offset + item[1].cloud_response.accepted_len,
-            )
-            selected_resp = selected_vr.cloud_response
-            selected_progress = selected_branch.offset + selected_resp.accepted_len
             new_committed = list(committed_prefix)
-            new_committed.extend(base_draft[: selected_branch.offset])
-            new_committed.extend(selected_resp.accepted_token_ids)
-            if selected_resp.correction_token_id is not None:
-                new_committed.append(selected_resp.correction_token_id)
+            new_committed.extend(base_resp_cloud.accepted_token_ids)
+            if correction is not None:
+                new_committed.append(correction)
+
+            selected_branch = branches[0]
+            prefetched_ids = []
+            prefetched_logprobs = []
+            for branch in branches:
+                if branch.offset != base_accepted:
+                    continue
+                if correction is None:
+                    continue
+                if branch.draft_ids and branch.draft_ids[0] == correction:
+                    selected_branch = branch
+                    prefetched_ids = list(branch.draft_ids[1:])
+                    prefetched_logprobs = list(branch.draft_logprobs[1:])
+                    break
 
             total_drafted = sum(len(b.draft_ids) for b in branches)
-            metrics.total_accepted_tokens += min(selected_progress, k)
-            if selected_progress < k:
+            metrics.total_accepted_tokens += base_accepted
+            if base_accepted < k:
                 metrics.total_rollbacks += 1
             metrics.slot_details.append(
                 {
                     "slot_id": selected_branch.branch_id,
                     "drafted": total_drafted,
-                    "accepted": selected_progress,
-                    "full_hit": selected_progress >= k,
-                    "wasted_tokens": max(0, total_drafted - selected_progress),
+                    "accepted": base_accepted,
+                    "full_hit": base_accepted >= k,
+                    "wasted_tokens": max(0, total_drafted - base_accepted - len(prefetched_ids)),
                     "draft_ms": sum(b.draft_time_ms for b in branches),
                     "verify_ms": sum(
                         vr.cloud_response.server_verify_time_ms for _, vr in branch_results
                     ),
                     "rtt_ms": max(vr.rtt_ms for _, vr in branch_results),
-                    "rollback": selected_progress < k,
+                    "rollback": base_accepted < k,
                     "tree_branch_width": len(branches),
                     "selected_offset": selected_branch.offset,
-                    "stale_branches": sum(1 for b, _ in branch_results if b.branch_id != selected_branch.branch_id),
-                    "base_accepted": base_accept,
+                    "stale_branches": sum(1 for b in branches if b.branch_id != selected_branch.branch_id),
+                    "base_accepted": base_accepted,
+                    "base_draft_ms": base_draft_ms,
+                    "branch_draft_ms": batch_draft_ms,
+                    "base_wait_ms": base_wait_ms,
+                    "total_wait_ms": total_wait_ms,
+                    "spec_verify_wall_ms": 0.0,
+                    "prefetched_tokens": len(prefetched_ids),
                 }
             )
             committed_prefix.clear()

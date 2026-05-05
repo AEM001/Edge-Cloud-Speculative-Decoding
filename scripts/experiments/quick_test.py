@@ -63,6 +63,21 @@ class QuickResult:
     branch_width: float = 0.0
     avg_selected_offset: float = 0.0
     avg_stale_branches: float = 0.0
+    direct_server_ms: float = 0.0
+    direct_http_ms: float = 0.0
+    direct_ul_ms: float = 0.0
+    direct_dl_ms: float = 0.0
+
+
+@dataclass
+class DirectTiming:
+    tokens: int
+    total_ms: float
+    overhead_ms: float
+    server_ms: float
+    http_ms: float
+    ul_ms: float
+    dl_ms: float
 
 
 def load_prompts():
@@ -75,7 +90,7 @@ def load_prompts():
     return [(p, "simple") for p in simple_prompts]
 
 
-def _direct_with_throttle(prompt: str, throttled: ThrottledCloudClient) -> Tuple[int, float, float]:
+def _direct_with_throttle(prompt: str, throttled: ThrottledCloudClient) -> DirectTiming:
     """Direct /generate with same simulated network delay applied to direct too."""
     cond = throttled.condition
     now = time.perf_counter() - throttled._start_wall
@@ -95,9 +110,10 @@ def _direct_with_throttle(prompt: str, throttled: ThrottledCloudClient) -> Tuple
         data = resp.json()
         tokens = data.get("tokens_generated", 0)
         text = data.get("text", "")
+        server_ms = float(data.get("generation_time_ms", 0.0))
     except Exception as exc:
         logger.error("Direct failed: %s", exc)
-        return 0, 0.0, 0.0
+        return DirectTiming(0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     elapsed_ms = (time.perf_counter() - start) * 1000
 
     now2 = time.perf_counter() - throttled._start_wall
@@ -108,7 +124,7 @@ def _direct_with_throttle(prompt: str, throttled: ThrottledCloudClient) -> Tuple
 
     total_ms = ul_delay + elapsed_ms + dl_delay
     overhead_ms = ul_delay + dl_delay
-    return tokens, total_ms, overhead_ms
+    return DirectTiming(tokens, total_ms, overhead_ms, server_ms, elapsed_ms, ul_delay, dl_delay)
 
 
 def _speculative(edge_client: EdgeClient, prompt: str, k: int) -> Optional[object]:
@@ -137,26 +153,34 @@ def _tree_async_speculative(async_client: TreeAsyncEdgeClient, prompt: str, k: i
 
 def run_direct_case(prompt_meta, text: str, throttled: ThrottledCloudClient) -> Optional[QuickResult]:
     throttled.reset_stats()
-    tokens, total_ms, overhead_ms = _direct_with_throttle(text, throttled)
-    if tokens <= 0:
+    timing = _direct_with_throttle(text, throttled)
+    if timing.tokens <= 0:
         return None
-    tps = tokens / (total_ms / 1000)
+    tps = timing.tokens / (timing.total_ms / 1000)
     result = QuickResult(
         method="direct",
         network=throttled.condition.name,
         prompt_type=prompt_meta["type"],
         prompt_id=prompt_meta["id"],
-        tokens_generated=tokens,
-        total_time_ms=total_ms,
+        tokens_generated=timing.tokens,
+        total_time_ms=timing.total_ms,
         tokens_per_second=tps,
-        sim_overhead_ms=overhead_ms,
+        sim_overhead_ms=timing.overhead_ms,
+        direct_server_ms=timing.server_ms,
+        direct_http_ms=timing.http_ms,
+        direct_ul_ms=timing.ul_ms,
+        direct_dl_ms=timing.dl_ms,
     )
     logger.info(
-        "    direct  : %d tok  %5.0f ms  %5.1f tok/s  overhead=%d ms",
-        tokens,
-        total_ms,
+        "    direct  : %d tok  %5.0f ms  %5.1f tok/s  "
+        "server=%d ms  http=%d ms  sim_ul=%d ms  sim_dl=%d ms",
+        timing.tokens,
+        timing.total_ms,
         tps,
-        overhead_ms,
+        timing.server_ms,
+        timing.http_ms,
+        timing.ul_ms,
+        timing.dl_ms,
     )
     return result
 
@@ -228,6 +252,12 @@ def run_tree_spec_case(
     branch_width = _avg([s.get("tree_branch_width", 0) for s in metrics.slot_details])
     selected_offset = _avg([s.get("selected_offset", 0) for s in metrics.slot_details])
     stale_branches = _avg([s.get("stale_branches", 0) for s in metrics.slot_details])
+    base_accept = _avg([s.get("base_accepted", 0) for s in metrics.slot_details])
+    base_draft_ms = _avg([s.get("base_draft_ms", 0) for s in metrics.slot_details])
+    branch_draft_ms = _avg([s.get("branch_draft_ms", 0) for s in metrics.slot_details])
+    base_wait_ms = _avg([s.get("base_wait_ms", 0) for s in metrics.slot_details])
+    total_wait_ms = _avg([s.get("total_wait_ms", 0) for s in metrics.slot_details])
+    spec_verify_wall_ms = _avg([s.get("spec_verify_wall_ms", 0) for s in metrics.slot_details])
     logger.info(
         "    %s: %d tok  %5.0f ms  %5.1f tok/s  accept=%4.1f%%  net_useful=%.2f tok/round  "
         "rounds=%d  rtt=%d ms  bubble=%.0fms  offset=%.1f",
@@ -241,6 +271,17 @@ def run_tree_spec_case(
         metrics.average_rtt_ms,
         metrics.avg_bubble_ms,
         selected_offset,
+    )
+    logger.info(
+        "      tree_diag: base_accept=%.2f  base_draft=%.0fms  branch_draft=%.0fms  "
+        "base_wait=%.0fms  total_wait=%.0fms  spec_verify_wall=%.0fms  stale=%.1f",
+        base_accept,
+        base_draft_ms,
+        branch_draft_ms,
+        base_wait_ms,
+        total_wait_ms,
+        spec_verify_wall_ms,
+        stale_branches,
     )
     return QuickResult(
         method=method_name,
@@ -318,12 +359,20 @@ def run_quick_test():
             ))
         except Exception:
             pass
+    try:
+        requests.post(
+            f"{SERVER_URL}/generate",
+            json={"prompt": warmup_prompt, "max_tokens": 8, "temperature": 0.0},
+            timeout=60.0,
+        )
+    except Exception:
+        pass
     logger.info("Warmup complete.")
 
     results: List[QuickResult] = []
     tree_method_suffix = f"b{tree_async_client.branch_width}"
 
-    for condition in NetworkCondition.all_profiles():
+    for condition in [NetworkCondition.good(), NetworkCondition.medium()]:
         throttled = ThrottledCloudClient(base_client, condition)
         edge_client.cloud_client  = throttled
         tree_async_client.cloud_client = throttled
