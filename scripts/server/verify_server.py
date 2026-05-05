@@ -108,7 +108,6 @@ class CloudVerifier:
             "trust_remote_code": True,
             "max_model_len": max_model_len,
             "enable_prefix_caching": True,
-            "enforce_eager": True,
             "disable_log_stats": False,
             "disable_custom_all_reduce": True,
         }

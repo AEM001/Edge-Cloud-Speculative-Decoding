@@ -21,11 +21,13 @@ from typing import Dict, List, Optional, Tuple
 import requests
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from client.edge_client import EdgeClient
 from client.http_cloud_client import create_http_cloud_client
 from config import DRAFT_GPU_MEM as GPU_MEMORY_UTILIZATION, DRAFT_MAX_LEN as MAX_MODEL_LEN, DRAFT_MODEL_NAME as MODEL_NAME, DRAFT_MODEL_PATH as MODEL_PATH
 from core.draft_generator import VLLMDraftGenerator
+from core.protocol import DraftRequest
 from experiments.network_conditions import NetworkCondition, ThrottledCloudClient
 from core.model_manager import VLLMModelManager
 from experiments.prompt_loader import load_speed_bench_prompts
@@ -295,6 +297,26 @@ def run_quick_test():
         branch_width=3,
     )
     logger.info("Draft model loaded.")
+
+    # ── Warmup: fire a few calls so torch.compile / GPU kernels are hot ──
+    logger.info("Warming up draft model and verify server ...")
+    warmup_prompt = prompts[0][0]["text"]
+    warmup_prefix = list(draft_generator.tokenizer.encode(warmup_prompt))
+    for _ in range(3):
+        draft_generator.generate_draft_tokens(
+            DraftRequest(verified_prefix=warmup_prefix, num_draft_tokens=7),
+            temperature=0.0,
+        )
+    for _ in range(3):
+        try:
+            requests.post(
+                f"{SERVER_URL}/generate",
+                json={"prompt": warmup_prompt, "max_tokens": 16, "temperature": 0.0},
+                timeout=60.0,
+            )
+        except Exception:
+            pass
+    logger.info("Warmup complete.")
 
     results: List[QuickResult] = []
     tree_method_suffix = f"b{tree_async_client.branch_width}"
