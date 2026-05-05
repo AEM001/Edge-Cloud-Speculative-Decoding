@@ -1,7 +1,7 @@
 from typing import List
 import logging
 
-from protocol import DraftRequest, DraftResponse
+from core.protocol import DraftRequest, DraftResponse
 
 logger = logging.getLogger(__name__)
 

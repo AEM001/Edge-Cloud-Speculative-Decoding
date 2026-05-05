@@ -4,7 +4,7 @@ import logging
 import requests
 from typing import Optional
 
-from protocol import EdgeRequest, CloudResponse
+from core.protocol import EdgeRequest, CloudResponse
   # noqa: E402
 
 logger = logging.getLogger(__name__)

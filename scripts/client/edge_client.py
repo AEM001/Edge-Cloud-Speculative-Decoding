@@ -6,12 +6,12 @@ import logging
 from typing import List, Optional, Dict, Any, Callable
 from dataclasses import dataclass, field
 
-from protocol import (
+from core.protocol import (
     EdgeRequest, CloudResponse, DraftRequest, DraftResponse,
     TokenInfo,
 )
-from draft_generator import VLLMDraftGenerator
-from model_manager import VLLMModelManager
+from core.draft_generator import VLLMDraftGenerator
+from core.model_manager import VLLMModelManager
 
 logger = logging.getLogger(__name__)
 

@@ -25,11 +25,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Tuple
 
-# Protocol types live one level up
-import sys, pathlib
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
-
-from protocol import EdgeRequest, CloudResponse
+from core.protocol import EdgeRequest, CloudResponse
 
 logger = logging.getLogger(__name__)
 

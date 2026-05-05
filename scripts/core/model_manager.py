@@ -1,4 +1,3 @@
-
 from pathlib import Path
 from typing import Tuple, Optional
 import logging
@@ -7,7 +6,6 @@ logger = logging.getLogger(__name__)
 
 
 class VLLMModelManager:
-    """Manages the draft model using vLLM with GGUF support."""
 
     def __init__(
         self,
@@ -17,16 +15,7 @@ class VLLMModelManager:
         tensor_parallel_size: int = 1,
         gpu_id: int = 0
     ):
-        """
-        Initialize vLLM model manager.
 
-        Args:
-            model_path: Path to HuggingFace model directory
-            gpu_memory_utilization: GPU memory fraction to use
-            max_model_len: Maximum sequence length
-            tensor_parallel_size: Number of GPUs for tensor parallelism
-            gpu_id: Which GPU to use (default 0)
-        """
         self.model_path = Path(model_path)
         self.gpu_memory_utilization = gpu_memory_utilization
         self.max_model_len = max_model_len
@@ -37,7 +26,6 @@ class VLLMModelManager:
         self.tokenizer = None
         
     def load(self):
-        """Load model using vLLM."""
         try:
             from vllm import LLM
             from transformers import AutoTokenizer
@@ -67,11 +55,9 @@ class VLLMModelManager:
     
     
     def is_loaded(self) -> bool:
-        """Check if model is loaded."""
         return self.llm is not None and self.tokenizer is not None
     
     def get_model_info(self) -> dict:
-        """Get model information."""
         if not self.is_loaded():
             return {}
         

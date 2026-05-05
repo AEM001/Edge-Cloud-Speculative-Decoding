@@ -22,25 +22,28 @@ GPU 1 (RTX 4090)  →  edge  / draft model     Qwen2.5-3B-Instruct-AWQ
 
 ```
 draft/
-├── server/
-│   └── verify_server.py         FastAPI server: /verify (speculative) + /generate (direct)
-├── client/
-│   ├── edge_client.py           Synchronous speculative decoding loop
-│   ├── async_edge_client.py     Pipelined async client (PicoSpec-style, lookahead=1)
-│   └── http_cloud_client.py     HTTP/keep-alive transport to verify server
-├── experiments/
-│   ├── network_conditions.py    Throttle simulation: good / medium / bursty profiles
-│   ├── metrics_collector.py     Data model, JSON export, summary tables
-│   ├── run_network_experiment.py  Full K-sweep runner
-│   └── outputs_network/
-│       ├── results_latest.json
-│       └── report.md
-├── draft_generator.py           vLLM draft token generator (TokensPrompt, prefix caching)
-├── model_manager.py             Model loader / GPU assignment
-├── prompt_loader.py             Prompt dataset (simple + complex categories)
-├── protocol.py                  EdgeRequest / CloudResponse dataclasses + wire format
-├── config.py                    Model paths, GPU memory fractions
-└── quick_test.py                Fast sanity check: direct vs sync_k7 vs cqt_k7
+├── scripts/
+│   ├── core/                      # Core infrastructure (shared across codebase)
+│   │   ├── protocol.py            # EdgeRequest / CloudResponse dataclasses + wire format
+│   │   ├── model_manager.py       # Model loader / GPU assignment
+│   │   └── draft_generator.py     # vLLM draft token generator (TokensPrompt, prefix caching)
+│   ├── client/                    # Edge clients
+│   │   ├── edge_client.py         # Synchronous speculative decoding loop
+│   │   ├── async_edge_client.py   # Pipelined async client (PicoSpec-style, lookahead=1)
+│   │   └── http_cloud_client.py   # HTTP/keep-alive transport to verify server
+│   ├── server/                    # Cloud verification server
+│   │   └── verify_server.py       # FastAPI server: /verify (speculative) + /generate (direct)
+│   └── experiments/               # Experiment-specific utilities
+│       ├── network_conditions.py  # Throttle simulation: good / medium / bursty profiles
+│       ├── metrics_collector.py   # Data model, JSON export, summary tables
+│       ├── prompt_loader.py       # Prompt dataset (simple + complex categories)
+│       ├── run_network_experiment.py  # Full K-sweep runner
+│       ├── quick_test.py          # Fast sanity check: direct vs sync_k7 vs cqt_k7
+│       └── outputs_network/
+│           ├── results_latest.json
+│           └── report.md
+├── config.py                      # Model paths, GPU memory fractions
+└── models/                        # Model download scripts and config
 ```
 
 ---
@@ -57,7 +60,7 @@ CUDA_VISIBLE_DEVICES=0 VERIFY_GPU_MEM=0.85 \
 ### 2. Run the quick sanity check (GPU 1)
 
 ```bash
-CUDA_VISIBLE_DEVICES=1 .venv/bin/python quick_test.py
+CUDA_VISIBLE_DEVICES=1 .venv/bin/python -m experiments.quick_test
 ```
 
 Runs **direct** vs **sync_k7** vs **cqt_k7** (async with CQT prefix selection)

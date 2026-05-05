@@ -1,4 +1,3 @@
-"""Data structures for speculative decoding protocol."""
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 import numpy as np
@@ -6,26 +5,22 @@ import numpy as np
 
 @dataclass
 class TokenInfo:
-    """Information about a single drafted token."""
     token_id: int
     logprob: float
 
 
 @dataclass
 class DraftRequest:
-    """Request from server to generate draft tokens."""
-    verified_prefix: List[int]  # Token IDs of verified context
+    verified_prefix: List[int]
     num_draft_tokens: int = 5
 
 
 @dataclass
 class DraftResponse:
-    """Response containing drafted tokens."""
     draft_token_ids: List[int]
     logprobs: List[float]
     
     def to_dict(self):
-        """Serialize to dictionary for network transmission."""
         return {
             "draft_token_ids": self.draft_token_ids,
             "logprobs": self.logprobs
@@ -33,7 +28,6 @@ class DraftResponse:
     
     @classmethod
     def from_dict(cls, data: dict) -> "DraftResponse":
-        """Deserialize from dictionary."""
         return cls(
             draft_token_ids=data["draft_token_ids"],
             logprobs=data["logprobs"]
@@ -42,7 +36,6 @@ class DraftResponse:
 
 @dataclass
 class EdgeRequest:
-    """Request from edge (Mac) to cloud (Ubuntu) for verification."""
     request_id: str
     round_id: int
     prefix_ids: List[int]
@@ -52,8 +45,6 @@ class EdgeRequest:
     policy_metadata: Dict[str, Any] = field(default_factory=dict)
     
     def to_dict(self):
-        """Serialize to dictionary for network transmission."""
-        # Replace -inf with a very small number for JSON compatibility
         import math
         safe_logprobs = [
             -1e10 if math.isinf(lp) and lp < 0 else lp 
@@ -71,7 +62,6 @@ class EdgeRequest:
     
     @classmethod
     def from_dict(cls, data: dict) -> "EdgeRequest":
-        """Deserialize from dictionary."""
         return cls(
             request_id=data["request_id"],
             round_id=data["round_id"],
@@ -85,7 +75,6 @@ class EdgeRequest:
 
 @dataclass
 class CloudResponse:
-    """Response from cloud (Ubuntu) to edge (Mac) with verification results."""
     request_id: str
     round_id: int
     accepted_len: int
@@ -96,7 +85,6 @@ class CloudResponse:
     rtt_ms: Optional[float] = None
     
     def to_dict(self):
-        """Serialize to dictionary for network transmission."""
         return {
             "request_id": self.request_id,
             "round_id": self.round_id,
@@ -110,7 +98,6 @@ class CloudResponse:
     
     @classmethod
     def from_dict(cls, data: dict) -> "CloudResponse":
-        """Deserialize from dictionary."""
         return cls(
             request_id=data["request_id"],
             round_id=data["round_id"],

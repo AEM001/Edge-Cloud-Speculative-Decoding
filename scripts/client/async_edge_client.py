@@ -40,9 +40,9 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Callable, Dict, List, Optional
 
-from protocol import CloudResponse, DraftRequest, DraftResponse, EdgeRequest, TokenInfo
-from draft_generator import VLLMDraftGenerator
-from model_manager import VLLMModelManager
+from core.protocol import CloudResponse, DraftRequest, DraftResponse, EdgeRequest, TokenInfo
+from core.draft_generator import VLLMDraftGenerator
+from core.model_manager import VLLMModelManager
 
 logger = logging.getLogger(__name__)
 
