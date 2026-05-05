@@ -220,7 +220,16 @@ class EdgeClient:
                 "draft_time_ms": draft_time_ms,
                 "server_time_ms": cloud_response.server_verify_time_ms,
                 "rtt_ms": cloud_response.rtt_ms,
-                "correction": correction_token
+                "correction": correction_token,
+                "verify_prefix_len": cloud_response.prefix_len,
+                "verify_draft_len": cloud_response.draft_len,
+                "verify_input_len": cloud_response.input_len,
+                "prompt_logprobs_requested": cloud_response.prompt_logprobs_requested,
+                "verify_batch_size": cloud_response.verify_batch_size,
+                "enable_prefix_caching": cloud_response.enable_prefix_caching,
+                "enforce_eager": cloud_response.enforce_eager,
+                "attention_backend": cloud_response.attention_backend,
+                "vllm_version": cloud_response.vllm_version,
             }
             metrics.round_details.append(round_detail)
             

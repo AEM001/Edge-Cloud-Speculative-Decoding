@@ -83,6 +83,16 @@ class CloudResponse:
     server_verify_time_ms: float
     server_total_time_ms: float
     rtt_ms: Optional[float] = None
+    prefix_len: Optional[int] = None
+    draft_len: Optional[int] = None
+    input_len: Optional[int] = None
+    prompt_logprobs_requested: Optional[int] = None
+    max_tokens_requested: Optional[int] = None
+    verify_batch_size: Optional[int] = None
+    enable_prefix_caching: Optional[bool] = None
+    enforce_eager: Optional[bool] = None
+    attention_backend: Optional[str] = None
+    vllm_version: Optional[str] = None
     
     def to_dict(self):
         return {
@@ -93,7 +103,17 @@ class CloudResponse:
             "correction_token_id": self.correction_token_id,
             "server_verify_time_ms": self.server_verify_time_ms,
             "server_total_time_ms": self.server_total_time_ms,
-            "rtt_ms": self.rtt_ms
+            "rtt_ms": self.rtt_ms,
+            "prefix_len": self.prefix_len,
+            "draft_len": self.draft_len,
+            "input_len": self.input_len,
+            "prompt_logprobs_requested": self.prompt_logprobs_requested,
+            "max_tokens_requested": self.max_tokens_requested,
+            "verify_batch_size": self.verify_batch_size,
+            "enable_prefix_caching": self.enable_prefix_caching,
+            "enforce_eager": self.enforce_eager,
+            "attention_backend": self.attention_backend,
+            "vllm_version": self.vllm_version
         }
     
     @classmethod
@@ -106,5 +126,15 @@ class CloudResponse:
             correction_token_id=data.get("correction_token_id"),
             server_verify_time_ms=data["server_verify_time_ms"],
             server_total_time_ms=data["server_total_time_ms"],
-            rtt_ms=data.get("rtt_ms")
+            rtt_ms=data.get("rtt_ms"),
+            prefix_len=data.get("prefix_len"),
+            draft_len=data.get("draft_len"),
+            input_len=data.get("input_len"),
+            prompt_logprobs_requested=data.get("prompt_logprobs_requested"),
+            max_tokens_requested=data.get("max_tokens_requested"),
+            verify_batch_size=data.get("verify_batch_size"),
+            enable_prefix_caching=data.get("enable_prefix_caching"),
+            enforce_eager=data.get("enforce_eager"),
+            attention_backend=data.get("attention_backend"),
+            vllm_version=data.get("vllm_version")
         )

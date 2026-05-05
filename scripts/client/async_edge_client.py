@@ -392,6 +392,15 @@ class AsyncEdgeClient:
                 "full_hit": False, "wasted_tokens": drafted,
                 "draft_ms": slot.draft_time_ms, "verify_ms": slot.verify_time_ms,
                 "rtt_ms": slot.rtt_ms, "rollback": False,
+                "verify_prefix_len": resp.prefix_len,
+                "verify_draft_len": resp.draft_len,
+                "verify_input_len": resp.input_len,
+                "prompt_logprobs_requested": resp.prompt_logprobs_requested,
+                "verify_batch_size": resp.verify_batch_size,
+                "enable_prefix_caching": resp.enable_prefix_caching,
+                "enforce_eager": resp.enforce_eager,
+                "attention_backend": resp.attention_backend,
+                "vllm_version": resp.vllm_version,
             })
             return False
 
@@ -404,6 +413,15 @@ class AsyncEdgeClient:
                 "full_hit": True, "wasted_tokens": 0,
                 "draft_ms": slot.draft_time_ms, "verify_ms": slot.verify_time_ms,
                 "rtt_ms": slot.rtt_ms, "rollback": False,
+                "verify_prefix_len": resp.prefix_len,
+                "verify_draft_len": resp.draft_len,
+                "verify_input_len": resp.input_len,
+                "prompt_logprobs_requested": resp.prompt_logprobs_requested,
+                "verify_batch_size": resp.verify_batch_size,
+                "enable_prefix_caching": resp.enable_prefix_caching,
+                "enforce_eager": resp.enforce_eager,
+                "attention_backend": resp.attention_backend,
+                "vllm_version": resp.vllm_version,
             })
             logger.debug("Slot %d: HIT accepted=%d committed=%d",
                          vr.slot_id, accepted, len(committed_prefix))
@@ -423,6 +441,15 @@ class AsyncEdgeClient:
                 "wasted_tokens": (drafted - accepted) + wasted_downstream,
                 "draft_ms": slot.draft_time_ms, "verify_ms": slot.verify_time_ms,
                 "rtt_ms": slot.rtt_ms, "rollback": True,
+                "verify_prefix_len": resp.prefix_len,
+                "verify_draft_len": resp.draft_len,
+                "verify_input_len": resp.input_len,
+                "prompt_logprobs_requested": resp.prompt_logprobs_requested,
+                "verify_batch_size": resp.verify_batch_size,
+                "enable_prefix_caching": resp.enable_prefix_caching,
+                "enforce_eager": resp.enforce_eager,
+                "attention_backend": resp.attention_backend,
+                "vllm_version": resp.vllm_version,
             })
             logger.debug("Slot %d: REJECT accepted=%d/%d correction=%s wasted_downstream=%d",
                          vr.slot_id, accepted, drafted, resp.correction_token_id, wasted_downstream)

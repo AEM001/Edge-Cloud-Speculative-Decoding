@@ -13,6 +13,7 @@ Environment variables (override via .env or shell export):
 """
 
 import argparse
+import importlib.metadata
 import logging
 import os
 import time
@@ -60,6 +61,16 @@ class VerifyResponse(BaseModel):
     server_verify_time_ms: float
     server_total_time_ms: float
     rtt_ms: Optional[float] = None
+    prefix_len: Optional[int] = None
+    draft_len: Optional[int] = None
+    input_len: Optional[int] = None
+    prompt_logprobs_requested: Optional[int] = None
+    max_tokens_requested: Optional[int] = None
+    verify_batch_size: Optional[int] = None
+    enable_prefix_caching: Optional[bool] = None
+    enforce_eager: Optional[bool] = None
+    attention_backend: Optional[str] = None
+    vllm_version: Optional[str] = None
 
 
 class VerifyBatchRequest(BaseModel):
@@ -115,12 +126,30 @@ class CloudVerifier:
         if quantization and quantization.lower() != "none":
             llm_kwargs["quantization"] = quantization
 
+        self.llm_kwargs = dict(llm_kwargs)
+        self.vllm_version = self._detect_vllm_version()
+        self.attention_backend = os.getenv("VLLM_ATTENTION_BACKEND")
         self.llm = LLM(**llm_kwargs)
         self.tokenizer = self.llm.get_tokenizer()
         self.model_path = str(path)
         self.gpu_memory_utilization = gpu_memory_utilization
         self.quantization = quantization
         logger.info("Verify model loaded: %s", model_path)
+
+    @staticmethod
+    def _detect_vllm_version() -> str:
+        try:
+            return importlib.metadata.version("vllm")
+        except importlib.metadata.PackageNotFoundError:
+            return "unknown"
+
+    def runtime_debug_info(self) -> Dict[str, Any]:
+        return {
+            "enable_prefix_caching": bool(self.llm_kwargs.get("enable_prefix_caching")),
+            "enforce_eager": bool(self.llm_kwargs.get("enforce_eager")),
+            "attention_backend": self.attention_backend,
+            "vllm_version": self.vllm_version,
+        }
 
     # ------------------------------------------------------------------
     def verify(
@@ -288,6 +317,12 @@ class CloudVerifier:
             "model_path": self.model_path,
             "gpu_memory_utilization": self.gpu_memory_utilization,
             "quantization": self.quantization,
+            "max_model_len": self.llm_kwargs.get("max_model_len"),
+            "tensor_parallel_size": self.llm_kwargs.get("tensor_parallel_size"),
+            "enable_prefix_caching": self.llm_kwargs.get("enable_prefix_caching"),
+            "enforce_eager": self.llm_kwargs.get("enforce_eager"),
+            "attention_backend": self.attention_backend,
+            "vllm_version": self.vllm_version,
         }
 
 
@@ -331,6 +366,7 @@ async def verify_draft(req: VerifyRequest):
         draft_ids=req.draft_ids,
     )
     total_ms = (time.time() - t0) * 1000
+    runtime_info = _verifier.runtime_debug_info()
     return VerifyResponse(
         request_id=req.request_id,
         round_id=req.round_id,
@@ -339,6 +375,13 @@ async def verify_draft(req: VerifyRequest):
         correction_token_id=correction,
         server_verify_time_ms=verify_ms,
         server_total_time_ms=total_ms,
+        prefix_len=len(req.prefix_ids),
+        draft_len=len(req.draft_ids),
+        input_len=len(req.prefix_ids) + len(req.draft_ids),
+        prompt_logprobs_requested=len(req.draft_ids),
+        max_tokens_requested=1,
+        verify_batch_size=1,
+        **runtime_info,
     )
 
 
@@ -352,6 +395,7 @@ async def verify_draft_batch(req: VerifyBatchRequest):
     responses = []
     for item, result in zip(req.requests, results):
         accepted_len, accepted_ids, correction, verify_ms = result
+        runtime_info = _verifier.runtime_debug_info()
         responses.append(VerifyResponse(
             request_id=item.request_id,
             round_id=item.round_id,
@@ -360,6 +404,13 @@ async def verify_draft_batch(req: VerifyBatchRequest):
             correction_token_id=correction,
             server_verify_time_ms=verify_ms,
             server_total_time_ms=total_ms,
+            prefix_len=len(item.prefix_ids),
+            draft_len=len(item.draft_ids),
+            input_len=len(item.prefix_ids) + len(item.draft_ids),
+            prompt_logprobs_requested=max(len(r.draft_ids) for r in req.requests),
+            max_tokens_requested=1,
+            verify_batch_size=len(req.requests),
+            **runtime_info,
         ))
     return VerifyBatchResponse(responses=responses)
 

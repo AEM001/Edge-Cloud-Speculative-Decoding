@@ -63,6 +63,12 @@ class QuickResult:
     branch_width: float = 0.0
     avg_selected_offset: float = 0.0
     avg_stale_branches: float = 0.0
+    avg_verify_prefix_len: float = 0.0
+    avg_verify_input_len: float = 0.0
+    verify_prefix_caching: Optional[bool] = None
+    verify_enforce_eager: Optional[bool] = None
+    verify_attention_backend: Optional[str] = None
+    verify_vllm_version: Optional[str] = None
     direct_server_ms: float = 0.0
     direct_http_ms: float = 0.0
     direct_ul_ms: float = 0.0
@@ -202,9 +208,11 @@ def run_sync_spec_case(
     accepted = round(metrics.acceptance_ratio * metrics.total_rounds * k)
     net_useful = accepted / metrics.total_rounds if metrics.total_rounds else 0
     method_name = f"sync_k{k}"
+    avg_verify_prefix_len = _avg([s.get("verify_prefix_len", 0) or 0 for s in metrics.round_details])
+    avg_verify_input_len = _avg([s.get("verify_input_len", 0) or 0 for s in metrics.round_details])
     logger.info(
         "    %s: %d tok  %5.0f ms  %5.1f tok/s  accept=%4.1f%%  net_useful=%.2f tok/round  "
-        "rounds=%d  rtt=%d ms",
+        "rounds=%d  rtt=%d ms  verify_prefix=%.0f  verify_input=%.0f",
         method_name,
         metrics.generated_tokens,
         total_ms,
@@ -213,6 +221,8 @@ def run_sync_spec_case(
         net_useful,
         metrics.total_rounds,
         metrics.average_rtt_ms,
+        avg_verify_prefix_len,
+        avg_verify_input_len,
     )
     return QuickResult(
         method=method_name,
@@ -229,6 +239,12 @@ def run_sync_spec_case(
         verify_time_ms=metrics.total_server_verify_time_ms,
         avg_rtt_ms=metrics.average_rtt_ms,
         sim_overhead_ms=net_stats["total_simulated_overhead_ms"],
+        avg_verify_prefix_len=avg_verify_prefix_len,
+        avg_verify_input_len=avg_verify_input_len,
+        verify_prefix_caching=_first([s.get("enable_prefix_caching") for s in metrics.round_details]),
+        verify_enforce_eager=_first([s.get("enforce_eager") for s in metrics.round_details]),
+        verify_attention_backend=_first([s.get("attention_backend") for s in metrics.round_details]),
+        verify_vllm_version=_first([s.get("vllm_version") for s in metrics.round_details]),
     )
 
 
@@ -258,9 +274,11 @@ def run_tree_spec_case(
     base_wait_ms = _avg([s.get("base_wait_ms", 0) for s in metrics.slot_details])
     total_wait_ms = _avg([s.get("total_wait_ms", 0) for s in metrics.slot_details])
     spec_verify_wall_ms = _avg([s.get("spec_verify_wall_ms", 0) for s in metrics.slot_details])
+    avg_verify_prefix_len = _avg([s.get("verify_prefix_len", 0) or 0 for s in metrics.slot_details])
+    avg_verify_input_len = _avg([s.get("verify_input_len", 0) or 0 for s in metrics.slot_details])
     logger.info(
         "    %s: %d tok  %5.0f ms  %5.1f tok/s  accept=%4.1f%%  net_useful=%.2f tok/round  "
-        "rounds=%d  rtt=%d ms  bubble=%.0fms  offset=%.1f",
+        "rounds=%d  rtt=%d ms  bubble=%.0fms  offset=%.1f  verify_prefix=%.0f  verify_input=%.0f",
         method_name,
         metrics.generated_tokens,
         total_ms,
@@ -271,6 +289,8 @@ def run_tree_spec_case(
         metrics.average_rtt_ms,
         metrics.avg_bubble_ms,
         selected_offset,
+        avg_verify_prefix_len,
+        avg_verify_input_len,
     )
     logger.info(
         "      tree_diag: base_accept=%.2f  base_draft=%.0fms  branch_draft=%.0fms  "
@@ -301,10 +321,23 @@ def run_tree_spec_case(
         branch_width=branch_width,
         avg_selected_offset=selected_offset,
         avg_stale_branches=stale_branches,
+        avg_verify_prefix_len=avg_verify_prefix_len,
+        avg_verify_input_len=avg_verify_input_len,
+        verify_prefix_caching=_first([s.get("enable_prefix_caching") for s in metrics.slot_details]),
+        verify_enforce_eager=_first([s.get("enforce_eager") for s in metrics.slot_details]),
+        verify_attention_backend=_first([s.get("attention_backend") for s in metrics.slot_details]),
+        verify_vllm_version=_first([s.get("vllm_version") for s in metrics.slot_details]),
     )
 
 
 def _avg(lst): return sum(lst) / len(lst) if lst else 0.0
+
+
+def _first(lst):
+    for item in lst:
+        if item is not None:
+            return item
+    return None
 
 
 def run_quick_test():

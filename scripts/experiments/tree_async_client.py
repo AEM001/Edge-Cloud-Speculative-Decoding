@@ -34,7 +34,7 @@ class TreeBranch:
 
 
 class TreeAsyncEdgeClient(AsyncEdgeClient):
-    """Async client that explores multiple speculative branches per round."""
+    """Async client that drafts tree branches as next-round prefetch only."""
 
     HISTORY_WINDOW: int = 50
     BRANCH_WIDTH: int = 3
@@ -117,6 +117,32 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
 
         return offsets[:self.branch_width]
 
+    def _prefetch_from_branch(
+        self,
+        branch: TreeBranch,
+        base_draft: List[int],
+        base_accepted: int,
+        correction: int | None,
+    ) -> tuple[List[int], List[float]] | None:
+        """Return reusable continuation tokens if a local branch matches reality."""
+        if branch.offset > base_accepted:
+            return None
+
+        expected_prefix = list(base_draft[branch.offset:base_accepted])
+        if correction is not None:
+            expected_prefix.append(correction)
+
+        if len(branch.draft_ids) < len(expected_prefix):
+            return None
+        if branch.draft_ids[:len(expected_prefix)] != expected_prefix:
+            return None
+
+        reuse_start = len(expected_prefix)
+        return (
+            list(branch.draft_ids[reuse_start:]),
+            list(branch.draft_logprobs[reuse_start:]),
+        )
+
     def _tree_pipeline_loop(
         self,
         prompt_ids,
@@ -183,9 +209,9 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
                 )
             )
 
-            # ── Fire base verify in background immediately ──────────────────
-            # The base branch verify travels over the network while we draft
-            # the speculative branches — this is the core latency hiding.
+            # Fire only the baseline verify in the background. Tree branches
+            # are local prefetch candidates for the next round; they are never
+            # sent to the verifier in this round.
             base_edge_req = EdgeRequest(
                 request_id=request_id,
                 round_id=tree_id * 100,
@@ -208,7 +234,7 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
             verify_thread = threading.Thread(target=_run_base_verify, daemon=True)
             verify_thread.start()
 
-            # ── Draft speculative branches while verify is in-flight ─────────
+            # Draft speculative branches while baseline verify is in flight.
             offsets = self._tree_offsets(k, len(base_draft))
             branch_offsets = [o for o in offsets if o > 0][: max(0, self.branch_width - 1)]
             branch_prefixes = []
@@ -279,7 +305,7 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
                 (branches[0], _VerifyResult(branches[0].branch_id, base_resp_cloud,
                                             base_resp_cloud.rtt_ms or 0.0))
             ]
-            metrics.uplink_bytes += sum(len(b.prefix) + len(b.draft_ids) for b in branches) * 4
+            metrics.uplink_bytes += (len(committed_prefix) + len(base_draft)) * 4 + 64
 
             if not branch_results:
                 break
@@ -299,16 +325,23 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
             selected_branch = branches[0]
             prefetched_ids = []
             prefetched_logprobs = []
-            for branch in branches:
-                if branch.offset != base_accepted:
+            usable_branches = sorted(
+                (branch for branch in branches[1:] if branch.offset <= base_accepted),
+                key=lambda branch: branch.offset,
+                reverse=True,
+            )
+            for branch in usable_branches:
+                reusable = self._prefetch_from_branch(
+                    branch=branch,
+                    base_draft=base_draft,
+                    base_accepted=base_accepted,
+                    correction=correction,
+                )
+                if reusable is None:
                     continue
-                if correction is None:
-                    continue
-                if branch.draft_ids and branch.draft_ids[0] == correction:
-                    selected_branch = branch
-                    prefetched_ids = list(branch.draft_ids[1:])
-                    prefetched_logprobs = list(branch.draft_logprobs[1:])
-                    break
+                selected_branch = branch
+                prefetched_ids, prefetched_logprobs = reusable
+                break
 
             total_drafted = sum(len(b.draft_ids) for b in branches)
             metrics.total_accepted_tokens += base_accepted
@@ -337,6 +370,15 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
                     "total_wait_ms": total_wait_ms,
                     "spec_verify_wall_ms": 0.0,
                     "prefetched_tokens": len(prefetched_ids),
+                    "verify_prefix_len": base_resp_cloud.prefix_len,
+                    "verify_draft_len": base_resp_cloud.draft_len,
+                    "verify_input_len": base_resp_cloud.input_len,
+                    "prompt_logprobs_requested": base_resp_cloud.prompt_logprobs_requested,
+                    "verify_batch_size": base_resp_cloud.verify_batch_size,
+                    "enable_prefix_caching": base_resp_cloud.enable_prefix_caching,
+                    "enforce_eager": base_resp_cloud.enforce_eager,
+                    "attention_backend": base_resp_cloud.attention_backend,
+                    "vllm_version": base_resp_cloud.vllm_version,
                 }
             )
             committed_prefix.clear()
