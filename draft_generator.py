@@ -163,6 +163,81 @@ class VLLMDraftGenerator:
                 "top_margins": top_margins
             }
         )
+
+    def generate_draft_tokens_batch(
+        self,
+        requests: List[DraftRequest],
+        temperature: float = 0.8,
+        top_p: float = 0.95,
+    ) -> List[DraftResponse]:
+        if not requests:
+            return []
+        if self.llm is None or self.tokenizer is None:
+            raise RuntimeError("Model not loaded")
+
+        from vllm import SamplingParams, TokensPrompt
+
+        k = requests[0].num_draft_tokens
+        sampling_params = SamplingParams(
+            temperature=temperature if temperature > 0 else 0.0,
+            top_p=top_p,
+            max_tokens=k,
+            logprobs=1,
+        )
+        outputs = self.llm.generate(
+            prompts=[TokensPrompt(prompt_token_ids=list(req.verified_prefix)) for req in requests],
+            sampling_params=sampling_params,
+            use_tqdm=False,
+        )
+
+        responses: List[DraftResponse] = []
+        for output, req in zip(outputs, requests):
+            generated_ids = output.outputs[0].token_ids[:req.num_draft_tokens] if output.outputs else []
+            out_logprobs = output.outputs[0].logprobs or [] if output.outputs else []
+            draft_token_ids = []
+            draft_logprobs = []
+            draft_probs = []
+            max_probs = []
+            entropies = []
+            top_margins = []
+
+            for i, token_id in enumerate(generated_ids):
+                if i < len(out_logprobs) and out_logprobs[i] is not None:
+                    logprobs_dict = out_logprobs[i]
+                    token_logprob_obj = logprobs_dict.get(token_id, None)
+                    if token_logprob_obj is not None:
+                        token_logprob_val = token_logprob_obj.logprob if hasattr(token_logprob_obj, 'logprob') else float(token_logprob_obj)
+                        token_prob = np.exp(token_logprob_val)
+                    else:
+                        token_logprob_val = -float('inf')
+                        token_prob = 0.0
+                    max_prob, entropy, top_margin = self.compute_confidence_stats(logprobs_dict)
+                else:
+                    token_prob = 1.0 / self.tokenizer.vocab_size if hasattr(self.tokenizer, 'vocab_size') else 0.0
+                    token_logprob_val = np.log(token_prob + 1e-10)
+                    max_prob = token_prob
+                    entropy = np.log(self.tokenizer.vocab_size) if hasattr(self.tokenizer, 'vocab_size') else 0.0
+                    top_margin = 0.0
+
+                draft_token_ids.append(token_id)
+                draft_logprobs.append(float(token_logprob_val))
+                draft_probs.append(float(token_prob))
+                max_probs.append(float(max_prob))
+                entropies.append(float(entropy))
+                top_margins.append(float(top_margin))
+
+            responses.append(DraftResponse(
+                draft_token_ids=draft_token_ids,
+                logprobs=draft_logprobs,
+                probabilities=draft_probs,
+                confidence_stats={
+                    "max_probs": max_probs,
+                    "entropies": entropies,
+                    "top_margins": top_margins
+                }
+            ))
+
+        return responses
     
     def decode_tokens(self, token_ids: List[int]) -> str:
         """Decode token IDs to text."""

@@ -62,6 +62,14 @@ class VerifyResponse(BaseModel):
     rtt_ms: Optional[float] = None
 
 
+class VerifyBatchRequest(BaseModel):
+    requests: List[VerifyRequest]
+
+
+class VerifyBatchResponse(BaseModel):
+    responses: List[VerifyResponse]
+
+
 class GenerateRequest(BaseModel):
     prompt: str
     max_tokens: int = 128
@@ -213,6 +221,68 @@ class CloudVerifier:
         ms = (time.time() - t0) * 1000
         return accepted_len, accepted_ids, correction, ms
 
+    def verify_batch(self, requests_: List[VerifyRequest]):
+        if not requests_:
+            return []
+        t0 = time.time()
+        from vllm import TokensPrompt
+
+        sampling_params = SamplingParams(
+            temperature=0.0,
+            max_tokens=1,
+            logprobs=1,
+            prompt_logprobs=max(len(req.draft_ids) for req in requests_),
+        )
+        prompts = [
+            TokensPrompt(prompt_token_ids=req.prefix_ids + req.draft_ids)
+            for req in requests_
+        ]
+        outputs = self.llm.generate(
+            prompts=prompts,
+            sampling_params=sampling_params,
+            use_tqdm=False,
+        )
+
+        elapsed_ms = (time.time() - t0) * 1000
+        per_request_ms = elapsed_ms / len(requests_)
+        results = []
+        for req, output in zip(requests_, outputs):
+            num_draft = len(req.draft_ids)
+            prefix_len = len(req.prefix_ids)
+            plp = output.prompt_logprobs
+            accepted_len = 0
+
+            for j, draft_tok in enumerate(req.draft_ids):
+                pos = prefix_len + j
+                if plp is None or pos >= len(plp) or plp[pos] is None:
+                    break
+                lp_dict = plp[pos]
+                best_tok = max(
+                    lp_dict.items(),
+                    key=lambda kv: kv[1].logprob if hasattr(kv[1], "logprob") else kv[1],
+                )[0]
+                if best_tok == draft_tok:
+                    accepted_len += 1
+                else:
+                    break
+
+            accepted_ids = req.draft_ids[:accepted_len]
+            correction = None
+            if accepted_len < num_draft:
+                pos = prefix_len + accepted_len
+                if plp and pos < len(plp) and plp[pos]:
+                    correction = max(
+                        plp[pos].items(),
+                        key=lambda kv: kv[1].logprob if hasattr(kv[1], "logprob") else kv[1],
+                    )[0]
+            else:
+                if output.outputs and output.outputs[0].token_ids:
+                    correction = output.outputs[0].token_ids[0]
+
+            results.append((accepted_len, accepted_ids, correction, per_request_ms))
+
+        return results
+
     def get_info(self) -> Dict[str, Any]:
         return {
             "model_path": self.model_path,
@@ -270,6 +340,28 @@ async def verify_draft(req: VerifyRequest):
         server_verify_time_ms=verify_ms,
         server_total_time_ms=total_ms,
     )
+
+
+@app.post("/verify_batch", response_model=VerifyBatchResponse)
+async def verify_draft_batch(req: VerifyBatchRequest):
+    if _verifier is None:
+        raise HTTPException(503, "Not ready")
+    t0 = time.time()
+    results = _verifier.verify_batch(req.requests)
+    total_ms = (time.time() - t0) * 1000
+    responses = []
+    for item, result in zip(req.requests, results):
+        accepted_len, accepted_ids, correction, verify_ms = result
+        responses.append(VerifyResponse(
+            request_id=item.request_id,
+            round_id=item.round_id,
+            accepted_len=accepted_len,
+            accepted_token_ids=accepted_ids,
+            correction_token_id=correction,
+            server_verify_time_ms=verify_ms,
+            server_total_time_ms=total_ms,
+        ))
+    return VerifyBatchResponse(responses=responses)
 
 
 @app.post("/generate", response_model=GenerateResponse)
