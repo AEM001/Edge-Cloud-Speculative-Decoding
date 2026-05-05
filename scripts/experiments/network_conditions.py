@@ -23,7 +23,7 @@ import logging
 import random
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 from core.protocol import EdgeRequest, CloudResponse
 
@@ -239,6 +239,62 @@ class ThrottledCloudClient:
         )
 
         return response
+
+    def verify_batch(self, requests: List[EdgeRequest]) -> List[CloudResponse]:
+        if not requests:
+            return []
+
+        if not hasattr(self.base_client, "verify_batch"):
+            # Fall back to sequential calls (still throttled) if base client
+            # lacks native batch support.
+            return [self(req) for req in requests]
+
+        cond = self.condition
+        now = time.perf_counter() - self._start_wall
+        one_way_ms, dl_mbps, ul_mbps = cond.current_link_params(now)
+
+        uplink_payload = json.dumps({"requests": [req.to_dict() for req in requests]}).encode("utf-8")
+        uplink_bytes = len(uplink_payload)
+        uplink_bw_delay = NetworkCondition._payload_delay_ms(uplink_bytes, ul_mbps)
+        uplink_delay = one_way_ms + uplink_bw_delay
+        _sleep_ms(uplink_delay)
+
+        t0 = time.perf_counter()
+        responses: List[CloudResponse] = self.base_client.verify_batch(requests)
+        actual_server_ms = (time.perf_counter() - t0) * 1000
+
+        downlink_payload = json.dumps({"responses": [resp.to_dict() for resp in responses]}).encode("utf-8")
+        downlink_bytes = len(downlink_payload)
+        downlink_bw_delay = NetworkCondition._payload_delay_ms(downlink_bytes, dl_mbps)
+        downlink_delay = one_way_ms + downlink_bw_delay
+        _sleep_ms(downlink_delay)
+
+        simulated_overhead = uplink_delay + downlink_delay
+        for resp in responses:
+            resp.rtt_ms = actual_server_ms + simulated_overhead
+
+        stats = self.stats
+        stats.num_calls += 1
+        stats.total_simulated_uplink_delay_ms += uplink_delay
+        stats.total_simulated_downlink_delay_ms += downlink_delay
+        stats.total_simulated_overhead_ms += simulated_overhead
+        stats.total_uplink_bytes += uplink_bytes
+        stats.total_downlink_bytes += downlink_bytes
+
+        logger.debug(
+            "[%s] batch ul=%.1f ms (%d B @ %.0f Mbps)  dl=%.1f ms (%d B @ %.0f Mbps)  overhead=%.1f ms  rtt≈%.1f ms",
+            cond.name,
+            uplink_delay,
+            uplink_bytes,
+            ul_mbps,
+            downlink_delay,
+            downlink_bytes,
+            dl_mbps,
+            simulated_overhead,
+            responses[0].rtt_ms if responses else 0.0,
+        )
+
+        return responses
 
     def reset_stats(self) -> None:
         self.stats = NetworkCallStats()

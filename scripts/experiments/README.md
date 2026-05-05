@@ -14,7 +14,6 @@ model runs on the cloud server (GPU 0).
 | `network_conditions.py` | Network simulation — wraps any `cloud_client`, injects RTT, bandwidth throttle, and bursty spike state machine |
 | `metrics_collector.py` | Unified data model (`ExperimentResult`), converters, aggregation, JSON/CSV export, and table printing |
 | `prompt_loader.py` | Prompt loading from SPEED-Bench dataset |
-| `run_network_experiment.py` | Main runner — draft model loaded once, sweeps profiles × methods × prompts |
 | `quick_test.py` | Fast sanity check: direct vs sync_k7 vs tree_async (for quick validation) |
 | `outputs_network/report.md` | Full analysis report with tables and root-cause findings |
 
