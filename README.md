@@ -30,7 +30,8 @@ draft/
 │   ├── client/                    # Edge clients
 │   │   ├── edge_client.py         # Synchronous speculative decoding loop
 │   │   ├── async_edge_client.py   # Pipelined async client (PicoSpec-style, lookahead=1)
-│   │   └── http_cloud_client.py   # HTTP/keep-alive transport to verify server
+│   │   ├── http_cloud_client.py   # HTTP/keep-alive transport to verify server
+│   │   └── tree_async_client.py   # Tree-based speculative client with branch prefetch
 │   ├── server/                    # Cloud verification server
 │   │   └── verify_server.py       # FastAPI server: /verify (speculative) + /generate (direct)
 │   └── experiments/               # Experiment-specific utilities
@@ -63,7 +64,7 @@ CUDA_VISIBLE_DEVICES=0 VERIFY_GPU_MEM=0.85 \
 CUDA_VISIBLE_DEVICES=1 .venv/bin/python -m experiments.quick_test
 ```
 
-Runs **direct** vs **sync_k7** vs **cqt_k7** (async with CQT prefix selection)
+Runs **direct** vs **sync_k7** vs **tree_k7_b3** (tree-based with branch prefetch)
 over 2 simple prompts × 3 network conditions. Prints tok/s, speedup, net useful
 tokens/round, rollbacks, and bubble time per row.
 
@@ -160,18 +161,12 @@ cloud API latency. The five main architectural options, in order of impact:
 
 ---
 
-## Current Results (3B draft → 14B verify, good network, K=7)
+## Results
 
-| Method | tok/s | vs direct | verify ms/round | notes |
-|--------|-------|-----------|-----------------|-------|
-| direct | ~37 | 1.00× | — | single /generate call |
-| sync_k7 | 28–36 | 0.77–0.96× | ~30 ms | simple prompts |
-| sync_k7 | 12–18 | 0.32–0.49× | 200–400 ms | complex prompts (long prefix) |
-| cqt_k7 | TBD | TBD | ~30 ms | async + CQT p10, lookahead=1 |
+See `experiments/outputs_network/report.md` for full network sweep results.
 
-Simple prompts nearly reach parity with direct. Complex prompts suffer from
-O(n) attention over long prefixes (500–900 tokens) inflating verify time past
-the 30 ms baseline — prefix caching helps but does not fully eliminate this.
+For recent diagnostic findings on tree-based speculative decoding, see:
+`experiments/outputs_quick/DIAGNOSTIC_REPORT_2025-05-05.md`
 
 ---
 
@@ -179,11 +174,20 @@ the 30 ms baseline — prefix caching helps but does not fully eliminate this.
 
 | Priority | Change | Expected gain |
 |----------|--------|---------------|
-| **High** | Upgrade draft to `Qwen2.5-7B-Instruct-AWQ` | Acceptance rate ~57% → ~72%; fewer rounds; spec wins ~2× on simple prompts |
+| **High** | Improve tree offset prediction accuracy | Tree currently underperforms due to poor rejection point prediction; better prediction could enable true prefetch benefit |
+| **High** | Upgrade draft to `Qwen2.5-7B-Instruct-AWQ` | Higher acceptance rate reduces rounds; speculative methods more competitive |
 | **High** | Send token delta only (not full prefix_ids) per round | Cuts uplink payload ~20×; eliminates re-prefill for accepted tokens |
-| Medium | Evaluate CQT p10 vs p20 vs fixed-margin (avg × 0.7) on bursty network | Quantify rollback reduction vs bubble-time increase |
 | Medium | Run vLLM in-process to eliminate ZMQ IPC | Saves ~15–20 ms/round; simplifies deployment |
+| Medium | Evaluate CQT prefix selection on bursty network | Quantify rollback reduction vs bubble-time increase |
 | Low | Shorter max_tokens (64 instead of 128) | Fewer rounds, less accumulated prefix overhead |
 | Low | Batch 3–5 verify rounds per HTTP call | Amortises transport cost; useful on very high-latency links |
 
-See `experiments/outputs_network/report.md` for full per-condition analysis.
+### Tree-Based Decoding
+
+The tree-based client (`tree_async_client.py`) attempts to hide branch drafting behind verify RTT by predicting the rejection point and prefetching continuation tokens. Current limitations:
+
+- **Requires exact offset prediction**: Branch prefetch only helps when `branch.offset == actual accepted_len` and `branch.draft_ids[0] == correction_token`
+- **Prediction quality is the bottleneck**: Current mode-based prediction often misses, wasting branch draft work
+- **Alternative strategies**: Consider hybrid approaches (sync → tree when confidence high) or improved prediction using smaller history windows
+
+See `experiments/outputs_quick/DIAGNOSTIC_REPORT_2025-05-05.md` for detailed analysis.
