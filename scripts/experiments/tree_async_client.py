@@ -7,7 +7,6 @@ all of quick_test's orchestration code.
 
 from __future__ import annotations
 
-import json
 import logging
 import math
 import queue
@@ -226,8 +225,8 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
                 break
 
             metrics.total_rounds += 1
-            metrics.total_drafted_tokens += sum(len(b.draft_ids) for b in branches)
-            metrics.total_edge_draft_time_ms += sum(b.draft_time_ms for b in branches)
+            metrics.total_drafted_tokens += k
+            metrics.total_edge_draft_time_ms += base_draft_ms + batch_draft_ms
 
             edge_reqs = []
             for branch in branches:
@@ -246,8 +245,8 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
                         "branch_width": len(branches),
                     },
                 )
-                metrics.uplink_bytes += len(json.dumps(edge_req.to_dict()).encode())
                 edge_reqs.append(edge_req)
+            metrics.uplink_bytes += sum(len(b.prefix) + len(b.draft_ids) for b in branches) * 4
 
             bubble_t0 = time.perf_counter()
             try:
@@ -278,7 +277,7 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
                 self._history.append(resp.accepted_len)
                 metrics.total_server_verify_time_ms += resp.server_verify_time_ms
                 metrics.total_network_time_ms += max(0.0, vr.rtt_ms - resp.server_verify_time_ms)
-                metrics.downlink_bytes += len(json.dumps(resp.to_dict()).encode())
+                metrics.downlink_bytes += len(resp.accepted_token_ids) * 4 + 32
 
             base_branch, base_vr = next(
                 ((branch, vr) for branch, vr in branch_results if branch.offset == 0),
@@ -303,7 +302,7 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
                 new_committed.append(selected_resp.correction_token_id)
 
             total_drafted = sum(len(b.draft_ids) for b in branches)
-            metrics.total_accepted_tokens += selected_progress
+            metrics.total_accepted_tokens += min(selected_progress, k)
             if selected_progress < k:
                 metrics.total_rollbacks += 1
             metrics.slot_details.append(
@@ -321,7 +320,7 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
                     "rollback": selected_progress < k,
                     "tree_branch_width": len(branches),
                     "selected_offset": selected_branch.offset,
-                    "stale_branches": len(branches) - 1,
+                    "stale_branches": sum(1 for b, _ in branch_results if b.branch_id != selected_branch.branch_id),
                     "base_accepted": base_accept,
                 }
             )

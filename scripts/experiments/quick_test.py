@@ -27,7 +27,7 @@ from client.edge_client import EdgeClient
 from client.http_cloud_client import create_http_cloud_client
 from config import DRAFT_GPU_MEM as GPU_MEMORY_UTILIZATION, DRAFT_MAX_LEN as MAX_MODEL_LEN, DRAFT_MODEL_NAME as MODEL_NAME, DRAFT_MODEL_PATH as MODEL_PATH
 from core.draft_generator import VLLMDraftGenerator
-from core.protocol import DraftRequest
+from core.protocol import DraftRequest, EdgeRequest
 from experiments.network_conditions import NetworkCondition, ThrottledCloudClient
 from core.model_manager import VLLMModelManager
 from experiments.prompt_loader import load_speed_bench_prompts
@@ -298,22 +298,24 @@ def run_quick_test():
     )
     logger.info("Draft model loaded.")
 
-    # ── Warmup: fire a few calls so torch.compile / GPU kernels are hot ──
+    # ── Warmup: heat draft GPU and verify GPU via the actual verify path ──
     logger.info("Warming up draft model and verify server ...")
     warmup_prompt = prompts[0][0]["text"]
     warmup_prefix = list(draft_generator.tokenizer.encode(warmup_prompt))
     for _ in range(3):
-        draft_generator.generate_draft_tokens(
+        wr = draft_generator.generate_draft_tokens(
             DraftRequest(verified_prefix=warmup_prefix, num_draft_tokens=7),
             temperature=0.0,
         )
-    for _ in range(3):
         try:
-            requests.post(
-                f"{SERVER_URL}/generate",
-                json={"prompt": warmup_prompt, "max_tokens": 16, "temperature": 0.0},
-                timeout=60.0,
-            )
+            base_client.verify(EdgeRequest(
+                request_id="warmup",
+                round_id=0,
+                prefix_ids=warmup_prefix,
+                draft_ids=wr.draft_token_ids,
+                draft_logprobs=wr.logprobs,
+                edge_draft_time_ms=0.0,
+            ))
         except Exception:
             pass
     logger.info("Warmup complete.")

@@ -1,5 +1,4 @@
 """Edge client for speculative decoding on Mac."""
-import json
 import time
 import uuid
 import logging
@@ -169,8 +168,7 @@ class EdgeClient:
                 policy_metadata={"policy_name": policy_name, "K": K}
             )
             
-            # Measure actual serialized payload size (bytes)
-            uplink_size = len(json.dumps(edge_request.to_dict()).encode('utf-8'))
+            uplink_size = (len(verified_prefix) + len(draft_response.draft_token_ids)) * 4 + 64
             metrics.uplink_bytes += uplink_size
             
             # Send to cloud
@@ -178,8 +176,7 @@ class EdgeClient:
             
             request_time_ms = (time.time() - request_start) * 1000
             
-            # Measure actual serialized response size (bytes)
-            downlink_size = len(json.dumps(cloud_response.to_dict()).encode('utf-8'))
+            downlink_size = len(cloud_response.accepted_token_ids) * 4 + 32
             metrics.downlink_bytes += downlink_size
             
             # Step 3: Update prefix based on verification

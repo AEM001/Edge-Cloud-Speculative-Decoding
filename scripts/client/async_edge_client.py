@@ -30,7 +30,6 @@ Pipeline metrics tracked (beyond what sync EdgeClient tracks):
   - overlap_time_ms       : total time where draft + verify ran concurrently
 """
 
-import json
 import logging
 import queue
 import threading
@@ -379,8 +378,8 @@ class AsyncEdgeClient:
         metrics.total_network_time_ms       += max(0.0, vr.rtt_ms - resp.server_verify_time_ms)
         n = max(metrics.total_rounds, 1)
         metrics.average_rtt_ms = (metrics.average_rtt_ms * (n - 1) + vr.rtt_ms) / n
-        metrics.uplink_bytes   += len(json.dumps({"accepted_token_ids": resp.accepted_token_ids}).encode())
-        metrics.downlink_bytes += len(json.dumps({"correction_token_id": resp.correction_token_id}).encode())
+        metrics.uplink_bytes   += len(resp.accepted_token_ids) * 4 + 32
+        metrics.downlink_bytes += 32
 
         # Only advance committed prefix if this slot is the immediate next
         slot_start = len(slot.assumed_prefix)
@@ -550,7 +549,7 @@ class AsyncEdgeClient:
                 edge_draft_time_ms=draft_ms,
                 policy_metadata={"policy_name": policy_name, "K": K},
             )
-            metrics.uplink_bytes += len(json.dumps(edge_req.to_dict()).encode())
+            metrics.uplink_bytes += (len(speculative_prefix) + len(draft_resp.draft_token_ids)) * 4 + 64
             draft_queue.put(_VerifyJob(slot_id=slot_id, request=edge_req))
 
             # Optimistically advance speculative prefix (assume full hit)
