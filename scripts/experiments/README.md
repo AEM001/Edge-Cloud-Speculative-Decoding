@@ -1,9 +1,9 @@
 # Network-Constrained Speculative Decoding Experiments
 
-Compares **direct generation** and **synchronous speculative decoding** (K = 3, 5, 7)
-under simulated mobile network conditions. Designed for the edge-cloud split
-research scenario: the draft model runs on the edge device (GPU 1), the verify
-model runs on the cloud server (GPU 0).
+Compares **direct generation**, **synchronous speculative decoding**, and the
+tree async speculative baseline under simulated mobile network conditions.
+The draft model runs on the edge device (GPU 1); the verify model runs on the
+cloud server (GPU 0).
 
 ---
 
@@ -12,10 +12,10 @@ model runs on the cloud server (GPU 0).
 | File | Role |
 |------|------|
 | `network_conditions.py` | Network simulation — wraps any `cloud_client`, injects RTT, bandwidth throttle, and bursty spike state machine |
-| `metrics_collector.py` | Unified data model (`ExperimentResult`), converters, aggregation, JSON/CSV export, and table printing |
 | `prompt_loader.py` | Prompt loading from SPEED-Bench dataset |
-| `quick_test.py` | Fast sanity check: direct vs sync_k7 vs tree_async (for quick validation) |
-| `outputs_network/report.md` | Full analysis report with tables and root-cause findings |
+| `tree_async_client.py` | Tree async speculative client used by `quick_test.py` |
+| `quick_test.py` | Fast sanity check with normalized direct/sync/tree metrics |
+| `outputs_quick/` | Normalized results, raw round details, and grouped summaries |
 
 **Dependencies:**
 - `core.protocol` - Data structures (EdgeRequest, CloudResponse, DraftRequest, DraftResponse)
@@ -42,13 +42,13 @@ CUDA_VISIBLE_DEVICES=0 VERIFY_GPU_MEM=0.85 \
 
 # Terminal 2 — experiment on GPU 1
 CUDA_VISIBLE_DEVICES=1 \
-  .venv/bin/python -m experiments.run_network_experiment --prompts 5
+  .venv/bin/python -m experiments.quick_test
 ```
 
 Or for a quick sanity check:
 
 ```bash
-CUDA_VISIBLE_DEVICES=1 .venv/bin/python quick_test.py
+CUDA_VISIBLE_DEVICES=1 .venv/bin/python -m experiments.quick_test
 ```
 
 ---
@@ -56,26 +56,23 @@ CUDA_VISIBLE_DEVICES=1 .venv/bin/python quick_test.py
 ## Quick Start
 
 ```bash
-CUDA_VISIBLE_DEVICES=1 .venv/bin/python -m experiments.run_network_experiment \
-    --prompts 5 \
-    --max-tokens 128 \
-    --k-values 3 5 7
+CUDA_VISIBLE_DEVICES=1 .venv/bin/python -m experiments.quick_test
 ```
 
-Writes results to `experiments/outputs_network/`.
+Writes results to `experiments/outputs_quick/`.
 
 ---
 
-## CLI Reference
+## Configuration
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--server` | `http://localhost:6006` | Verify server URL |
-| `--max-tokens` | `128` | Max new tokens per call |
-| `--prompts` | `5` | Prompts per type (simple + complex) |
-| `--k-values` | `3 5 7` | Draft lengths K to sweep |
-| `--profiles` | all | `good`, `medium`, `bursty` |
-| `--no-direct` | — | Skip direct generation baseline |
+`quick_test.py` currently uses module-level constants:
+
+| Constant | Default | Description |
+|----------|---------|-------------|
+| `SERVER_URL` | `http://localhost:6006` | Verify server URL |
+| `MAX_TOKENS` | `128` | Max new tokens per call |
+| `K_VALUES` | `[7]` | Draft lengths K to test |
+| `PROMPT_COUNT` | `2` | Prompts per type |
 
 ---
 
@@ -104,38 +101,26 @@ satellite = NetworkCondition(
 
 ## Metrics Tracked
 
-### Core (all methods)
+`quick_test.py` normalizes every method into the same schema:
 
-| Metric | Field |
-|--------|-------|
-| Tokens/second | `tokens_per_second` |
-| Total latency | `total_latency_ms` |
-| Tokens generated | `tokens_generated` |
-
-### Speculative-only
-
-| Metric | Field | Why it matters |
-|--------|-------|----------------|
-| Acceptance ratio | `acceptance_ratio` | Quality of draft model |
-| **Net useful tokens/round** | derived: `accepted / rounds` | Actual amortisation per RTT |
-| Total rounds | `total_rounds` | Determines total network overhead |
-| Draft time | `total_draft_time_ms` | Edge compute cost |
-| Verify time | `total_verify_time_ms` | Should be ~30 ms/round after fix |
-| Average RTT | `average_rtt_ms` | verify + network |
-| Simulated overhead | `simulated_overhead_ms` | Pure injected network delay |
+| Section | Meaning |
+|---------|---------|
+| `output` | Generated tokens, total wall time, tokens/sec |
+| `timing` | Local draft time, server model time, HTTP/RPC overhead, simulated UL/DL/network, RTT |
+| `speculative` | Rounds, K, drafted tokens, accepted draft tokens, correction tokens, acceptance |
+| `async_detail` | Branch launch/readiness/reuse, prefetched tokens, exposed branch time |
+| `verify_runtime` | Prefix/draft/input lengths and vLLM runtime settings |
+| `raw` | Direct timing or per-round details |
 
 ---
 
 ## Output Files
 
 ```
-outputs_network/
-├── results_YYYYMMDD_HHMMSS.json
-├── results_YYYYMMDD_HHMMSS.csv
-├── summary_YYYYMMDD_HHMMSS.json
-├── results_latest.json          ← symlink
-├── results_latest.csv           ← symlink
-└── report.md                    ← full analysis
+outputs_quick/
+├── quick_test_results.json      # normalized rows
+├── quick_test_rounds.jsonl      # raw direct/round/slot details
+└── quick_test_summary.json      # grouped averages and speedups
 ```
 
 ---
@@ -154,11 +139,15 @@ EdgeClient (GPU 1 — edge)
 ```
 
 **Key implementation detail — `verify()` method:**
-Feed `prefix_ids + draft_ids` as a single prompt with `prompt_logprobs=K,
+Feed `prefix_ids + draft_ids` as a single prompt with `prompt_logprobs=1,
 max_tokens=1`. vLLM runs **one prefill** over all tokens (prefix KV cache hit)
-then **one decode** for the correction token. Total GPU work per round ≈ 30 ms,
-vs the broken approach of `generate(prefix, max_tokens=K+1)` which did K+1
-sequential decode steps ≈ 196 ms/round.
+then **one decode** for the correction token. The verifier is greedy
+(`temperature=0`): it only needs the target top-1 token at each draft position.
+Stochastic speculative sampling would require target probabilities and
+rejection resampling logic.
+
+The `/verify` wire protocol omits draft logprobs and does not return accepted
+token IDs. The edge reconstructs accepted tokens from `draft_ids[:accepted_len]`.
 
 ---
 

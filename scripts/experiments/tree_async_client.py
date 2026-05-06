@@ -442,10 +442,10 @@ class TreeAsyncEdgeClient:
                 resp = vr.cloud_response
                 metrics.total_server_verify_time_ms += resp.server_verify_time_ms
                 metrics.total_network_time_ms += max(0.0, vr.rtt_ms - resp.server_verify_time_ms)
-                metrics.downlink_bytes += len(resp.accepted_token_ids) * 4 + 32
+                metrics.downlink_bytes += 48
 
             new_committed = list(committed_prefix)
-            new_committed.extend(base_resp_cloud.accepted_token_ids)
+            new_committed.extend(base_draft[:base_accepted])
             if correction is not None:
                 new_committed.append(correction)
 

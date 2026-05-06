@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
-import numpy as np
 
 
 @dataclass
@@ -40,22 +39,16 @@ class EdgeRequest:
     round_id: int
     prefix_ids: List[int]
     draft_ids: List[int]
-    draft_logprobs: List[float]
     edge_draft_time_ms: float
+    draft_logprobs: List[float] = field(default_factory=list)
     policy_metadata: Dict[str, Any] = field(default_factory=dict)
     
     def to_dict(self):
-        import math
-        safe_logprobs = [
-            -1e10 if math.isinf(lp) and lp < 0 else lp 
-            for lp in self.draft_logprobs
-        ]
         return {
             "request_id": self.request_id,
             "round_id": self.round_id,
             "prefix_ids": self.prefix_ids,
             "draft_ids": self.draft_ids,
-            "draft_logprobs": safe_logprobs,
             "edge_draft_time_ms": self.edge_draft_time_ms,
             "policy_metadata": self.policy_metadata
         }
@@ -67,7 +60,7 @@ class EdgeRequest:
             round_id=data["round_id"],
             prefix_ids=data["prefix_ids"],
             draft_ids=data["draft_ids"],
-            draft_logprobs=data["draft_logprobs"],
+            draft_logprobs=data.get("draft_logprobs", []),
             edge_draft_time_ms=data["edge_draft_time_ms"],
             policy_metadata=data.get("policy_metadata", {})
         )
@@ -122,7 +115,7 @@ class CloudResponse:
             request_id=data["request_id"],
             round_id=data["round_id"],
             accepted_len=data["accepted_len"],
-            accepted_token_ids=data["accepted_token_ids"],
+            accepted_token_ids=data.get("accepted_token_ids", []),
             correction_token_id=data.get("correction_token_id"),
             server_verify_time_ms=data["server_verify_time_ms"],
             server_total_time_ms=data["server_total_time_ms"],

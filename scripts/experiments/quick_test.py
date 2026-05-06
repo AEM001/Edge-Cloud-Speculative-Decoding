@@ -40,6 +40,8 @@ MAX_TOKENS = 128
 K_VALUES  = [7]      # draft length
 LOOKAHEAD = 1        # 1 verify in flight while 1 draft runs concurrently
 PROMPT_COUNT = 2    # prompts per type (simple only)
+DIRECT_SESSION = requests.Session()
+DIRECT_SESSION.trust_env = False
 
 
 @dataclass
@@ -146,7 +148,7 @@ def _direct_with_throttle(prompt: str, throttled: ThrottledCloudClient) -> Direc
 
     start = time.perf_counter()
     try:
-        resp = requests.post(
+        resp = DIRECT_SESSION.post(
             f"{SERVER_URL}/generate",
             json={"prompt": prompt, "max_tokens": MAX_TOKENS, "temperature": 0.0},
             timeout=120.0,
@@ -569,7 +571,7 @@ def run_quick_test():
         except Exception:
             pass
     try:
-        requests.post(
+        DIRECT_SESSION.post(
             f"{SERVER_URL}/generate",
             json={"prompt": warmup_prompt, "max_tokens": 8, "temperature": 0.0},
             timeout=60.0,

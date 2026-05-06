@@ -176,12 +176,15 @@ class EdgeClient:
             
             request_time_ms = (time.time() - request_start) * 1000
             
-            downlink_size = len(cloud_response.accepted_token_ids) * 4 + 32
+            downlink_size = 48
             metrics.downlink_bytes += downlink_size
             
             # Step 3: Update prefix based on verification
             accepted_len = cloud_response.accepted_len
-            accepted_tokens = cloud_response.accepted_token_ids
+            accepted_tokens = (
+                cloud_response.accepted_token_ids
+                or draft_response.draft_token_ids[:accepted_len]
+            )
             correction_token = cloud_response.correction_token_id
             
             # Append accepted draft tokens

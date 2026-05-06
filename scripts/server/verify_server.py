@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from vllm import LLM, SamplingParams
 
 logger = logging.getLogger(__name__)
@@ -47,16 +47,16 @@ class VerifyRequest(BaseModel):
     round_id: int
     prefix_ids: List[int]
     draft_ids: List[int]
-    draft_logprobs: List[float]
+    draft_logprobs: List[float] = Field(default_factory=list)
     edge_draft_time_ms: float
-    policy_metadata: Dict[str, Any] = {}
+    policy_metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class VerifyResponse(BaseModel):
     request_id: str
     round_id: int
     accepted_len: int
-    accepted_token_ids: List[int]
+    accepted_token_ids: List[int] = Field(default_factory=list)
     correction_token_id: Optional[int]
     server_verify_time_ms: float
     server_total_time_ms: float
@@ -160,12 +160,12 @@ class CloudVerifier:
     ):
         """
         Greedy verification via a single prefill pass.
-        Returns (accepted_len, accepted_ids, correction_token_id, ms).
+        Returns (accepted_len, correction_token_id, ms).
 
         How it works
         ------------
         Feed ``prefix_ids + draft_ids`` as the prompt with
-        ``prompt_logprobs=len(draft_ids)`` and ``max_tokens=1``.
+        ``prompt_logprobs=1`` and ``max_tokens=1``.
 
         vLLM runs ONE prefill forward pass over all tokens, then ONE
         decode step for the correction token.  Total GPU work:
@@ -179,17 +179,18 @@ class CloudVerifier:
 
         ``prompt_logprobs`` semantics in vLLM
         -------------------------------------
-        ``output.prompt_logprobs[i]`` is the distribution the model
-        assigns AT position ``i``, conditioned on tokens 0..i-1.
+        ``output.prompt_logprobs[i]`` contains requested logprob entries for
+        position ``i``, conditioned on tokens 0..i-1.
         Positions 0..(prefix_len-1) are ``None`` (not requested).
-        Positions prefix_len..(prefix_len+K-1) hold the K distributions
-        we need: ``argmax(prompt_logprobs[prefix_len + j])`` is what the
-        verify model would have generated at draft position ``j``.
+        Positions prefix_len..(prefix_len+K-1) hold the top-1 target
+        token we need for greedy verification. This verifier is correct
+        for temperature=0 greedy decoding; stochastic speculative sampling
+        needs target probabilities and rejection resampling instead.
         """
         t0 = time.time()
 
         if not draft_ids:
-            return 0, [], None, 0.0
+            return 0, None, 0.0
 
         num_draft = len(draft_ids)
         input_ids = prefix_ids + draft_ids
@@ -198,7 +199,7 @@ class CloudVerifier:
             temperature=0.0,           # greedy
             max_tokens=1,              # one correction token
             logprobs=1,                # top-1 for the correction position
-            prompt_logprobs=num_draft, # logprobs for the K draft positions
+            prompt_logprobs=1,         # top-1 for each draft position
         )
 
         from vllm import TokensPrompt
@@ -218,7 +219,7 @@ class CloudVerifier:
             if plp is None or pos >= len(plp) or plp[pos] is None:
                 break
             lp_dict = plp[pos]
-            # argmax over the distribution at this position
+            # argmax over the returned top-1 entries at this position
             best_tok = max(
                 lp_dict.items(),
                 key=lambda kv: kv[1].logprob if hasattr(kv[1], "logprob") else kv[1],
@@ -227,8 +228,6 @@ class CloudVerifier:
                 accepted_len += 1
             else:
                 break
-
-        accepted_ids = draft_ids[:accepted_len]
 
         # Correction token: what the verify model would generate at the
         # first divergence point.  For accepted_len < K this is the
@@ -248,7 +247,7 @@ class CloudVerifier:
                 correction = output.outputs[0].token_ids[0]
 
         ms = (time.time() - t0) * 1000
-        return accepted_len, accepted_ids, correction, ms
+        return accepted_len, correction, ms
 
     def verify_batch(self, requests_: List[VerifyRequest]):
         if not requests_:
@@ -260,7 +259,7 @@ class CloudVerifier:
             temperature=0.0,
             max_tokens=1,
             logprobs=1,
-            prompt_logprobs=max(len(req.draft_ids) for req in requests_),
+            prompt_logprobs=1,
         )
         prompts = [
             TokensPrompt(prompt_token_ids=req.prefix_ids + req.draft_ids)
@@ -295,7 +294,6 @@ class CloudVerifier:
                 else:
                     break
 
-            accepted_ids = req.draft_ids[:accepted_len]
             correction = None
             if accepted_len < num_draft:
                 pos = prefix_len + accepted_len
@@ -308,7 +306,7 @@ class CloudVerifier:
                 if output.outputs and output.outputs[0].token_ids:
                     correction = output.outputs[0].token_ids[0]
 
-            results.append((accepted_len, accepted_ids, correction, per_request_ms))
+            results.append((accepted_len, correction, per_request_ms))
 
         return results
 
@@ -361,7 +359,7 @@ async def verify_draft(req: VerifyRequest):
     if _verifier is None:
         raise HTTPException(503, "Not ready")
     t0 = time.time()
-    accepted_len, accepted_ids, correction, verify_ms = _verifier.verify(
+    accepted_len, correction, verify_ms = _verifier.verify(
         prefix_ids=req.prefix_ids,
         draft_ids=req.draft_ids,
     )
@@ -371,14 +369,14 @@ async def verify_draft(req: VerifyRequest):
         request_id=req.request_id,
         round_id=req.round_id,
         accepted_len=accepted_len,
-        accepted_token_ids=accepted_ids,
+        accepted_token_ids=[],
         correction_token_id=correction,
         server_verify_time_ms=verify_ms,
         server_total_time_ms=total_ms,
         prefix_len=len(req.prefix_ids),
         draft_len=len(req.draft_ids),
         input_len=len(req.prefix_ids) + len(req.draft_ids),
-        prompt_logprobs_requested=len(req.draft_ids),
+        prompt_logprobs_requested=1,
         max_tokens_requested=1,
         verify_batch_size=1,
         **runtime_info,
@@ -394,20 +392,20 @@ async def verify_draft_batch(req: VerifyBatchRequest):
     total_ms = (time.time() - t0) * 1000
     responses = []
     for item, result in zip(req.requests, results):
-        accepted_len, accepted_ids, correction, verify_ms = result
+        accepted_len, correction, verify_ms = result
         runtime_info = _verifier.runtime_debug_info()
         responses.append(VerifyResponse(
             request_id=item.request_id,
             round_id=item.round_id,
             accepted_len=accepted_len,
-            accepted_token_ids=accepted_ids,
+            accepted_token_ids=[],
             correction_token_id=correction,
             server_verify_time_ms=verify_ms,
             server_total_time_ms=total_ms,
             prefix_len=len(item.prefix_ids),
             draft_len=len(item.draft_ids),
             input_len=len(item.prefix_ids) + len(item.draft_ids),
-            prompt_logprobs_requested=max(len(r.draft_ids) for r in req.requests),
+            prompt_logprobs_requested=1,
             max_tokens_requested=1,
             verify_batch_size=len(req.requests),
             **runtime_info,
