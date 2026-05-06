@@ -5,10 +5,9 @@ Quick sanity check: does speculative decoding (K=7) beat throttled direct?
 For each network condition the SAME throttle wrapper is applied to both
 direct and speculative, so the comparison is apples-to-apples.
 
-Key metric added: net_useful_toks_per_round  = accepted_tokens / rounds
-  (i.e. how many tokens we actually *keep* per verify call)
-Acceptance ratio alone is misleading because a 60% ratio on K=7 yields
-4.2 kept tokens/round, which amortises the RTT much better than K=3 at 60%.
+Results use a normalized metric schema so direct, sync speculative, and
+tree async runs can be compared through the same output/timing/speculative
+fields while keeping method-specific raw round details separately.
 """
 import json
 import logging
@@ -16,7 +15,7 @@ import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
@@ -44,35 +43,75 @@ PROMPT_COUNT = 2    # prompts per type (simple only)
 
 
 @dataclass
-class QuickResult:
-    method: str                     # "direct" | "spec_k7"
-    network: str                    # "good" | "medium" | "bursty"
-    prompt_type: str
-    prompt_id: int
+class OutputMetrics:
     tokens_generated: int
     total_time_ms: float
     tokens_per_second: float
-    # speculative-only
-    acceptance_rate: float = 0.0
-    num_rounds: int = 0
-    net_useful_toks_per_round: float = 0.0   # accepted tokens / rounds
-    draft_time_ms: float = 0.0
-    verify_time_ms: float = 0.0
+
+
+@dataclass
+class TimingMetrics:
+    client_wall_ms: float = 0.0
+    local_draft_ms: float = 0.0
+    server_model_ms: float = 0.0
+    server_total_ms: float = 0.0
+    http_rpc_ms: float = 0.0
+    simulated_ul_ms: float = 0.0
+    simulated_dl_ms: float = 0.0
+    simulated_network_ms: float = 0.0
     avg_rtt_ms: float = 0.0
-    sim_overhead_ms: float = 0.0
-    branch_width: float = 0.0
-    avg_selected_offset: float = 0.0
-    avg_stale_branches: float = 0.0
-    avg_verify_prefix_len: float = 0.0
-    avg_verify_input_len: float = 0.0
-    verify_prefix_caching: Optional[bool] = None
-    verify_enforce_eager: Optional[bool] = None
-    verify_attention_backend: Optional[str] = None
-    verify_vllm_version: Optional[str] = None
-    direct_server_ms: float = 0.0
-    direct_http_ms: float = 0.0
-    direct_ul_ms: float = 0.0
-    direct_dl_ms: float = 0.0
+    critical_path_wait_ms: float = 0.0
+
+
+@dataclass
+class SpeculativeMetrics:
+    rounds: int = 0
+    k: int = 0
+    drafted_tokens: int = 0
+    accepted_draft_tokens: int = 0
+    correction_tokens: int = 0
+    generated_per_round: float = 0.0
+    accepted_draft_per_round: float = 0.0
+    acceptance_rate: float = 0.0
+    wasted_draft_tokens: int = 0
+
+
+@dataclass
+class AsyncDetailMetrics:
+    launched_branch_count: float = 0.0
+    ready_branch_count: float = 0.0
+    reused_branch_count: float = 0.0
+    prefetched_tokens: float = 0.0
+    exposed_branch_ms: float = 0.0
+    selected_offset: float = 0.0
+    base_accepted: float = 0.0
+    stale_branch_count: float = 0.0
+
+
+@dataclass
+class VerifyRuntimeMetrics:
+    avg_prefix_len: float = 0.0
+    avg_draft_len: float = 0.0
+    avg_input_len: float = 0.0
+    prefix_caching: Optional[bool] = None
+    enforce_eager: Optional[bool] = None
+    attention_backend: Optional[str] = None
+    vllm_version: Optional[str] = None
+
+
+@dataclass
+class ExperimentResult:
+    method: str
+    method_family: str              # direct | sync_spec | tree_async
+    network: str
+    prompt_type: str
+    prompt_id: int
+    output: OutputMetrics
+    timing: TimingMetrics
+    speculative: SpeculativeMetrics
+    async_detail: AsyncDetailMetrics
+    verify_runtime: VerifyRuntimeMetrics
+    raw: Dict[str, Any]
 
 
 @dataclass
@@ -157,25 +196,36 @@ def _tree_async_speculative(async_client: TreeAsyncEdgeClient, prompt: str, k: i
         return None
 
 
-def run_direct_case(prompt_meta, text: str, throttled: ThrottledCloudClient) -> Optional[QuickResult]:
+def run_direct_case(prompt_meta, text: str, throttled: ThrottledCloudClient) -> Optional[ExperimentResult]:
     throttled.reset_stats()
     timing = _direct_with_throttle(text, throttled)
     if timing.tokens <= 0:
         return None
     tps = timing.tokens / (timing.total_ms / 1000)
-    result = QuickResult(
+    result = ExperimentResult(
         method="direct",
+        method_family="direct",
         network=throttled.condition.name,
         prompt_type=prompt_meta["type"],
         prompt_id=prompt_meta["id"],
-        tokens_generated=timing.tokens,
-        total_time_ms=timing.total_ms,
-        tokens_per_second=tps,
-        sim_overhead_ms=timing.overhead_ms,
-        direct_server_ms=timing.server_ms,
-        direct_http_ms=timing.http_ms,
-        direct_ul_ms=timing.ul_ms,
-        direct_dl_ms=timing.dl_ms,
+        output=OutputMetrics(
+            tokens_generated=timing.tokens,
+            total_time_ms=timing.total_ms,
+            tokens_per_second=tps,
+        ),
+        timing=TimingMetrics(
+            client_wall_ms=timing.total_ms,
+            server_model_ms=timing.server_ms,
+            server_total_ms=timing.server_ms,
+            http_rpc_ms=timing.http_ms,
+            simulated_ul_ms=timing.ul_ms,
+            simulated_dl_ms=timing.dl_ms,
+            simulated_network_ms=timing.overhead_ms,
+        ),
+        speculative=SpeculativeMetrics(),
+        async_detail=AsyncDetailMetrics(),
+        verify_runtime=VerifyRuntimeMetrics(),
+        raw={"direct_timing": asdict(timing)},
     )
     logger.info(
         "    direct  : %d tok  %5.0f ms  %5.1f tok/s  "
@@ -197,7 +247,7 @@ def run_sync_spec_case(
     prompt_meta,
     text: str,
     k: int,
-) -> Optional[QuickResult]:
+) -> Optional[ExperimentResult]:
     throttled.reset_stats()
     metrics = _speculative(edge_client, text, k)
     if not metrics or metrics.generated_tokens <= 0:
@@ -205,10 +255,12 @@ def run_sync_spec_case(
     net_stats = throttled.get_stats_dict()
     total_ms = metrics.total_latency_ms
     tps = metrics.generated_tokens / (total_ms / 1000)
-    accepted = round(metrics.acceptance_ratio * metrics.total_rounds * k)
+    accepted = metrics.total_accepted_drafted_tokens
     net_useful = accepted / metrics.total_rounds if metrics.total_rounds else 0
+    correction_tokens = max(0, metrics.generated_tokens - accepted)
     method_name = f"sync_k{k}"
     avg_verify_prefix_len = _avg([s.get("verify_prefix_len", 0) or 0 for s in metrics.round_details])
+    avg_verify_draft_len = _avg([s.get("verify_draft_len", 0) or 0 for s in metrics.round_details])
     avg_verify_input_len = _avg([s.get("verify_input_len", 0) or 0 for s in metrics.round_details])
     logger.info(
         "    %s: %d tok  %5.0f ms  %5.1f tok/s  accept=%4.1f%%  net_useful=%.2f tok/round  "
@@ -224,27 +276,55 @@ def run_sync_spec_case(
         avg_verify_prefix_len,
         avg_verify_input_len,
     )
-    return QuickResult(
+    return ExperimentResult(
         method=method_name,
+        method_family="sync_spec",
         network=throttled.condition.name,
         prompt_type=prompt_meta["type"],
         prompt_id=prompt_meta["id"],
-        tokens_generated=metrics.generated_tokens,
-        total_time_ms=total_ms,
-        tokens_per_second=tps,
-        acceptance_rate=metrics.acceptance_ratio,
-        num_rounds=metrics.total_rounds,
-        net_useful_toks_per_round=net_useful,
-        draft_time_ms=metrics.total_edge_draft_time_ms,
-        verify_time_ms=metrics.total_server_verify_time_ms,
-        avg_rtt_ms=metrics.average_rtt_ms,
-        sim_overhead_ms=net_stats["total_simulated_overhead_ms"],
-        avg_verify_prefix_len=avg_verify_prefix_len,
-        avg_verify_input_len=avg_verify_input_len,
-        verify_prefix_caching=_first([s.get("enable_prefix_caching") for s in metrics.round_details]),
-        verify_enforce_eager=_first([s.get("enforce_eager") for s in metrics.round_details]),
-        verify_attention_backend=_first([s.get("attention_backend") for s in metrics.round_details]),
-        verify_vllm_version=_first([s.get("vllm_version") for s in metrics.round_details]),
+        output=OutputMetrics(
+            tokens_generated=metrics.generated_tokens,
+            total_time_ms=total_ms,
+            tokens_per_second=tps,
+        ),
+        timing=TimingMetrics(
+            client_wall_ms=total_ms,
+            local_draft_ms=metrics.total_edge_draft_time_ms,
+            server_model_ms=metrics.total_server_verify_time_ms,
+            http_rpc_ms=max(
+                0.0,
+                metrics.total_network_time_ms
+                + metrics.total_server_verify_time_ms
+                - net_stats["total_simulated_overhead_ms"],
+            ),
+            simulated_ul_ms=net_stats["total_simulated_uplink_delay_ms"],
+            simulated_dl_ms=net_stats["total_simulated_downlink_delay_ms"],
+            simulated_network_ms=net_stats["total_simulated_overhead_ms"],
+            avg_rtt_ms=metrics.average_rtt_ms,
+            critical_path_wait_ms=metrics.average_rtt_ms,
+        ),
+        speculative=SpeculativeMetrics(
+            rounds=metrics.total_rounds,
+            k=k,
+            drafted_tokens=metrics.total_drafted_tokens,
+            accepted_draft_tokens=accepted,
+            correction_tokens=correction_tokens,
+            generated_per_round=metrics.generated_tokens / metrics.total_rounds if metrics.total_rounds else 0.0,
+            accepted_draft_per_round=net_useful,
+            acceptance_rate=metrics.acceptance_ratio,
+            wasted_draft_tokens=metrics.wasted_drafted_tokens,
+        ),
+        async_detail=AsyncDetailMetrics(),
+        verify_runtime=VerifyRuntimeMetrics(
+            avg_prefix_len=avg_verify_prefix_len,
+            avg_draft_len=avg_verify_draft_len,
+            avg_input_len=avg_verify_input_len,
+            prefix_caching=_first([s.get("enable_prefix_caching") for s in metrics.round_details]),
+            enforce_eager=_first([s.get("enforce_eager") for s in metrics.round_details]),
+            attention_backend=_first([s.get("attention_backend") for s in metrics.round_details]),
+            vllm_version=_first([s.get("vllm_version") for s in metrics.round_details]),
+        ),
+        raw={"round_details": metrics.round_details, "network": net_stats},
     )
 
 
@@ -254,7 +334,7 @@ def run_tree_spec_case(
     prompt_meta,
     text: str,
     k: int,
-) -> Optional[QuickResult]:
+) -> Optional[ExperimentResult]:
     throttled.reset_stats()
     metrics = _tree_async_speculative(tree_async_client, text, k)
     if not metrics or metrics.generated_tokens <= 0:
@@ -264,6 +344,7 @@ def run_tree_spec_case(
     tps = metrics.generated_tokens / (total_ms / 1000)
     accepted = metrics.total_accepted_tokens
     net_useful = accepted / metrics.total_rounds if metrics.total_rounds else 0
+    correction_tokens = max(0, metrics.generated_tokens - accepted)
     method_name = f"tree_k{k}_b{tree_async_client.branch_width}"
     branch_width = _avg([s.get("tree_branch_width", 0) for s in metrics.slot_details])
     selected_offset = _avg([s.get("selected_offset", 0) for s in metrics.slot_details])
@@ -271,10 +352,16 @@ def run_tree_spec_case(
     base_accept = _avg([s.get("base_accepted", 0) for s in metrics.slot_details])
     base_draft_ms = _avg([s.get("base_draft_ms", 0) for s in metrics.slot_details])
     branch_draft_ms = _avg([s.get("branch_draft_ms", 0) for s in metrics.slot_details])
+    active_spec_branches = _avg([s.get("active_spec_branches", 0) for s in metrics.slot_details])
+    exposed_branch_ms = _avg([s.get("exposed_branch_ms", 0) for s in metrics.slot_details])
+    ready_branch_count = _avg([max(0, s.get("tree_branch_width", 0) - 1) for s in metrics.slot_details])
+    reused_branch_count = _avg([1 if s.get("selected_offset", 0) > 0 else 0 for s in metrics.slot_details])
+    prefetched_tokens = _avg([s.get("prefetched_tokens", 0) for s in metrics.slot_details])
     base_wait_ms = _avg([s.get("base_wait_ms", 0) for s in metrics.slot_details])
     total_wait_ms = _avg([s.get("total_wait_ms", 0) for s in metrics.slot_details])
     spec_verify_wall_ms = _avg([s.get("spec_verify_wall_ms", 0) for s in metrics.slot_details])
     avg_verify_prefix_len = _avg([s.get("verify_prefix_len", 0) or 0 for s in metrics.slot_details])
+    avg_verify_draft_len = _avg([s.get("verify_draft_len", 0) or 0 for s in metrics.slot_details])
     avg_verify_input_len = _avg([s.get("verify_input_len", 0) or 0 for s in metrics.slot_details])
     logger.info(
         "    %s: %d tok  %5.0f ms  %5.1f tok/s  accept=%4.1f%%  net_useful=%.2f tok/round  "
@@ -294,39 +381,85 @@ def run_tree_spec_case(
     )
     logger.info(
         "      tree_diag: base_accept=%.2f  base_draft=%.0fms  branch_draft=%.0fms  "
-        "base_wait=%.0fms  total_wait=%.0fms  spec_verify_wall=%.0fms  stale=%.1f",
+        "exposed_branch=%.0fms  active_spec=%.1f  base_wait=%.0fms  total_wait=%.0fms  "
+        "spec_verify_wall=%.0fms  stale=%.1f",
         base_accept,
         base_draft_ms,
         branch_draft_ms,
+        exposed_branch_ms,
+        active_spec_branches,
         base_wait_ms,
         total_wait_ms,
         spec_verify_wall_ms,
         stale_branches,
     )
-    return QuickResult(
+    return ExperimentResult(
         method=method_name,
+        method_family="tree_async",
         network=throttled.condition.name,
         prompt_type=prompt_meta["type"],
         prompt_id=prompt_meta["id"],
-        tokens_generated=metrics.generated_tokens,
-        total_time_ms=total_ms,
-        tokens_per_second=tps,
-        acceptance_rate=metrics.acceptance_ratio,
-        num_rounds=metrics.total_rounds,
-        net_useful_toks_per_round=net_useful,
-        draft_time_ms=metrics.total_edge_draft_time_ms,
-        verify_time_ms=metrics.total_server_verify_time_ms,
-        avg_rtt_ms=metrics.average_rtt_ms,
-        sim_overhead_ms=net_stats["total_simulated_overhead_ms"],
-        branch_width=branch_width,
-        avg_selected_offset=selected_offset,
-        avg_stale_branches=stale_branches,
-        avg_verify_prefix_len=avg_verify_prefix_len,
-        avg_verify_input_len=avg_verify_input_len,
-        verify_prefix_caching=_first([s.get("enable_prefix_caching") for s in metrics.slot_details]),
-        verify_enforce_eager=_first([s.get("enforce_eager") for s in metrics.slot_details]),
-        verify_attention_backend=_first([s.get("attention_backend") for s in metrics.slot_details]),
-        verify_vllm_version=_first([s.get("vllm_version") for s in metrics.slot_details]),
+        output=OutputMetrics(
+            tokens_generated=metrics.generated_tokens,
+            total_time_ms=total_ms,
+            tokens_per_second=tps,
+        ),
+        timing=TimingMetrics(
+            client_wall_ms=total_ms,
+            local_draft_ms=metrics.total_edge_draft_time_ms,
+            server_model_ms=metrics.total_server_verify_time_ms,
+            http_rpc_ms=max(
+                0.0,
+                metrics.total_network_time_ms
+                + metrics.total_server_verify_time_ms
+                - net_stats["total_simulated_overhead_ms"],
+            ),
+            simulated_ul_ms=net_stats["total_simulated_uplink_delay_ms"],
+            simulated_dl_ms=net_stats["total_simulated_downlink_delay_ms"],
+            simulated_network_ms=net_stats["total_simulated_overhead_ms"],
+            avg_rtt_ms=metrics.average_rtt_ms,
+            critical_path_wait_ms=metrics.avg_bubble_ms,
+        ),
+        speculative=SpeculativeMetrics(
+            rounds=metrics.total_rounds,
+            k=k,
+            drafted_tokens=metrics.total_drafted_tokens,
+            accepted_draft_tokens=accepted,
+            correction_tokens=correction_tokens,
+            generated_per_round=metrics.generated_tokens / metrics.total_rounds if metrics.total_rounds else 0.0,
+            accepted_draft_per_round=net_useful,
+            acceptance_rate=metrics.acceptance_ratio,
+            wasted_draft_tokens=max(0, metrics.total_drafted_tokens - accepted),
+        ),
+        async_detail=AsyncDetailMetrics(
+            launched_branch_count=active_spec_branches,
+            ready_branch_count=ready_branch_count,
+            reused_branch_count=reused_branch_count,
+            prefetched_tokens=prefetched_tokens,
+            exposed_branch_ms=exposed_branch_ms,
+            selected_offset=selected_offset,
+            base_accepted=base_accept,
+            stale_branch_count=stale_branches,
+        ),
+        verify_runtime=VerifyRuntimeMetrics(
+            avg_prefix_len=avg_verify_prefix_len,
+            avg_draft_len=avg_verify_draft_len,
+            avg_input_len=avg_verify_input_len,
+            prefix_caching=_first([s.get("enable_prefix_caching") for s in metrics.slot_details]),
+            enforce_eager=_first([s.get("enforce_eager") for s in metrics.slot_details]),
+            attention_backend=_first([s.get("attention_backend") for s in metrics.slot_details]),
+            vllm_version=_first([s.get("vllm_version") for s in metrics.slot_details]),
+        ),
+        raw={
+            "slot_details": metrics.slot_details,
+            "network": net_stats,
+            "avg_branch_width": branch_width,
+            "avg_base_draft_ms": base_draft_ms,
+            "avg_branch_draft_ms": branch_draft_ms,
+            "avg_base_wait_ms": base_wait_ms,
+            "avg_total_wait_ms": total_wait_ms,
+            "avg_spec_verify_wall_ms": spec_verify_wall_ms,
+        },
     )
 
 
@@ -338,6 +471,49 @@ def _first(lst):
         if item is not None:
             return item
     return None
+
+
+def _build_summary(results: List[ExperimentResult], methods_to_show: List[str]) -> Dict[str, Any]:
+    summary: Dict[str, Any] = {}
+    for net in [c.name for c in NetworkCondition.all_profiles()]:
+        direct_rows = [r for r in results if r.method == "direct" and r.network == net]
+        direct_tps = _avg([r.output.tokens_per_second for r in direct_rows])
+        methods: Dict[str, Any] = {
+            "direct": {
+                "tokens_per_second": direct_tps,
+                "total_time_ms": _avg([r.output.total_time_ms for r in direct_rows]),
+                "server_model_ms": _avg([r.timing.server_model_ms for r in direct_rows]),
+                "http_rpc_ms": _avg([r.timing.http_rpc_ms for r in direct_rows]),
+                "simulated_network_ms": _avg([r.timing.simulated_network_ms for r in direct_rows]),
+            }
+        }
+        for method in methods_to_show:
+            rows = [r for r in results if r.method == method and r.network == net]
+            tps = _avg([r.output.tokens_per_second for r in rows])
+            methods[method] = {
+                "tokens_per_second": tps,
+                "speedup_vs_direct": tps / direct_tps if direct_tps else 0.0,
+                "total_time_ms": _avg([r.output.total_time_ms for r in rows]),
+                "rounds": _avg([r.speculative.rounds for r in rows]),
+                "acceptance_rate": _avg([r.speculative.acceptance_rate for r in rows]),
+                "accepted_draft_per_round": _avg([
+                    r.speculative.accepted_draft_per_round for r in rows
+                ]),
+                "generated_per_round": _avg([r.speculative.generated_per_round for r in rows]),
+                "local_draft_ms": _avg([r.timing.local_draft_ms for r in rows]),
+                "server_model_ms": _avg([r.timing.server_model_ms for r in rows]),
+                "avg_rtt_ms": _avg([r.timing.avg_rtt_ms for r in rows]),
+                "simulated_network_ms": _avg([r.timing.simulated_network_ms for r in rows]),
+                "launched_branch_count": _avg([
+                    r.async_detail.launched_branch_count for r in rows
+                ]),
+                "ready_branch_count": _avg([r.async_detail.ready_branch_count for r in rows]),
+                "reused_branch_count": _avg([r.async_detail.reused_branch_count for r in rows]),
+                "prefetched_tokens": _avg([r.async_detail.prefetched_tokens for r in rows]),
+                "exposed_branch_ms": _avg([r.async_detail.exposed_branch_ms for r in rows]),
+            }
+        summary[net] = methods
+    return summary
 
 
 def run_quick_test():
@@ -402,7 +578,7 @@ def run_quick_test():
         pass
     logger.info("Warmup complete.")
 
-    results: List[QuickResult] = []
+    results: List[ExperimentResult] = []
     tree_method_suffix = f"b{tree_async_client.branch_width}"
 
     for condition in [NetworkCondition.good(), NetworkCondition.medium()]:
@@ -452,10 +628,14 @@ def run_quick_test():
     logger.info(header)
     logger.info("-" * len(header))
     for net in [c.name for c in NetworkCondition.all_profiles()]:
-        d_tps = _avg([r.tokens_per_second for r in results if r.method == "direct" and r.network == net])
+        d_tps = _avg([r.output.tokens_per_second for r in results if r.method == "direct" and r.network == net])
         row = f"{net:<10}  {d_tps:>8.1f}"
         for mname in methods_to_show:
-            s_tps   = _avg([r.tokens_per_second for r in results if r.method == mname and r.network == net])
+            s_tps = _avg([
+                r.output.tokens_per_second
+                for r in results
+                if r.method == mname and r.network == net
+            ])
             speedup = s_tps / d_tps if d_tps else 0
             flag    = " ✓" if speedup >= 1.0 else ""
             col     = f"{s_tps:.1f} ({speedup:.3f}x{flag})"
@@ -468,7 +648,33 @@ def run_quick_test():
     out_file = output_dir / "quick_test_results.json"
     with open(out_file, "w") as f:
         json.dump([asdict(r) for r in results], f, indent=2)
+
+    raw_file = output_dir / "quick_test_rounds.jsonl"
+    with open(raw_file, "w") as f:
+        for result in results:
+            base = {
+                "method": result.method,
+                "method_family": result.method_family,
+                "network": result.network,
+                "prompt_type": result.prompt_type,
+                "prompt_id": result.prompt_id,
+            }
+            details = (
+                result.raw.get("round_details")
+                or result.raw.get("slot_details")
+                or [result.raw.get("direct_timing", {})]
+            )
+            for index, detail in enumerate(details):
+                f.write(json.dumps({**base, "detail_index": index, "detail": detail}) + "\n")
+
+    summary_file = output_dir / "quick_test_summary.json"
+    summary = _build_summary(results, methods_to_show)
+    with open(summary_file, "w") as f:
+        json.dump(summary, f, indent=2)
+
     logger.info("\nResults saved to: %s", out_file)
+    logger.info("Round details saved to: %s", raw_file)
+    logger.info("Summary saved to: %s", summary_file)
     return True
 
 

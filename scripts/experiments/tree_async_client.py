@@ -1,26 +1,98 @@
 """Tree-based speculative pipeline client used by quick_test.
 
-This module keeps the tree-specific pipeline logic isolated from the
-benchmark driver so it can be imported elsewhere without dragging in
-all of quick_test's orchestration code.
+This module implements a standalone tree-based speculative decoding client
+without the complexity of the parent async pipeline.
 """
 
 from __future__ import annotations
 
 import logging
-import queue
 import threading
 import time
 import uuid
-from collections import Counter, deque
-from dataclasses import dataclass
-from typing import Callable, List
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional
 
-from client.async_edge_client import AsyncEdgeClient, AsyncRequestMetrics, _VerifyResult
-from core.protocol import DraftRequest, EdgeRequest
+from core.protocol import CloudResponse, DraftRequest, EdgeRequest
 
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Dataclasses
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _VerifyResult:
+    slot_id: int
+    cloud_response: CloudResponse
+    rtt_ms: float
+
+
+@dataclass
+class AsyncRequestMetrics:
+    """Metrics for tree-based speculative decoding."""
+    request_id: str
+    prompt: str
+
+    # Core throughput
+    total_latency_ms: float = 0.0
+    generated_tokens: int = 0
+    tokens_per_second: float = 0.0
+
+    # Round / token counts
+    total_rounds: int = 0
+    total_drafted_tokens: int = 0
+    total_accepted_tokens: int = 0
+    total_rollbacks: int = 0
+    acceptance_ratio: float = 0.0
+    mean_k_chosen: float = 0.0
+
+    # Timing breakdown
+    total_edge_draft_time_ms: float = 0.0
+    total_server_verify_time_ms: float = 0.0
+    total_network_time_ms: float = 0.0
+    average_rtt_ms: float = 0.0
+    total_bubble_ms: float = 0.0
+    avg_bubble_ms: float = 0.0
+
+    # Pipeline metrics
+    pipeline_efficiency: float = 0.0
+    overlap_time_ms: float = 0.0
+    prefetch_waste_ratio: float = 0.0
+    slot_hit_rate: float = 0.0
+    async_speedup_vs_sync: float = 0.0
+
+    # Per-slot details
+    slot_details: List[Dict[str, Any]] = field(default_factory=list)
+
+    # Network
+    uplink_bytes: int = 0
+    downlink_bytes: int = 0
+
+    def compute_derived(self):
+        if self.total_drafted_tokens > 0:
+            self.acceptance_ratio = self.total_accepted_tokens / self.total_drafted_tokens
+        if self.total_rounds > 0:
+            self.mean_k_chosen = self.total_drafted_tokens / self.total_rounds
+            self.avg_bubble_ms = self.total_bubble_ms / self.total_rounds
+        if self.total_latency_ms > 0:
+            self.tokens_per_second = 1000 * self.generated_tokens / self.total_latency_ms
+
+        hits = sum(1 for s in self.slot_details if s.get("full_hit"))
+        self.pipeline_efficiency = hits / len(self.slot_details) if self.slot_details else 0.0
+        self.slot_hit_rate = self.pipeline_efficiency
+
+        wasted = sum(s.get("wasted_tokens", 0) for s in self.slot_details)
+        pre_drafted = sum(s.get("drafted", 0) for s in self.slot_details)
+        self.prefetch_waste_ratio = wasted / pre_drafted if pre_drafted > 0 else 0.0
+
+        mean_draft = self.total_edge_draft_time_ms / self.total_rounds if self.total_rounds else 0
+        mean_verify = self.total_server_verify_time_ms / self.total_rounds if self.total_rounds else 0
+        sync_time = mean_draft + mean_verify
+        async_time = max(mean_draft, mean_verify)
+        self.async_speedup_vs_sync = sync_time / async_time if async_time > 0 else 1.0
 
 
 @dataclass
@@ -33,16 +105,38 @@ class TreeBranch:
     draft_time_ms: float
 
 
-class TreeAsyncEdgeClient(AsyncEdgeClient):
-    """Async client that drafts tree branches as next-round prefetch only."""
+class TreeAsyncEdgeClient:
+    """Standalone tree-based speculative decoding client.
+    
+    Drafts multiple parallel branches (a tree) and reuses the branch
+    that matches verification results in the next round.
+    """
 
-    HISTORY_WINDOW: int = 50
     BRANCH_WIDTH: int = 3
+    BASE_ACCEPTANCE_RATIO: float = 0.60
 
-    def __init__(self, *args, branch_width: int = BRANCH_WIDTH, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        model_manager,
+        draft_generator,
+        cloud_client: Callable[[EdgeRequest], CloudResponse],
+        max_new_tokens: int = 128,
+        temperature: float = 0.0,
+        lookahead: int = 1,
+        branch_width: int = BRANCH_WIDTH,
+        eos_token_id: Optional[int] = None,
+    ):
+        self.model_manager = model_manager
+        self.draft_generator = draft_generator
+        self.cloud_client = cloud_client
+        self.max_new_tokens = max_new_tokens
+        self.temperature = temperature
+        self.lookahead = max(1, lookahead)
+        self.tokenizer = draft_generator.tokenizer
+        self.eos_token_id = eos_token_id
+        if self.eos_token_id is None and self.tokenizer:
+            self.eos_token_id = getattr(self.tokenizer, "eos_token_id", None)
         self.branch_width = max(1, branch_width)
-        self._history: deque[int] = deque(maxlen=self.HISTORY_WINDOW)
 
     def generate(
         self,
@@ -54,16 +148,12 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
         metrics = AsyncRequestMetrics(request_id=request_id, prompt=prompt)
         prompt_ids = self.tokenizer.encode(prompt)
         committed_prefix: List[int] = list(prompt_ids)
-        speculative_prefix: List[int] = list(prompt_ids)
-        result_queue: queue.Queue = queue.Queue()
         wall_start = time.perf_counter()
 
         try:
             self._tree_pipeline_loop(
                 prompt_ids=prompt_ids,
                 committed_prefix=committed_prefix,
-                speculative_prefix=speculative_prefix,
-                result_queue=result_queue,
                 policy=policy,
                 policy_name=policy_name,
                 request_id=request_id,
@@ -90,13 +180,8 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
         if spec_ahead <= 0:
             return [0]
         max_offset = min(k, spec_ahead)
-        if not self._history:
-            center = max(0, min(max_offset, int(round(0.6 * k))))
-            seeds = [center, center - 1, center + 1]
-        else:
-            counts = Counter(self._history)
-            mode = counts.most_common(1)[0][0]
-            seeds = [mode, mode - 1, mode + 1]
+        center = max(0, min(max_offset, int(round(self.BASE_ACCEPTANCE_RATIO * k))))
+        seeds = [center, center - 1, center + 1]
 
         offsets: List[int] = []
         for offset in seeds:
@@ -128,6 +213,9 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
         if branch.offset > base_accepted:
             return None
 
+        # If offset < accepted, the branch was drafted before some tokens that
+        # the target later accepted. Those leading branch tokens must bridge
+        # back to reality before any remaining branch tokens can be reused.
         expected_prefix = list(base_draft[branch.offset:base_accepted])
         if correction is not None:
             expected_prefix.append(correction)
@@ -147,8 +235,6 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
         self,
         prompt_ids,
         committed_prefix,
-        speculative_prefix,
-        result_queue,
         policy,
         policy_name,
         request_id,
@@ -227,14 +313,17 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
             def _run_base_verify(req=base_edge_req, out=base_verify_result):
                 try:
                     resp = self.cloud_client(req)
-                    out.append(resp)
+                    out.append((resp, time.perf_counter()))
                 except Exception as exc:
                     logger.error("Base verify error: %s", exc)
 
             verify_thread = threading.Thread(target=_run_base_verify, daemon=True)
+            verify_start = time.perf_counter()
             verify_thread.start()
 
-            # Draft speculative branches while baseline verify is in flight.
+            # Draft speculative branches in a separate background task. The
+            # critical path never waits for this task; it only consumes branch
+            # results that are already ready when base verification returns.
             offsets = self._tree_offsets(k, len(base_draft))
             branch_offsets = [o for o in offsets if o > 0][: max(0, self.branch_width - 1)]
             branch_prefixes = []
@@ -243,44 +332,70 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
                 prefix.extend(base_draft[:offset])
                 branch_prefixes.append((offset, prefix))
 
-            batch_t0 = time.perf_counter()
-            if branch_prefixes and hasattr(self.draft_generator, "generate_draft_tokens_batch"):
-                draft_resps = self.draft_generator.generate_draft_tokens_batch(
-                    [
-                        DraftRequest(verified_prefix=list(prefix), num_draft_tokens=k)
-                        for _, prefix in branch_prefixes
-                    ],
-                    temperature=self.temperature,
-                )
-                batch_draft_ms = (time.perf_counter() - batch_t0) * 1000
-            else:
-                draft_resps = []
-                for _, prefix in branch_prefixes:
-                    draft_resps.append(
-                        self.draft_generator.generate_draft_tokens(
-                            DraftRequest(verified_prefix=list(prefix), num_draft_tokens=k),
+            branch_result: List = []
+
+            def _run_branch_draft(
+                prefixes=branch_prefixes,
+                out=branch_result,
+                branch_base_id=tree_id * 100,
+            ):
+                batch_t0 = time.perf_counter()
+                try:
+                    if prefixes and hasattr(self.draft_generator, "generate_draft_tokens_batch"):
+                        draft_resps_ = self.draft_generator.generate_draft_tokens_batch(
+                            [
+                                DraftRequest(verified_prefix=list(prefix), num_draft_tokens=k)
+                                for _, prefix in prefixes
+                            ],
                             temperature=self.temperature,
                         )
+                    else:
+                        draft_resps_ = []
+                        for _, prefix in prefixes:
+                            draft_resps_.append(
+                                self.draft_generator.generate_draft_tokens(
+                                    DraftRequest(
+                                        verified_prefix=list(prefix),
+                                        num_draft_tokens=k,
+                                    ),
+                                    temperature=self.temperature,
+                                )
+                            )
+                    batch_draft_ms_ = (time.perf_counter() - batch_t0) * 1000
+                    per_branch_draft_ms_ = (
+                        batch_draft_ms_ / len(draft_resps_) if draft_resps_ else 0.0
                     )
-                batch_draft_ms = (time.perf_counter() - batch_t0) * 1000
+                    drafted_branches = []
+                    for branch_index, ((offset, prefix), draft_resp) in enumerate(
+                        zip(prefixes, draft_resps_),
+                        start=1,
+                    ):
+                        if not draft_resp.draft_token_ids:
+                            continue
+                        drafted_branches.append(
+                            TreeBranch(
+                                branch_id=branch_base_id + branch_index,
+                                offset=offset,
+                                prefix=list(prefix),
+                                draft_ids=draft_resp.draft_token_ids,
+                                draft_logprobs=draft_resp.logprobs,
+                                draft_time_ms=per_branch_draft_ms_,
+                            )
+                        )
+                    out.append(
+                        (
+                            drafted_branches,
+                            batch_draft_ms_,
+                            per_branch_draft_ms_,
+                            time.perf_counter(),
+                        )
+                    )
+                except Exception as exc:
+                    logger.error("Branch draft error: %s", exc)
 
-            per_branch_draft_ms = batch_draft_ms / len(draft_resps) if draft_resps else 0.0
-            for branch_index, ((offset, prefix), draft_resp) in enumerate(
-                zip(branch_prefixes, draft_resps),
-                start=1,
-            ):
-                if not draft_resp.draft_token_ids:
-                    continue
-                branches.append(
-                    TreeBranch(
-                        branch_id=tree_id * 100 + branch_index,
-                        offset=offset,
-                        prefix=list(prefix),
-                        draft_ids=draft_resp.draft_token_ids,
-                        draft_logprobs=draft_resp.logprobs,
-                        draft_time_ms=per_branch_draft_ms,
-                    )
-                )
+            branch_thread = threading.Thread(target=_run_branch_draft, daemon=True)
+            if branch_prefixes:
+                branch_thread.start()
 
             if not branches:
                 verify_thread.join(timeout=120)
@@ -288,7 +403,7 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
 
             metrics.total_rounds += 1
             metrics.total_drafted_tokens += len(base_draft)
-            metrics.total_edge_draft_time_ms += base_draft_ms + batch_draft_ms
+            metrics.total_edge_draft_time_ms += base_draft_ms
 
             bubble_t0 = time.perf_counter()
             verify_thread.join(timeout=120)
@@ -298,7 +413,20 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
 
             if not base_verify_result:
                 break
-            base_resp_cloud = base_verify_result[0]
+            base_resp_cloud, verify_done = base_verify_result[0]
+            branch_ready_at_verify = bool(branch_result)
+            draft_resps = []
+            batch_draft_ms = 0.0
+            per_branch_draft_ms = 0.0
+            branch_done = None
+            if branch_ready_at_verify:
+                drafted_branches, batch_draft_ms, per_branch_draft_ms, branch_done = branch_result[0]
+                branches.extend(drafted_branches)
+                metrics.total_edge_draft_time_ms += batch_draft_ms
+            verify_rtt_ms = base_resp_cloud.rtt_ms or ((verify_done - verify_start) * 1000)
+            exposed_branch_ms = 0.0
+            if branch_done is not None:
+                exposed_branch_ms = max(0.0, (branch_done - verify_done) * 1000)
             base_accepted = base_resp_cloud.accepted_len
             correction = base_resp_cloud.correction_token_id
             branch_results = [
@@ -312,7 +440,6 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
 
             for branch, vr in branch_results:
                 resp = vr.cloud_response
-                self._history.append(resp.accepted_len)
                 metrics.total_server_verify_time_ms += resp.server_verify_time_ms
                 metrics.total_network_time_ms += max(0.0, vr.rtt_ms - resp.server_verify_time_ms)
                 metrics.downlink_bytes += len(resp.accepted_token_ids) * 4 + 32
@@ -366,6 +493,8 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
                     "base_accepted": base_accepted,
                     "base_draft_ms": base_draft_ms,
                     "branch_draft_ms": batch_draft_ms,
+                    "exposed_branch_ms": exposed_branch_ms,
+                    "active_spec_branches": len(branch_offsets),
                     "base_wait_ms": base_wait_ms,
                     "total_wait_ms": total_wait_ms,
                     "spec_verify_wall_ms": 0.0,
@@ -388,5 +517,3 @@ class TreeAsyncEdgeClient(AsyncEdgeClient):
                 metrics.average_rtt_ms * (metrics.total_rounds - 1)
                 + max(vr.rtt_ms for _, vr in branch_results)
             ) / metrics.total_rounds
-            speculative_prefix.clear()
-            speculative_prefix.extend(committed_prefix)
