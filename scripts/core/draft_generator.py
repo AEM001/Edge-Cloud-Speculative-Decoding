@@ -15,7 +15,7 @@ class VLLMDraftGenerator:
     def generate_draft_tokens(
         self, 
         request: DraftRequest,
-        temperature: float = 0.8,
+        temperature: float = 0.0,
         top_p: float = 0.95
     ) -> DraftResponse:
 
@@ -78,7 +78,7 @@ class VLLMDraftGenerator:
     def generate_draft_tokens_batch(
         self,
         requests: List[DraftRequest],
-        temperature: float = 0.8,
+        temperature: float = 0.0,
         top_p: float = 0.95,
     ) -> List[DraftResponse]:
         if not requests:

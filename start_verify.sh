@@ -15,8 +15,8 @@ PORT=${PORT:-6006}
 # Use .venv environment
 PYTHON="$REPO_DIR/.venv/bin/python3"
 
-# Use SDPA attention backend (built into PyTorch, no flash-attn required)
-export VLLM_ATTENTION_BACKEND=sdpa
+# Use flash-attention backend (requires flash-attn in venv)
+export VLLM_ATTENTION_BACKEND=flash_attn
 
 # Verify model runs on GPU 0
 export CUDA_VISIBLE_DEVICES=0
