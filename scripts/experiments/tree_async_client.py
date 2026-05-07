@@ -45,7 +45,6 @@ class AsyncRequestMetrics:
     total_rounds: int = 0
     total_drafted_tokens: int = 0
     total_accepted_tokens: int = 0
-    total_rollbacks: int = 0
     acceptance_ratio: float = 0.0
     mean_k_chosen: float = 0.0
 
@@ -58,10 +57,6 @@ class AsyncRequestMetrics:
     avg_bubble_ms: float = 0.0
 
     # Pipeline metrics
-    pipeline_efficiency: float = 0.0
-    overlap_time_ms: float = 0.0
-    prefetch_waste_ratio: float = 0.0
-    slot_hit_rate: float = 0.0
     async_speedup_vs_sync: float = 0.0
 
     # Per-slot details
@@ -79,14 +74,6 @@ class AsyncRequestMetrics:
             self.avg_bubble_ms = self.total_bubble_ms / self.total_rounds
         if self.total_latency_ms > 0:
             self.tokens_per_second = 1000 * self.generated_tokens / self.total_latency_ms
-
-        hits = sum(1 for s in self.slot_details if s.get("full_hit"))
-        self.pipeline_efficiency = hits / len(self.slot_details) if self.slot_details else 0.0
-        self.slot_hit_rate = self.pipeline_efficiency
-
-        wasted = sum(s.get("wasted_tokens", 0) for s in self.slot_details)
-        pre_drafted = sum(s.get("drafted", 0) for s in self.slot_details)
-        self.prefetch_waste_ratio = wasted / pre_drafted if pre_drafted > 0 else 0.0
 
         mean_draft = self.total_edge_draft_time_ms / self.total_rounds if self.total_rounds else 0
         mean_verify = self.total_server_verify_time_ms / self.total_rounds if self.total_rounds else 0
@@ -166,12 +153,10 @@ class TreeAsyncEdgeClient:
 
         logger.info(
             "Tree generation done: %d tokens in %.0fms  %.2f tok/s  "
-            "pipeline_eff=%.1f%%  rollbacks=%d  bubble=%.1fms",
+            "bubble=%.1fms",
             metrics.generated_tokens,
             metrics.total_latency_ms,
             metrics.tokens_per_second,
-            100 * metrics.pipeline_efficiency,
-            metrics.total_rollbacks,
             metrics.avg_bubble_ms,
         )
         return metrics
@@ -469,21 +454,16 @@ class TreeAsyncEdgeClient:
 
             total_drafted = sum(len(b.draft_ids) for b in branches)
             metrics.total_accepted_tokens += base_accepted
-            if base_accepted < k:
-                metrics.total_rollbacks += 1
             metrics.slot_details.append(
                 {
                     "slot_id": selected_branch.branch_id,
                     "drafted": total_drafted,
                     "accepted": base_accepted,
-                    "full_hit": base_accepted >= k,
-                    "wasted_tokens": max(0, total_drafted - base_accepted - len(prefetched_ids)),
                     "draft_ms": sum(b.draft_time_ms for b in branches),
                     "verify_ms": sum(
                         vr.cloud_response.server_verify_time_ms for _, vr in branch_results
                     ),
                     "rtt_ms": max(vr.rtt_ms for _, vr in branch_results),
-                    "rollback": base_accepted < k,
                     "tree_branch_width": len(branches),
                     "selected_offset": selected_branch.offset,
                     "stale_branches": sum(1 for b in branches if b.branch_id != selected_branch.branch_id),
@@ -494,7 +474,6 @@ class TreeAsyncEdgeClient:
                     "active_spec_branches": len(branch_offsets),
                     "base_wait_ms": base_wait_ms,
                     "total_wait_ms": total_wait_ms,
-                    "spec_verify_wall_ms": 0.0,
                     "prefetched_tokens": len(prefetched_ids),
                     "verify_prefix_len": verify_prefix_len,
                     "verify_draft_len": verify_draft_len,

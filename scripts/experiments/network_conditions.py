@@ -1,21 +1,3 @@
-"""
-Network condition simulation for speculative decoding experiments.
-
-Wraps any cloud_client callable and injects:
-  - RTT-based latency (half applied each direction)
-  - Separate uplink / downlink bandwidth throttling
-  - Bursty profiles: time-based spike state machine that alternates between
-    normal and degraded (spike) periods
-
-Usage
------
-    from experiments.network_conditions import NetworkCondition, ThrottledCloudClient
-
-    cond = NetworkCondition.good()
-    client = ThrottledCloudClient(base_client, cond)
-    # pass `client` anywhere EdgeClient expects a cloud_client
-"""
-
 from __future__ import annotations
 
 import json
@@ -29,19 +11,9 @@ from core.protocol import EdgeRequest, CloudResponse
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# NetworkCondition descriptor
-# ---------------------------------------------------------------------------
-
 @dataclass(frozen=True)
 class NetworkCondition:
-    """
-    Descriptor of a simulated network link.
-
-    For steady-state profiles (good, medium) set the normal_* fields only.
-    For bursty profiles also set spike_* and spike/normal durations — the
-    ThrottledCloudClient will alternate between normal and spike states.
-    """
+    
 
     name: str
 
@@ -57,9 +29,6 @@ class NetworkCondition:
     spike_duration_sec: float = 0.0     # how long a burst lasts
     normal_duration_sec: float = 0.0    # how long normal period lasts between bursts
 
-    # ------------------------------------------------------------------
-    # Pre-defined network profiles
-    # ------------------------------------------------------------------
 
     @classmethod
     def good(cls) -> "NetworkCondition":
@@ -108,21 +77,12 @@ class NetworkCondition:
             cls.bursty(),
         ]
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
     @property
     def is_bursty(self) -> bool:
         return self.spike_duration_sec > 0
 
     def current_link_params(self, wall_time: float) -> Tuple[float, float, float]:
-        """
-        Return (one_way_latency_ms, download_mbps, upload_mbps) at `wall_time`.
 
-        For bursty profiles, cycles through normal → spike → normal …
-        For steady profiles, always returns the normal values.
-        """
         if not self.is_bursty:
             return self.rtt_ms / 2.0, self.download_mbps, self.upload_mbps
 
@@ -153,13 +113,9 @@ class NetworkCondition:
         )
 
 
-# ---------------------------------------------------------------------------
-# Throttled cloud client wrapper
-# ---------------------------------------------------------------------------
 
 @dataclass
 class NetworkCallStats:
-    """Per-call network overhead statistics accumulated by ThrottledCloudClient."""
     num_calls: int = 0
     total_simulated_uplink_delay_ms: float = 0.0
     total_simulated_downlink_delay_ms: float = 0.0
@@ -169,13 +125,7 @@ class NetworkCallStats:
 
 
 class ThrottledCloudClient:
-    """
-    wraps the normal request thing with the simulated time(transmit and payload),
-    the basic time is :
-    t0 = time.perf_counter()
-        response: CloudResponse = self.base_client(request)
-        actual_server_ms = (time.perf_counter() - t0) * 1000
-    """
+
 
     def __init__(
         self,
@@ -194,7 +144,6 @@ class ThrottledCloudClient:
         one_way_ms, dl_mbps, ul_mbps = cond.current_link_params(now)
         in_spike = cond.is_bursty and (one_way_ms == cond.spike_rtt_ms / 2.0)
 
-        # --- Uplink payload ------------------------------------------------
         uplink_payload = json.dumps(request.to_dict()).encode("utf-8")
         uplink_bytes = len(uplink_payload)
         uplink_bw_delay = NetworkCondition._payload_delay_ms(uplink_bytes, ul_mbps)
@@ -202,12 +151,10 @@ class ThrottledCloudClient:
 
         _sleep_ms(uplink_delay)
 
-        # --- Actual call ---------------------------------------------------
         t0 = time.perf_counter()
         response: CloudResponse = self.base_client(request)
         actual_server_ms = (time.perf_counter() - t0) * 1000
 
-        # --- Downlink payload ----------------------------------------------
         downlink_payload = json.dumps(response.to_dict()).encode("utf-8")
         downlink_bytes = len(downlink_payload)
         downlink_bw_delay = NetworkCondition._payload_delay_ms(downlink_bytes, dl_mbps)
@@ -215,11 +162,9 @@ class ThrottledCloudClient:
 
         _sleep_ms(downlink_delay)
 
-        # --- Patch RTT on response ----------------------------------------
         simulated_overhead = uplink_delay + downlink_delay
         response.rtt_ms = actual_server_ms + simulated_overhead
 
-        # --- Accumulate stats ---------------------------------------------
         s = self.stats
         s.num_calls += 1
         s.total_simulated_uplink_delay_ms += uplink_delay
@@ -257,10 +202,6 @@ class ThrottledCloudClient:
             ),
         }
 
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 def _sleep_ms(ms: float) -> None:
     """Sleep for `ms` milliseconds (no-op for ≤ 0)."""
