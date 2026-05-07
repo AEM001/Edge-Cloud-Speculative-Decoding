@@ -160,12 +160,8 @@ class EdgeClient:
             
             edge_request = EdgeRequest(
                 request_id=request_id,
-                round_id=round_id,
                 prefix_ids=verified_prefix,
                 draft_ids=draft_response.draft_token_ids,
-                draft_logprobs=draft_response.logprobs,
-                edge_draft_time_ms=draft_time_ms,
-                policy_metadata={"policy_name": policy_name, "K": K}
             )
             
             uplink_size = (len(verified_prefix) + len(draft_response.draft_token_ids)) * 4 + 64
@@ -180,11 +176,10 @@ class EdgeClient:
             metrics.downlink_bytes += downlink_size
             
             # Step 3: Update prefix based on verification
+            verify_prefix_len = len(verified_prefix)
+            verify_draft_len = len(draft_response.draft_token_ids)
             accepted_len = cloud_response.accepted_len
-            accepted_tokens = (
-                cloud_response.accepted_token_ids
-                or draft_response.draft_token_ids[:accepted_len]
-            )
+            accepted_tokens = draft_response.draft_token_ids[:accepted_len]
             correction_token = cloud_response.correction_token_id
             
             # Append accepted draft tokens
@@ -224,15 +219,9 @@ class EdgeClient:
                 "server_time_ms": cloud_response.server_verify_time_ms,
                 "rtt_ms": cloud_response.rtt_ms,
                 "correction": correction_token,
-                "verify_prefix_len": cloud_response.prefix_len,
-                "verify_draft_len": cloud_response.draft_len,
-                "verify_input_len": cloud_response.input_len,
-                "prompt_logprobs_requested": cloud_response.prompt_logprobs_requested,
-                "verify_batch_size": cloud_response.verify_batch_size,
-                "enable_prefix_caching": cloud_response.enable_prefix_caching,
-                "enforce_eager": cloud_response.enforce_eager,
-                "attention_backend": cloud_response.attention_backend,
-                "vllm_version": cloud_response.vllm_version,
+                "verify_prefix_len": verify_prefix_len,
+                "verify_draft_len": verify_draft_len,
+                "verify_input_len": verify_prefix_len + verify_draft_len,
             }
             metrics.round_details.append(round_detail)
             

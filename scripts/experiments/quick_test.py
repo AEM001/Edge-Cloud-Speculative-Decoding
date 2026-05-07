@@ -562,11 +562,8 @@ def run_quick_test():
         try:
             base_client.verify(EdgeRequest(
                 request_id="warmup",
-                round_id=0,
                 prefix_ids=warmup_prefix,
                 draft_ids=wr.draft_token_ids,
-                draft_logprobs=wr.logprobs,
-                edge_draft_time_ms=0.0,
             ))
         except Exception:
             pass

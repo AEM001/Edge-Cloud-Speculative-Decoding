@@ -88,9 +88,9 @@ previous round — only the K new draft positions are computed from scratch.
 
 The `/verify` protocol is intentionally slim:
 
-- Request sends `request_id`, `round_id`, `prefix_ids`, `draft_ids`, timing, and policy metadata.
+- Request sends only `request_id`, `prefix_ids`, and `draft_ids`.
 - Draft logprobs are not sent; greedy verification does not use them.
-- Response sends `accepted_len` and `correction_token_id`.
+- Response sends `request_id`, `accepted_len`, `correction_token_id`, and `server_verify_time_ms`.
 - Accepted token IDs are not returned because the edge already has `draft_ids[:accepted_len]`.
 
 - **Current cost:** ~30 ms/round on 14B AWQ (K=7, simple prompts)

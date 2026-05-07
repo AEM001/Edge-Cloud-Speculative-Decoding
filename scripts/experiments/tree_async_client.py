@@ -300,13 +300,8 @@ class TreeAsyncEdgeClient:
             # sent to the verifier in this round.
             base_edge_req = EdgeRequest(
                 request_id=request_id,
-                round_id=tree_id * 100,
                 prefix_ids=list(committed_prefix),
                 draft_ids=base_draft,
-                draft_logprobs=base_logprobs,
-                edge_draft_time_ms=base_draft_ms,
-                policy_metadata={"policy_name": policy_name, "K": k,
-                                  "tree_id": tree_id, "branch_offset": 0},
             )
             base_verify_result: List = []   # filled by thread
 
@@ -434,6 +429,8 @@ class TreeAsyncEdgeClient:
                                             base_resp_cloud.rtt_ms or 0.0))
             ]
             metrics.uplink_bytes += (len(committed_prefix) + len(base_draft)) * 4 + 64
+            verify_prefix_len = len(committed_prefix)
+            verify_draft_len = len(base_draft)
 
             if not branch_results:
                 break
@@ -499,15 +496,9 @@ class TreeAsyncEdgeClient:
                     "total_wait_ms": total_wait_ms,
                     "spec_verify_wall_ms": 0.0,
                     "prefetched_tokens": len(prefetched_ids),
-                    "verify_prefix_len": base_resp_cloud.prefix_len,
-                    "verify_draft_len": base_resp_cloud.draft_len,
-                    "verify_input_len": base_resp_cloud.input_len,
-                    "prompt_logprobs_requested": base_resp_cloud.prompt_logprobs_requested,
-                    "verify_batch_size": base_resp_cloud.verify_batch_size,
-                    "enable_prefix_caching": base_resp_cloud.enable_prefix_caching,
-                    "enforce_eager": base_resp_cloud.enforce_eager,
-                    "attention_backend": base_resp_cloud.attention_backend,
-                    "vllm_version": base_resp_cloud.vllm_version,
+                    "verify_prefix_len": verify_prefix_len,
+                    "verify_draft_len": verify_draft_len,
+                    "verify_input_len": verify_prefix_len + verify_draft_len,
                 }
             )
             committed_prefix.clear()

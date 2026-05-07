@@ -22,8 +22,7 @@ from typing import Any, Dict, List, Optional
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from vllm import LLM, SamplingParams
 
 logger = logging.getLogger(__name__)
@@ -44,33 +43,15 @@ _DEFAULT_MODEL_PATH = "/root/code/draft/models/Qwen2.5-14B-Instruct-AWQ"
 
 class VerifyRequest(BaseModel):
     request_id: str
-    round_id: int
     prefix_ids: List[int]
     draft_ids: List[int]
-    draft_logprobs: List[float] = Field(default_factory=list)
-    edge_draft_time_ms: float
-    policy_metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class VerifyResponse(BaseModel):
     request_id: str
-    round_id: int
     accepted_len: int
-    accepted_token_ids: List[int] = Field(default_factory=list)
     correction_token_id: Optional[int]
     server_verify_time_ms: float
-    server_total_time_ms: float
-    rtt_ms: Optional[float] = None
-    prefix_len: Optional[int] = None
-    draft_len: Optional[int] = None
-    input_len: Optional[int] = None
-    prompt_logprobs_requested: Optional[int] = None
-    max_tokens_requested: Optional[int] = None
-    verify_batch_size: Optional[int] = None
-    enable_prefix_caching: Optional[bool] = None
-    enforce_eager: Optional[bool] = None
-    attention_backend: Optional[str] = None
-    vllm_version: Optional[str] = None
 
 
 class VerifyBatchRequest(BaseModel):
@@ -358,28 +339,15 @@ async def health():
 async def verify_draft(req: VerifyRequest):
     if _verifier is None:
         raise HTTPException(503, "Not ready")
-    t0 = time.time()
     accepted_len, correction, verify_ms = _verifier.verify(
         prefix_ids=req.prefix_ids,
         draft_ids=req.draft_ids,
     )
-    total_ms = (time.time() - t0) * 1000
-    runtime_info = _verifier.runtime_debug_info()
     return VerifyResponse(
         request_id=req.request_id,
-        round_id=req.round_id,
         accepted_len=accepted_len,
-        accepted_token_ids=[],
         correction_token_id=correction,
         server_verify_time_ms=verify_ms,
-        server_total_time_ms=total_ms,
-        prefix_len=len(req.prefix_ids),
-        draft_len=len(req.draft_ids),
-        input_len=len(req.prefix_ids) + len(req.draft_ids),
-        prompt_logprobs_requested=1,
-        max_tokens_requested=1,
-        verify_batch_size=1,
-        **runtime_info,
     )
 
 
@@ -387,28 +355,15 @@ async def verify_draft(req: VerifyRequest):
 async def verify_draft_batch(req: VerifyBatchRequest):
     if _verifier is None:
         raise HTTPException(503, "Not ready")
-    t0 = time.time()
     results = _verifier.verify_batch(req.requests)
-    total_ms = (time.time() - t0) * 1000
     responses = []
     for item, result in zip(req.requests, results):
         accepted_len, correction, verify_ms = result
-        runtime_info = _verifier.runtime_debug_info()
         responses.append(VerifyResponse(
             request_id=item.request_id,
-            round_id=item.round_id,
             accepted_len=accepted_len,
-            accepted_token_ids=[],
             correction_token_id=correction,
             server_verify_time_ms=verify_ms,
-            server_total_time_ms=total_ms,
-            prefix_len=len(item.prefix_ids),
-            draft_len=len(item.draft_ids),
-            input_len=len(item.prefix_ids) + len(item.draft_ids),
-            prompt_logprobs_requested=1,
-            max_tokens_requested=1,
-            verify_batch_size=len(req.requests),
-            **runtime_info,
         ))
     return VerifyBatchResponse(responses=responses)
 

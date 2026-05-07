@@ -58,7 +58,7 @@ class HTTPCloudClient:
             try:
                 logger.debug(
                     f"Sending verification request (attempt {attempt + 1}/{self.retry_attempts}): "
-                    f"request_id={request.request_id}, round_id={request.round_id}"
+                    f"request_id={request.request_id}"
                 )
                 
                 response = self.session.post(
