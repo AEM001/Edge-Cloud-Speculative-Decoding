@@ -135,30 +135,23 @@ class MarkovAdaptiveKPolicy:
 
     def __init__(self):
         self.prev_net_output: Optional[int] = None
-        self.prev_k: Optional[int] = None
         self.state_name = "warmup"
 
     def __call__(self, _round_id: int, _tokens) -> int:
         if self.prev_net_output is None:
             self.state_name = "warmup"
             return 7
-
-        if self.prev_k is not None and self.prev_k < 7:
-            self.state_name = "probe"
-            return 7
-
         if self.prev_net_output >= 6:
             self.state_name = "high"
             return 7
         if self.prev_net_output >= 3:
-            self.state_name = "mid_recovery"
+            self.state_name = "mid"
             return 4
-        self.state_name = "low_recovery"
+        self.state_name = "low"
         return 3
 
     def on_round_complete(self, round_detail: Dict[str, Any]) -> None:
         self.prev_net_output = int(round_detail.get("net_output", 0))
-        self.prev_k = int(round_detail.get("K", 0))
 
 
 def _load_prompt_set():
