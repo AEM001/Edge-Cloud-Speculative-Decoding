@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Quick sanity check: do speculative decoding variants beat throttled direct?
+Quick sanity check: does speculative decoding (K=7) beat throttled direct?
 
 For each network condition the SAME throttle wrapper is applied to both
 direct and speculative, so the comparison is apples-to-apples.
@@ -68,8 +68,7 @@ class TimingMetrics:
 @dataclass
 class SpeculativeMetrics:
     rounds: int = 0
-    k: float = 0.0
-    mean_k_chosen: float = 0.0
+    k: int = 0
     drafted_tokens: int = 0
     accepted_draft_tokens: int = 0
     correction_tokens: int = 0
@@ -126,32 +125,6 @@ class DirectTiming:
     http_ms: float
     ul_ms: float
     dl_ms: float
-
-
-class MarkovAdaptiveKPolicy:
-    """Previous-round adaptive K policy from ACCEPTANCE_ANALYSIS.md."""
-
-    method_name = "sync_adaptive_k3_4_7"
-
-    def __init__(self):
-        self.prev_net_output: Optional[int] = None
-        self.state_name = "warmup"
-
-    def __call__(self, _round_id: int, _tokens) -> int:
-        if self.prev_net_output is None:
-            self.state_name = "warmup"
-            return 7
-        if self.prev_net_output >= 6:
-            self.state_name = "high"
-            return 7
-        if self.prev_net_output >= 3:
-            self.state_name = "mid"
-            return 4
-        self.state_name = "low"
-        return 3
-
-    def on_round_complete(self, round_detail: Dict[str, Any]) -> None:
-        self.prev_net_output = int(round_detail.get("net_output", 0))
 
 
 def _load_prompt_set():
@@ -212,19 +185,6 @@ def _speculative(edge_client: EdgeClient, prompt: str, k: int) -> Optional[objec
         )
     except Exception as exc:
         logger.error("Speculative K=%d failed: %s", k, exc)
-        return None
-
-
-def _adaptive_speculative(edge_client: EdgeClient, prompt: str) -> Optional[object]:
-    policy = MarkovAdaptiveKPolicy()
-    try:
-        return edge_client.generate(
-            prompt=prompt,
-            policy=policy,
-            policy_name="MarkovAdaptiveK3_4_7",
-        )
-    except Exception as exc:
-        logger.error("Adaptive speculative failed: %s", exc)
         return None
 
 
@@ -350,95 +310,6 @@ def run_sync_spec_case(
         speculative=SpeculativeMetrics(
             rounds=metrics.total_rounds,
             k=k,
-            mean_k_chosen=metrics.mean_K_chosen,
-            drafted_tokens=metrics.total_drafted_tokens,
-            accepted_draft_tokens=accepted,
-            correction_tokens=correction_tokens,
-            generated_per_round=metrics.generated_tokens / metrics.total_rounds if metrics.total_rounds else 0.0,
-            accepted_draft_per_round=net_useful,
-            acceptance_rate=metrics.acceptance_ratio,
-            wasted_draft_tokens=metrics.wasted_drafted_tokens,
-        ),
-        async_detail=AsyncDetailMetrics(),
-        verify_runtime=VerifyRuntimeMetrics(
-            avg_prefix_len=avg_verify_prefix_len,
-            avg_draft_len=avg_verify_draft_len,
-            avg_input_len=avg_verify_input_len,
-            prefix_caching=_first([s.get("enable_prefix_caching") for s in metrics.round_details]),
-            enforce_eager=_first([s.get("enforce_eager") for s in metrics.round_details]),
-            attention_backend=_first([s.get("attention_backend") for s in metrics.round_details]),
-            vllm_version=_first([s.get("vllm_version") for s in metrics.round_details]),
-        ),
-        raw={"round_details": metrics.round_details, "network": net_stats},
-    )
-
-
-def run_adaptive_spec_case(
-    edge_client: EdgeClient,
-    throttled: ThrottledCloudClient,
-    prompt_meta,
-    text: str,
-) -> Optional[ExperimentResult]:
-    throttled.reset_stats()
-    metrics = _adaptive_speculative(edge_client, text)
-    if not metrics or metrics.generated_tokens <= 0:
-        return None
-    net_stats = throttled.get_stats_dict()
-    total_ms = metrics.total_latency_ms
-    tps = metrics.generated_tokens / (total_ms / 1000)
-    accepted = metrics.total_accepted_drafted_tokens
-    net_useful = accepted / metrics.total_rounds if metrics.total_rounds else 0
-    correction_tokens = max(0, metrics.generated_tokens - accepted)
-    method_name = MarkovAdaptiveKPolicy.method_name
-    avg_verify_prefix_len = _avg([s.get("verify_prefix_len", 0) or 0 for s in metrics.round_details])
-    avg_verify_draft_len = _avg([s.get("verify_draft_len", 0) or 0 for s in metrics.round_details])
-    avg_verify_input_len = _avg([s.get("verify_input_len", 0) or 0 for s in metrics.round_details])
-    logger.info(
-        "    %s: %d tok  %5.0f ms  %5.1f tok/s  accept=%4.1f%%  net_useful=%.2f tok/round  "
-        "rounds=%d  mean_k=%.2f  rtt=%d ms  verify_prefix=%.0f  verify_input=%.0f",
-        method_name,
-        metrics.generated_tokens,
-        total_ms,
-        tps,
-        metrics.acceptance_ratio * 100,
-        net_useful,
-        metrics.total_rounds,
-        metrics.mean_K_chosen,
-        metrics.average_rtt_ms,
-        avg_verify_prefix_len,
-        avg_verify_input_len,
-    )
-    return ExperimentResult(
-        method=method_name,
-        method_family="sync_spec",
-        network=throttled.condition.name,
-        prompt_type=prompt_meta["type"],
-        prompt_id=prompt_meta["id"],
-        output=OutputMetrics(
-            tokens_generated=metrics.generated_tokens,
-            total_time_ms=total_ms,
-            tokens_per_second=tps,
-        ),
-        timing=TimingMetrics(
-            client_wall_ms=total_ms,
-            local_draft_ms=metrics.total_edge_draft_time_ms,
-            server_model_ms=metrics.total_server_verify_time_ms,
-            http_rpc_ms=max(
-                0.0,
-                metrics.total_network_time_ms
-                + metrics.total_server_verify_time_ms
-                - net_stats["total_simulated_overhead_ms"],
-            ),
-            simulated_ul_ms=net_stats["total_simulated_uplink_delay_ms"],
-            simulated_dl_ms=net_stats["total_simulated_downlink_delay_ms"],
-            simulated_network_ms=net_stats["total_simulated_overhead_ms"],
-            avg_rtt_ms=metrics.average_rtt_ms,
-            critical_path_wait_ms=metrics.average_rtt_ms,
-        ),
-        speculative=SpeculativeMetrics(
-            rounds=metrics.total_rounds,
-            k=metrics.mean_K_chosen,
-            mean_k_chosen=metrics.mean_K_chosen,
             drafted_tokens=metrics.total_drafted_tokens,
             accepted_draft_tokens=accepted,
             correction_tokens=correction_tokens,
@@ -556,7 +427,6 @@ def run_tree_spec_case(
         speculative=SpeculativeMetrics(
             rounds=metrics.total_rounds,
             k=k,
-            mean_k_chosen=metrics.mean_k_chosen,
             drafted_tokens=metrics.total_drafted_tokens,
             accepted_draft_tokens=accepted,
             correction_tokens=correction_tokens,
@@ -629,13 +499,11 @@ def _build_summary(results: List[ExperimentResult], methods_to_show: List[str]) 
                 "speedup_vs_direct": tps / direct_tps if direct_tps else 0.0,
                 "total_time_ms": _avg([r.output.total_time_ms for r in rows]),
                 "rounds": _avg([r.speculative.rounds for r in rows]),
-                "mean_k_chosen": _avg([r.speculative.mean_k_chosen for r in rows]),
                 "acceptance_rate": _avg([r.speculative.acceptance_rate for r in rows]),
                 "accepted_draft_per_round": _avg([
                     r.speculative.accepted_draft_per_round for r in rows
                 ]),
                 "generated_per_round": _avg([r.speculative.generated_per_round for r in rows]),
-                "wasted_draft_tokens": _avg([r.speculative.wasted_draft_tokens for r in rows]),
                 "local_draft_ms": _avg([r.timing.local_draft_ms for r in rows]),
                 "server_model_ms": _avg([r.timing.server_model_ms for r in rows]),
                 "avg_rtt_ms": _avg([r.timing.avg_rtt_ms for r in rows]),
@@ -654,11 +522,7 @@ def _build_summary(results: List[ExperimentResult], methods_to_show: List[str]) 
 
 def run_quick_test():
     logger.info("=" * 70)
-    logger.info(
-        "QUICK TEST  —  Direct vs sync K=%s vs %s vs tree (all throttled)",
-        K_VALUES,
-        MarkovAdaptiveKPolicy.method_name,
-    )
+    logger.info("QUICK TEST  —  Direct (throttled) vs Speculative K=%s (throttled)", K_VALUES)
     logger.info("Draft model : %s", MODEL_NAME)
     logger.info("=" * 70)
 
@@ -743,11 +607,6 @@ def run_quick_test():
                     results.append(spec_result)
                 time.sleep(0.3)
 
-            adaptive_result = run_adaptive_spec_case(edge_client, throttled, prompt_meta, text)
-            if adaptive_result:
-                results.append(adaptive_result)
-            time.sleep(0.3)
-
             for k in K_VALUES:
                 tree_result = run_tree_spec_case(tree_async_client, throttled, prompt_meta, text, k)
                 if tree_result:
@@ -761,7 +620,6 @@ def run_quick_test():
     logger.info("=" * 70)
     methods_to_show = (
         [f"sync_k{k}" for k in K_VALUES]
-        + [MarkovAdaptiveKPolicy.method_name]
         + [f"tree_k{k}_{tree_method_suffix}" for k in K_VALUES]
     )
     col_w = 28

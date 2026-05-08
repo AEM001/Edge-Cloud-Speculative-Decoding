@@ -116,8 +116,6 @@ class EdgeClient:
         logger.info(f"Prompt tokens: {len(prompt_ids)}")
         
         round_id = 0
-        previous_net_output = None
-        previous_policy_state = None
         
         while len(verified_prefix) - len(prompt_ids) < self.max_new_tokens:
             # Check for EOS in newly generated tokens only (not in prompt)
@@ -130,10 +128,7 @@ class EdgeClient:
             
             # Determine K using policy
             # For now, pass empty list since we don't have draft tokens yet
-            requested_K = int(policy(round_id, []))
-            remaining_tokens = self.max_new_tokens - (len(verified_prefix) - len(prompt_ids))
-            K = max(1, min(requested_K, remaining_tokens))
-            policy_state = getattr(policy, "state_name", None)
+            K = policy(round_id, [])
             
             # Generate draft
             draft_request = DraftRequest(
@@ -186,21 +181,14 @@ class EdgeClient:
             accepted_len = cloud_response.accepted_len
             accepted_tokens = draft_response.draft_token_ids[:accepted_len]
             correction_token = cloud_response.correction_token_id
-            remaining_before_commit = self.max_new_tokens - (len(verified_prefix) - len(prompt_ids))
             
             # Append accepted draft tokens
-            accepted_to_append = accepted_tokens[:remaining_before_commit]
-            verified_prefix.extend(accepted_to_append)
-            remaining_after_accept = self.max_new_tokens - (len(verified_prefix) - len(prompt_ids))
+            verified_prefix.extend(accepted_tokens)
             
             # Append correction token if provided and not EOS
-            correction_emitted = False
             if correction_token is not None:
-                if correction_token != self.eos_token_id and remaining_after_accept > 0:
+                if correction_token != self.eos_token_id:
                     verified_prefix.append(correction_token)
-                    correction_emitted = True
-            generated_this_round = len(accepted_to_append) + (1 if correction_emitted else 0)
-            net_output = accepted_len + (1 if correction_token is not None else 0)
             
             # Step 4: Record metrics
             metrics.total_rounds += 1
@@ -225,15 +213,8 @@ class EdgeClient:
             round_detail = {
                 "round_id": round_id,
                 "K": K,
-                "requested_K": requested_K,
-                "policy_state": policy_state,
-                "prev_net_output": previous_net_output,
-                "prev_policy_state": previous_policy_state,
                 "drafted": len(draft_response.draft_token_ids),
                 "accepted": accepted_len,
-                "generated_this_round": generated_this_round,
-                "net_output": net_output,
-                "correction_emitted": correction_emitted,
                 "draft_time_ms": draft_time_ms,
                 "server_time_ms": cloud_response.server_verify_time_ms,
                 "rtt_ms": cloud_response.rtt_ms,
@@ -249,16 +230,11 @@ class EdgeClient:
                 f"accepted={accepted_len}, draft_time={draft_time_ms:.2f}ms, "
                 f"server_time={cloud_response.server_verify_time_ms:.2f}ms"
             )
-
-            if hasattr(policy, "on_round_complete"):
-                policy.on_round_complete(round_detail)
-            previous_net_output = net_output
-            previous_policy_state = policy_state
             
             round_id += 1
             
             # Check if we should stop (no tokens generated)
-            if generated_this_round == 0:
+            if accepted_len == 0 and correction_token is None:
                 logger.warning(f"No progress in round {round_id}, stopping")
                 break
         
