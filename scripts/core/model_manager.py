@@ -36,6 +36,10 @@ class VLLMModelManager:
 
         logger.info(f"Loading vLLM model from: {self.model_path} on GPU {self.gpu_id}")
 
+        # Pin to the specified GPU via CUDA_VISIBLE_DEVICES
+        import os
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(self.gpu_id)
+
         # Load HuggingFace format model with vLLM
         self.llm = LLM(
             model=str(self.model_path),

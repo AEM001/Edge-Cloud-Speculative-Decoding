@@ -29,7 +29,7 @@ from core.draft_generator import VLLMDraftGenerator
 from core.protocol import DraftRequest, EdgeRequest
 from experiments.network_conditions import NetworkCondition, ThrottledCloudClient
 from core.model_manager import VLLMModelManager
-from experiments.prompt_loader import load_speed_bench_prompts
+from experiments.prompt_loader import load_prompts
 from experiments.tree_async_client import TreeAsyncEdgeClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -39,7 +39,7 @@ SERVER_URL = "http://localhost:6006"
 MAX_TOKENS = 128
 K_VALUES  = [7]      # draft length
 LOOKAHEAD = 1        # 1 verify in flight while 1 draft runs concurrently
-PROMPT_COUNT = 2    # prompts per type (simple only)
+PROMPT_COUNT = 15   # per dataset
 DIRECT_SESSION = requests.Session()
 DIRECT_SESSION.trust_env = False
 
@@ -127,14 +127,16 @@ class DirectTiming:
     dl_ms: float
 
 
-def load_prompts():
-    simple_prompts = load_speed_bench_prompts(
-        count=PROMPT_COUNT,
-        category="coding",
-        multiturn=False
-    )
-    logger.info("Loaded %d simple prompts (complex skipped)", len(simple_prompts))
-    return [(p, "simple") for p in simple_prompts]
+def _load_prompt_set():
+    """Load 15 prompts each from gsm8k and humaneval, roughly same length."""
+    prompts = []
+    for src in ("gsm8k", "humaneval"):
+        loaded = load_prompts(source=src, count=PROMPT_COUNT, min_length=200, max_length=500)
+        prompts.extend((p, src) for p in loaded)
+    logger.info("Loaded %d prompts: %d gsm8k + %d humaneval", len(prompts),
+                sum(1 for _, t in prompts if t == "gsm8k"),
+                sum(1 for _, t in prompts if t == "humaneval"))
+    return prompts
 
 
 def _direct_with_throttle(prompt: str, throttled: ThrottledCloudClient) -> DirectTiming:
@@ -524,7 +526,7 @@ def run_quick_test():
     logger.info("Draft model : %s", MODEL_NAME)
     logger.info("=" * 70)
 
-    prompts = load_prompts()
+    prompts = _load_prompt_set()
 
     base_client = create_http_cloud_client(SERVER_URL, timeout=120.0)
 

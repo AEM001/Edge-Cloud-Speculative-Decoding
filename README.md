@@ -28,9 +28,11 @@ draft/
 │   │   ├── model_manager.py       # Model loader / GPU assignment
 │   │   └── draft_generator.py     # vLLM draft token generator (TokensPrompt, prefix caching)
 │   ├── client/                    # Edge clients
+│   │   ├── __init__.py
 │   │   ├── edge_client.py         # Synchronous speculative decoding loop
-│   │   ├── http_cloud_client.py   # HTTP/keep-alive transport to verify server
+│   │   └── http_cloud_client.py   # HTTP/keep-alive transport to verify server
 │   ├── server/                    # Cloud verification server
+│   │   ├── __init__.py
 │   │   └── verify_server.py       # FastAPI server: /verify (speculative) + /generate (direct)
 │   └── experiments/               # Experiment-specific utilities
 │       ├── network_conditions.py  # Throttle simulation: good / medium / bursty profiles
@@ -42,7 +44,15 @@ draft/
 │           ├── quick_test_rounds.jsonl
 │           └── quick_test_summary.json
 ├── config.py                      # Model paths, GPU memory fractions
-└── models/                        # Model download scripts and config
+└── models/                        # Downloaded model weight directories
+    ├── Qwen2.5-1.5B-Instruct-AWQ
+    ├── Qwen2.5-3B-Instruct-AWQ
+    ├── Qwen2.5-7B-Instruct-AWQ
+    ├── Qwen2.5-14B-Instruct-AWQ
+    ├── Qwen3-8B
+    ├── qwen3_8b_eagle3
+    ├── download.py                # Model download script
+    └── hf.txt                     # Hugging Face token reference
 ```
 
 ---
@@ -52,14 +62,13 @@ draft/
 ### 1. Start the verify server (GPU 0)
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 VERIFY_GPU_MEM=0.85 \
-  .venv/bin/python -m server.verify_server --port 6006
+VERIFY_GPU_MEM=0.85 python3 scripts/server/verify_server.py --port 6006
 ```
 
 ### 2. Run the quick sanity check (GPU 1)
 
 ```bash
-CUDA_VISIBLE_DEVICES=1 .venv/bin/python -m experiments.quick_test
+python3 scripts/experiments/quick_test.py
 ```
 
 Runs **direct** vs **sync_k7** vs **tree_k7_b3** (tree-based with branch prefetch)

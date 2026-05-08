@@ -1,63 +1,66 @@
-"""Prompt loader using SPEED-Bench dataset qualitative split."""
+"""Prompt loader supporting GSM8K and HumanEval datasets."""
+import json
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 
-def load_speed_bench_prompts(
+_DATA_DIR = Path(__file__).parent.parent.parent / "data"
+
+
+def load_prompts(
+    source: str = "gsm8k",
     count: int = 5,
-    category: str = "coding",
-    multiturn: bool = False,
-    data_path: Optional[Path] = None
+    split: str = "test",
+    min_length: int = 0,
+    max_length: int = 99999,
 ) -> List[Dict]:
     """
-    Load prompts from SPEED-Bench qualitative split.
-
-    Actual dataset columns: question_id, category, sub_category, turns, source, src_id, difficulty, multiturn
+    Load prompts from a supported dataset.
 
     Args:
-        count: Number of prompts to load
-        category: Category to filter (default: "coding")
-        multiturn: Whether to include multiturn samples (default: False for single-turn)
-        data_path: Optional local path to SPEED-Bench qualitative split. If None, loads from HuggingFace.
+        source: Dataset name — "gsm8k" or "humaneval".
+        count: Number of prompts to return.
+        split: Dataset split ("train" or "test", gsm8k only).
+        min_length: Minimum prompt text length in characters.
+        max_length: Maximum prompt text length in characters.
 
     Returns:
-        List of prompt dictionaries with keys: id, text, category, multiturn, src_id, question_id
+        List of dicts with keys: id, text, source.
     """
-    try:
-        from datasets import load_dataset
-    except ImportError:
-        raise ImportError("datasets library is required. Install with: pip install datasets")
-
-    # Load from local path if provided, otherwise from HuggingFace
-    if data_path and data_path.exists():
-        dataset = load_dataset(str(data_path), "qualitative")
+    if source == "gsm8k":
+        prompts = _load_gsm8k(split)
+    elif source == "humaneval":
+        prompts = _load_humaneval()
     else:
-        # Use token from hf.txt if available
-        hf_token_file = Path(__file__).parent.parent / "models" / "hf.txt"
-        token = None
-        if hf_token_file.exists():
-            token = hf_token_file.read_text().strip()
-        dataset = load_dataset("nvidia/SPEED-Bench", "qualitative", token=token)
+        raise ValueError(f"Unknown source: {source}. Use: gsm8k or humaneval")
 
-    # Filter for category and multiturn (difficulty is None in actual data)
-    filtered = dataset['test'].filter(
-        lambda x: x['category'] == category and x['multiturn'] == multiturn
-    )
+    filtered = [p for p in prompts if min_length <= len(p["text"]) <= max_length]
 
-    # Convert to list of dictionaries
+    return [
+        {"id": i + 1, "text": p["text"], "source": source}
+        for i, p in enumerate(filtered[:count])
+    ]
+
+
+def _load_gsm8k(split: str = "test") -> List[Dict]:
+    path = _DATA_DIR / "gsm8k" / f"{split}.jsonl"
+    if not path.exists():
+        raise FileNotFoundError(f"GSM8K data not found at {path}. Download it first.")
     prompts = []
-    for i, item in enumerate(filtered):
-        if i >= count:
-            break
-        # Get the first turn's prompt
-        prompt_text = item['turns'][0] if item['turns'] and len(item['turns']) > 0 else ""
-        prompts.append({
-            "id": i + 1,
-            "text": prompt_text,
-            "category": item['category'],
-            "multiturn": item['multiturn'],
-            "src_id": item['src_id'],
-            "question_id": item['question_id']
-        })
+    with open(path) as f:
+        for line in f:
+            row = json.loads(line)
+            prompts.append({"text": row["question"]})
+    return prompts
 
+
+def _load_humaneval() -> List[Dict]:
+    path = _DATA_DIR / "humaneval" / "test.jsonl"
+    if not path.exists():
+        raise FileNotFoundError(f"HumanEval data not found at {path}. Download it first.")
+    prompts = []
+    with open(path) as f:
+        for line in f:
+            row = json.loads(line)
+            prompts.append({"text": row["prompt"]})
     return prompts

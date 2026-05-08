@@ -1,0 +1,137 @@
+{
+  "good": {
+    "direct": {
+      "tokens_per_second": 37.554032692185984,
+      "total_time_ms": 3099.6556083221376,
+      "server_model_ms": 3071.505641937256,
+      "http_rpc_ms": 3074.523766099916,
+      "simulated_network_ms": 25.131842222222225
+    },
+    "sync_k7": {
+      "tokens_per_second": 46.5427197959838,
+      "speedup_vs_direct": 1.23935344514061,
+      "total_time_ms": 2950.139307975769,
+      "rounds": 23.933333333333334,
+      "acceptance_rate": 0.6779381531634667,
+      "accepted_draft_per_round": 4.7193458168419635,
+      "generated_per_round": 5.719345816841964,
+      "local_draft_ms": 811.8236382802328,
+      "server_model_ms": 1475.9662469228108,
+      "avg_rtt_ms": 88.98772226450525,
+      "simulated_network_ms": 604.2166666666666,
+      "launched_branch_count": 0.0,
+      "ready_branch_count": 0.0,
+      "reused_branch_count": 0.0,
+      "prefetched_tokens": 0.0,
+      "exposed_branch_ms": 0.0
+    },
+    "tree_k7_b3": {
+      "tokens_per_second": 47.355999557904575,
+      "speedup_vs_direct": 1.2610097015694968,
+      "total_time_ms": 2893.2633282999936,
+      "rounds": 27.366666666666667,
+      "acceptance_rate": 0.6976250841533798,
+      "accepted_draft_per_round": 3.8653540691749537,
+      "generated_per_round": 4.865354069174952,
+      "local_draft_ms": 1481.7213711665165,
+      "server_model_ms": 1685.6776237487793,
+      "avg_rtt_ms": 88.9348535084975,
+      "simulated_network_ms": 690.8666666666668,
+      "launched_branch_count": 1.9945704135508058,
+      "ready_branch_count": 1.9945704135508058,
+      "reused_branch_count": 0.5728855496697017,
+      "prefetched_tokens": 2.580723723402444,
+      "exposed_branch_ms": 0.0
+    }
+  },
+  "medium": {
+    "direct": {
+      "tokens_per_second": 37.820401953649814,
+      "total_time_ms": 3079.472669066643,
+      "server_model_ms": 3021.2299585342407,
+      "http_rpc_ms": 3024.208215733309,
+      "simulated_network_ms": 55.264453333333336
+    },
+    "sync_k7": {
+      "tokens_per_second": 37.532481979007635,
+      "speedup_vs_direct": 0.9923871783542905,
+      "total_time_ms": 3666.6057348251343,
+      "rounds": 23.933333333333334,
+      "acceptance_rate": 0.6779381531634667,
+      "accepted_draft_per_round": 4.7193458168419635,
+      "generated_per_round": 5.719345816841964,
+      "local_draft_ms": 794.9276367823282,
+      "server_model_ms": 1491.2238200505574,
+      "avg_rtt_ms": 119.59178419176698,
+      "simulated_network_ms": 1325.6956666666667,
+      "launched_branch_count": 0.0,
+      "ready_branch_count": 0.0,
+      "reused_branch_count": 0.0,
+      "prefetched_tokens": 0.0,
+      "exposed_branch_ms": 0.0
+    },
+    "tree_k7_b3": {
+      "tokens_per_second": 36.867248453618664,
+      "speedup_vs_direct": 0.9747979013761072,
+      "total_time_ms": 3686.505124433369,
+      "rounds": 27.366666666666667,
+      "acceptance_rate": 0.6976250841533798,
+      "accepted_draft_per_round": 3.8653540691749537,
+      "generated_per_round": 4.865354069174952,
+      "local_draft_ms": 1467.5681927334153,
+      "server_model_ms": 1665.101671218872,
+      "avg_rtt_ms": 118.11801677977597,
+      "simulated_network_ms": 1515.8313333333333,
+      "launched_branch_count": 1.9945704135508058,
+      "ready_branch_count": 1.9945704135508058,
+      "reused_branch_count": 0.5728855496697017,
+      "prefetched_tokens": 2.580723723402444,
+      "exposed_branch_ms": 0.0
+    }
+  },
+  "bursty": {
+    "direct": {
+      "tokens_per_second": 0.0,
+      "total_time_ms": 0.0,
+      "server_model_ms": 0.0,
+      "http_rpc_ms": 0.0,
+      "simulated_network_ms": 0.0
+    },
+    "sync_k7": {
+      "tokens_per_second": 0.0,
+      "speedup_vs_direct": 0.0,
+      "total_time_ms": 0.0,
+      "rounds": 0.0,
+      "acceptance_rate": 0.0,
+      "accepted_draft_per_round": 0.0,
+      "generated_per_round": 0.0,
+      "local_draft_ms": 0.0,
+      "server_model_ms": 0.0,
+      "avg_rtt_ms": 0.0,
+      "simulated_network_ms": 0.0,
+      "launched_branch_count": 0.0,
+      "ready_branch_count": 0.0,
+      "reused_branch_count": 0.0,
+      "prefetched_tokens": 0.0,
+      "exposed_branch_ms": 0.0
+    },
+    "tree_k7_b3": {
+      "tokens_per_second": 0.0,
+      "speedup_vs_direct": 0.0,
+      "total_time_ms": 0.0,
+      "rounds": 0.0,
+      "acceptance_rate": 0.0,
+      "accepted_draft_per_round": 0.0,
+      "generated_per_round": 0.0,
+      "local_draft_ms": 0.0,
+      "server_model_ms": 0.0,
+      "avg_rtt_ms": 0.0,
+      "simulated_network_ms": 0.0,
+      "launched_branch_count": 0.0,
+      "ready_branch_count": 0.0,
+      "reused_branch_count": 0.0,
+      "prefetched_tokens": 0.0,
+      "exposed_branch_ms": 0.0
+    }
+  }
+}

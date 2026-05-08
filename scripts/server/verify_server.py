@@ -3,7 +3,7 @@ Verify server — runs the target (7B) model and exposes an HTTP API
 for draft verification and direct generation.
 
 Start with:
-    python -m server.verify_server --port 6006
+    python3 scripts/server/verify_server.py --port 6006
 
 Environment variables (override via .env or shell export):
     VERIFY_MODEL_PATH   — path to the 7B AWQ model dir
@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import uvicorn
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from vllm import LLM, SamplingParams
@@ -240,12 +242,11 @@ class CloudVerifier:
 # FastAPI app
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="PicoSpec Verify Server", version="1.0.0")
 _verifier: Optional[CloudVerifier] = None
 
 
-@app.on_event("startup")
-async def _startup():
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
     global _verifier
     model_path = _env("VERIFY_MODEL_PATH", _DEFAULT_MODEL_PATH)
     gpu_mem = float(_env("VERIFY_GPU_MEM", "0.90"))
@@ -257,6 +258,10 @@ async def _startup():
         max_model_len=max_len,
         quantization=quant,
     )
+    yield
+
+
+app = FastAPI(title="PicoSpec Verify Server", version="1.0.0", lifespan=_lifespan)
 
 
 @app.get("/health")
@@ -316,7 +321,7 @@ def main():
     args = parser.parse_args()
 
     uvicorn.run(
-        "server.verify_server:app",
+        app,
         host=args.host,
         port=args.port,
         log_level="info",
