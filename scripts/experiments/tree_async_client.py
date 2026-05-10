@@ -166,7 +166,8 @@ class TreeAsyncEdgeClient:
             return [0]
         max_offset = min(k, spec_ahead)
         center = max(0, min(max_offset, int(round(self.BASE_ACCEPTANCE_RATIO * k))))
-        seeds = [center, center - 1, center + 1]
+        lower_mid = max(1, int(round(0.45 * k)))
+        seeds = [max_offset, lower_mid, center]
 
         offsets: List[int] = []
         for offset in seeds:
@@ -174,10 +175,9 @@ class TreeAsyncEdgeClient:
             if clipped not in offsets:
                 offsets.append(clipped)
 
-        center = max(0, min(max_offset, int(round(sum(seeds) / len(seeds)))))
         delta = 1
         while len(offsets) < self.branch_width and delta <= k:
-            for candidate in (center - delta, center + delta):
+            for candidate in (lower_mid - delta, center - delta, center + delta, max_offset - delta):
                 clipped = max(0, min(max_offset, candidate))
                 if clipped not in offsets:
                     offsets.append(clipped)
@@ -258,6 +258,20 @@ class TreeAsyncEdgeClient:
                 base_draft_ms = 0.0
                 prefetched_ids = prefetched_ids[len(base_draft):]
                 prefetched_logprobs = prefetched_logprobs[len(base_draft):]
+
+                remaining_k = k - len(base_draft)
+                if remaining_k > 0:
+                    base_t0 = time.perf_counter()
+                    topup_resp = self.draft_generator.generate_draft_tokens(
+                        DraftRequest(
+                            verified_prefix=list(committed_prefix) + base_draft,
+                            num_draft_tokens=remaining_k,
+                        ),
+                        temperature=self.temperature,
+                    )
+                    base_draft_ms = (time.perf_counter() - base_t0) * 1000
+                    base_draft.extend(topup_resp.draft_token_ids)
+                    base_logprobs.extend(topup_resp.logprobs)
             else:
                 base_t0 = time.perf_counter()
                 base_resp = self.draft_generator.generate_draft_tokens(
@@ -265,10 +279,10 @@ class TreeAsyncEdgeClient:
                     temperature=self.temperature,
                 )
                 base_draft_ms = (time.perf_counter() - base_t0) * 1000
-                if not base_resp.draft_token_ids:
-                    break
                 base_draft = list(base_resp.draft_token_ids)
                 base_logprobs = list(base_resp.logprobs)
+            if not base_draft:
+                break
             branches.append(
                 TreeBranch(
                     branch_id=tree_id * 100,
