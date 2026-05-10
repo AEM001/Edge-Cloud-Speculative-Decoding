@@ -45,7 +45,7 @@ def _bool_env(name: str, default: bool) -> bool:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
-_DEFAULT_MODEL_PATH = "/root/code/draft/models/Qwen2.5-32B-Instruct-AWQ"
+_DEFAULT_MODEL_PATH = "/root/code/draft/models/Qwen2.5-14B-Instruct-AWQ"
 
 
 # ---------------------------------------------------------------------------

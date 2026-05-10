@@ -37,9 +37,9 @@ logger = logging.getLogger(__name__)
 
 SERVER_URL = "http://localhost:6006"
 MAX_TOKENS = 128
-K_VALUES  = [7]      # draft length
+K_VALUES  = [8]      # draft length
 LOOKAHEAD = 1        # 1 verify in flight while 1 draft runs concurrently
-PROMPT_COUNT = 3   # per dataset
+PROMPT_COUNT = 10   # per dataset
 DIRECT_SESSION = requests.Session()
 DIRECT_SESSION.trust_env = False
 
@@ -598,7 +598,7 @@ def run_quick_test():
     results: List[ExperimentResult] = []
     tree_method_suffix = f"b{tree_async_client.branch_width}"
 
-    for condition in [NetworkCondition.good()]:
+    for condition in [NetworkCondition.good(), NetworkCondition.medium()]:
         throttled = ThrottledCloudClient(base_client, condition)
         edge_client.cloud_client  = throttled
         tree_async_client.cloud_client = throttled
@@ -644,7 +644,7 @@ def run_quick_test():
     )
     logger.info(header)
     logger.info("-" * len(header))
-    for net in ["good"]:
+    for net in ["good", "medium"]:
         d_tps = _avg([r.output.tokens_per_second for r in results if r.method == "direct" and r.network == net])
         row = f"{net:<10}  {d_tps:>8.1f}"
         for mname in methods_to_show:

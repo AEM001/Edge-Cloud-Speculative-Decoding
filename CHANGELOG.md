@@ -28,3 +28,10 @@
 - the cuda_graph is making it very slow, need to fix problems
 - and temporarily using only the good network
 - make the verify into two GPUs
+
+22:57 
+- back to the two 4090s, very successful
+- used the randomly picking prompts
+- for the first time, the medium network is working!
+- the tree based-asynchronous way is significently beating the vanilla way! 
+- so fucking good, I'm so happy for this.

@@ -1,5 +1,6 @@
 """Prompt loader supporting GSM8K and HumanEval datasets."""
 import json
+import random
 from pathlib import Path
 from typing import List, Dict
 
@@ -36,9 +37,12 @@ def load_prompts(
 
     filtered = [p for p in prompts if min_length <= len(p["text"]) <= max_length]
 
+    # Random selection instead of taking first count
+    selected = random.sample(filtered, min(count, len(filtered)))
+
     return [
         {"id": i + 1, "text": p["text"], "source": source}
-        for i, p in enumerate(filtered[:count])
+        for i, p in enumerate(selected)
     ]
 
 

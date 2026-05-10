@@ -1,92 +1,92 @@
 {
   "good": {
     "direct": {
-      "tokens_per_second": 23.727768272989366,
-      "total_time_ms": 4776.7443538329635,
-      "server_model_ms": 4748.430967330933,
-      "http_rpc_ms": 4751.60062049963,
-      "simulated_network_ms": 25.143733333333333
+      "tokens_per_second": 36.83464391299664,
+      "total_time_ms": 3380.6265983000253,
+      "server_model_ms": 3352.255380153656,
+      "http_rpc_ms": 3355.4894083000245,
+      "simulated_network_ms": 25.137190000000004
     },
-    "sync_k7": {
-      "tokens_per_second": 20.13095826560161,
-      "speedup_vs_direct": 0.8484134720970702,
-      "total_time_ms": 6667.832175890605,
-      "rounds": 24.333333333333332,
-      "acceptance_rate": 0.6485297492517155,
-      "accepted_draft_per_round": 4.539708244762008,
-      "generated_per_round": 5.539708244762008,
-      "local_draft_ms": 1254.093329111735,
-      "server_model_ms": 4731.098294258118,
-      "avg_rtt_ms": 224.08614581097189,
-      "simulated_network_ms": 614.7666666666667,
+    "sync_k8": {
+      "tokens_per_second": 47.96487812312398,
+      "speedup_vs_direct": 1.3021675528183994,
+      "total_time_ms": 2903.0394673347473,
+      "rounds": 21.75,
+      "acceptance_rate": 0.6632619562369334,
+      "accepted_draft_per_round": 5.290427352372433,
+      "generated_per_round": 6.290427352372433,
+      "local_draft_ms": 840.8768177032471,
+      "server_model_ms": 1455.144441127777,
+      "avg_rtt_ms": 93.73856680104531,
+      "simulated_network_ms": 549.3874999999999,
       "launched_branch_count": 0.0,
       "ready_branch_count": 0.0,
       "reused_branch_count": 0.0,
       "prefetched_tokens": 0.0,
       "exposed_branch_ms": 0.0
     },
-    "tree_k7_b3": {
-      "tokens_per_second": 19.44973663589842,
-      "speedup_vs_direct": 0.8197035815643536,
-      "total_time_ms": 6920.3675573332175,
-      "rounds": 24.333333333333332,
-      "acceptance_rate": 0.6485297492517155,
-      "accepted_draft_per_round": 4.539708244762008,
-      "generated_per_round": 5.539708244762008,
-      "local_draft_ms": 3260.3300855056054,
-      "server_model_ms": 5352.436463038127,
-      "avg_rtt_ms": 249.93107717925682,
-      "simulated_network_ms": 614.7666666666667,
-      "launched_branch_count": 2.0,
-      "ready_branch_count": 2.0,
-      "reused_branch_count": 0.4247544570125215,
-      "prefetched_tokens": 2.515193408741796,
-      "exposed_branch_ms": 0.0
+    "tree_k8_b3": {
+      "tokens_per_second": 51.59352135972604,
+      "speedup_vs_direct": 1.4006792486331574,
+      "total_time_ms": 2718.204000900005,
+      "rounds": 21.7,
+      "acceptance_rate": 0.6644713561818826,
+      "accepted_draft_per_round": 5.304280166225247,
+      "generated_per_round": 6.304280166225247,
+      "local_draft_ms": 2387.7392694999517,
+      "server_model_ms": 1447.4339246749878,
+      "avg_rtt_ms": 93.71934718680339,
+      "simulated_network_ms": 548.1234999999999,
+      "launched_branch_count": 1.9976190476190474,
+      "ready_branch_count": 1.9976190476190474,
+      "reused_branch_count": 0.48243552484344476,
+      "prefetched_tokens": 2.8010647182809905,
+      "exposed_branch_ms": 0.052084689944174686
     }
   },
   "medium": {
     "direct": {
-      "tokens_per_second": 0.0,
-      "total_time_ms": 0.0,
-      "server_model_ms": 0.0,
-      "http_rpc_ms": 0.0,
-      "simulated_network_ms": 0.0
+      "tokens_per_second": 37.3392555403487,
+      "total_time_ms": 3331.923046564289,
+      "server_model_ms": 3273.7064242362976,
+      "http_rpc_ms": 3276.651040850004,
+      "simulated_network_ms": 55.272005714285704
     },
-    "sync_k7": {
-      "tokens_per_second": 0.0,
-      "speedup_vs_direct": 0.0,
-      "total_time_ms": 0.0,
-      "rounds": 0.0,
-      "acceptance_rate": 0.0,
-      "accepted_draft_per_round": 0.0,
-      "generated_per_round": 0.0,
-      "local_draft_ms": 0.0,
-      "server_model_ms": 0.0,
-      "avg_rtt_ms": 0.0,
-      "simulated_network_ms": 0.0,
+    "sync_k8": {
+      "tokens_per_second": 39.33191674334352,
+      "speedup_vs_direct": 1.0533663881124131,
+      "total_time_ms": 3523.744547367096,
+      "rounds": 21.75,
+      "acceptance_rate": 0.6632619562369334,
+      "accepted_draft_per_round": 5.290427352372433,
+      "generated_per_round": 6.290427352372433,
+      "local_draft_ms": 821.9243288040161,
+      "server_model_ms": 1443.7159180641174,
+      "avg_rtt_ms": 123.21902325596798,
+      "simulated_network_ms": 1205.1924999999999,
       "launched_branch_count": 0.0,
       "ready_branch_count": 0.0,
       "reused_branch_count": 0.0,
       "prefetched_tokens": 0.0,
       "exposed_branch_ms": 0.0
     },
-    "tree_k7_b3": {
-      "tokens_per_second": 0.0,
-      "speedup_vs_direct": 0.0,
-      "total_time_ms": 0.0,
-      "rounds": 0.0,
-      "acceptance_rate": 0.0,
-      "accepted_draft_per_round": 0.0,
-      "generated_per_round": 0.0,
-      "local_draft_ms": 0.0,
-      "server_model_ms": 0.0,
-      "avg_rtt_ms": 0.0,
-      "simulated_network_ms": 0.0,
-      "launched_branch_count": 0.0,
-      "ready_branch_count": 0.0,
-      "reused_branch_count": 0.0,
-      "prefetched_tokens": 0.0,
-      "exposed_branch_ms": 0.0
+    "tree_k8_b3": {
+      "tokens_per_second": 42.90339614447274,
+      "speedup_vs_direct": 1.1490158420033694,
+      "total_time_ms": 3269.494783099998,
+      "rounds": 21.7,
+      "acceptance_rate": 0.6644713561818826,
+      "accepted_draft_per_round": 5.304280166225247,
+      "generated_per_round": 6.304280166225247,
+      "local_draft_ms": 2516.675949400315,
+      "server_model_ms": 1439.4801378250122,
+      "avg_rtt_ms": 123.30765405354245,
+      "simulated_network_ms": 1202.4195,
+      "launched_branch_count": 1.9976190476190474,
+      "ready_branch_count": 1.9976190476190474,
+      "reused_branch_count": 0.48243552484344476,
+      "prefetched_tokens": 3.272936392822019,
+      "exposed_branch_ms": 0.008702086183500334
     }
   },
   "bursty": {
@@ -97,7 +97,7 @@
       "http_rpc_ms": 0.0,
       "simulated_network_ms": 0.0
     },
-    "sync_k7": {
+    "sync_k8": {
       "tokens_per_second": 0.0,
       "speedup_vs_direct": 0.0,
       "total_time_ms": 0.0,
@@ -115,7 +115,7 @@
       "prefetched_tokens": 0.0,
       "exposed_branch_ms": 0.0
     },
-    "tree_k7_b3": {
+    "tree_k8_b3": {
       "tokens_per_second": 0.0,
       "speedup_vs_direct": 0.0,
       "total_time_ms": 0.0,

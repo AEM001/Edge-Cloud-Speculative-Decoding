@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start the verify server directly.
-# By default the 32B verifier is sharded across GPU 0 and GPU 1.
+# By default the 14B verifier runs on GPU 0.
 #
 # Usage:
 #   bash scripts/start_verify.sh [--port 6006]
@@ -17,9 +17,9 @@ PYTHON="$REPO_DIR/.venv/bin/python3"
 
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 
-export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0,1}
-export VERIFY_TENSOR_PARALLEL_SIZE=${VERIFY_TENSOR_PARALLEL_SIZE:-2}
-export VERIFY_GPU_MEM=${VERIFY_GPU_MEM:-0.55}
+export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+export VERIFY_TENSOR_PARALLEL_SIZE=${VERIFY_TENSOR_PARALLEL_SIZE:-1}
+export VERIFY_GPU_MEM=${VERIFY_GPU_MEM:-0.9}
 export VERIFY_ENFORCE_EAGER=${VERIFY_ENFORCE_EAGER:-1}
 export VERIFY_ENABLE_PREFIX_CACHING=${VERIFY_ENABLE_PREFIX_CACHING:-1}
 
