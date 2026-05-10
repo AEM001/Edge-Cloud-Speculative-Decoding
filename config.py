@@ -19,26 +19,28 @@ def _int(name: str, default: int) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Draft model  (Qwen2.5-3B-Instruct-AWQ — runs on the edge / GPU 1)
+# Draft model  (Qwen2.5-1.5B-Instruct-AWQ — runs on the edge / GPU 1)
 # ---------------------------------------------------------------------------
 DRAFT_MODEL_NAME: str = os.getenv(
-    "DRAFT_MODEL_NAME", "Qwen/Qwen2.5-3B-Instruct"
+    "DRAFT_MODEL_NAME", "Qwen/Qwen2.5-1.5B-Instruct"
 )
 DRAFT_MODEL_PATH: Path = Path(
-    os.getenv("DRAFT_MODEL_PATH", "/root/code/draft/models/Qwen2.5-3B-Instruct-AWQ")
+    os.getenv("DRAFT_MODEL_PATH", "/root/code/draft/models/Qwen2.5-1.5B-Instruct-AWQ")
 )
-DRAFT_GPU_MEM: float = _float("DRAFT_GPU_MEM", 0.60)
+DRAFT_GPU_MEM: float = _float("DRAFT_GPU_MEM", 0.25)
 DRAFT_MAX_LEN: int = _int("DRAFT_MAX_LEN", 4096)
+DRAFT_GPU_ID: int = _int("DRAFT_GPU_ID", 1)
 
 # ---------------------------------------------------------------------------
-# Verify model  (Qwen2.5-14B-Instruct-AWQ — runs on GPU 0 via verify server)
+# Verify model  (Qwen2.5-32B-Instruct-AWQ — runs on GPU 0 via verify server)
 # ---------------------------------------------------------------------------
 VERIFY_MODEL_PATH: Path = Path(
-    os.getenv("VERIFY_MODEL_PATH", "/root/code/draft/models/Qwen2.5-14B-Instruct-AWQ")
+    os.getenv("VERIFY_MODEL_PATH", "/root/code/draft/models/Qwen2.5-32B-Instruct-AWQ")
 )
-VERIFY_GPU_MEM: float = _float("VERIFY_GPU_MEM", 0.90)
+VERIFY_GPU_MEM: float = _float("VERIFY_GPU_MEM", 0.55)
 VERIFY_MAX_LEN: int = _int("VERIFY_MAX_LEN", 4096)
 VERIFY_QUANTIZATION: str = os.getenv("VERIFY_QUANTIZATION", "awq")
+VERIFY_TENSOR_PARALLEL_SIZE: int = _int("VERIFY_TENSOR_PARALLEL_SIZE", 2)
 
 # ---------------------------------------------------------------------------
 # Verify server  (HTTP endpoint)

@@ -24,6 +24,7 @@ pydantic-settings==2.14.0
 
 # Hugging Face
 huggingface-hub==1.13.0
+datasets
 
 # Visualization
 matplotlib==3.10.9

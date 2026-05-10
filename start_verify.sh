@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Start the verify server (Qwen2.5-7B-AWQ) directly.
-# The server occupies GPU 0 by default.
+# Start the verify server directly.
+# By default the 32B verifier is sharded across GPU 0 and GPU 1.
 #
 # Usage:
 #   bash scripts/start_verify.sh [--port 6006]
@@ -9,17 +9,19 @@
 
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 PORT=${PORT:-6006}
 
 # Use .venv environment
 PYTHON="$REPO_DIR/.venv/bin/python3"
 
-# Use flash-attention backend (requires flash-attn in venv)
-export VLLM_ATTENTION_BACKEND=flash_attn
+export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 
-# Verify model runs on GPU 0
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0,1}
+export VERIFY_TENSOR_PARALLEL_SIZE=${VERIFY_TENSOR_PARALLEL_SIZE:-2}
+export VERIFY_GPU_MEM=${VERIFY_GPU_MEM:-0.55}
+export VERIFY_ENFORCE_EAGER=${VERIFY_ENFORCE_EAGER:-1}
+export VERIFY_ENABLE_PREFIX_CACHING=${VERIFY_ENABLE_PREFIX_CACHING:-1}
 
 # Parse optional --port arg
 while [[ $# -gt 0 ]]; do
@@ -33,7 +35,10 @@ echo "=== Starting verify server on port $PORT ==="
 echo "Repo: $REPO_DIR"
 echo "Python: $PYTHON"
 echo "Attention backend: $VLLM_ATTENTION_BACKEND"
+echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
+echo "Tensor parallel size: $VERIFY_TENSOR_PARALLEL_SIZE"
+echo "Verify GPU memory utilization: $VERIFY_GPU_MEM"
 echo ""
 
 cd "$REPO_DIR"
-PYTHONPATH="$REPO_DIR" "$PYTHON" -m server.verify_server --host 0.0.0.0 --port $PORT
+PYTHONPATH="$REPO_DIR/scripts" "$PYTHON" -m server.verify_server --host 0.0.0.0 --port $PORT

@@ -20,6 +20,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+os.environ.setdefault("VLLM_ATTENTION_BACKEND", "FLASH_ATTN")
+
 import uvicorn
 from contextlib import asynccontextmanager
 
@@ -36,7 +38,14 @@ logger = logging.getLogger(__name__)
 def _env(name: str, default: str) -> str:
     return os.getenv(name, default)
 
-_DEFAULT_MODEL_PATH = "/root/code/draft/models/Qwen2.5-14B-Instruct-AWQ"
+
+def _bool_env(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+_DEFAULT_MODEL_PATH = "/root/code/draft/models/Qwen2.5-32B-Instruct-AWQ"
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +90,7 @@ class CloudVerifier:
         gpu_memory_utilization: float = 0.90,
         max_model_len: int = 4096,
         quantization: str = "awq",
+        tensor_parallel_size: int = 1,
     ):
         path = Path(model_path)
         if not path.exists():
@@ -89,12 +99,12 @@ class CloudVerifier:
         logger.info("Loading verify model: %s", model_path)
         llm_kwargs: Dict[str, Any] = {
             "model": str(path),
-            "tensor_parallel_size": 1,
+            "tensor_parallel_size": tensor_parallel_size,
             "gpu_memory_utilization": gpu_memory_utilization,
             "trust_remote_code": True,
             "max_model_len": max_model_len,
-            "enable_prefix_caching": True,
-            "enforce_eager": True,
+            "enable_prefix_caching": _bool_env("VERIFY_ENABLE_PREFIX_CACHING", True),
+            "enforce_eager": _bool_env("VERIFY_ENFORCE_EAGER", False),
             "disable_log_stats": False,
             "disable_custom_all_reduce": True,
         }
@@ -109,6 +119,7 @@ class CloudVerifier:
         self.model_path = str(path)
         self.gpu_memory_utilization = gpu_memory_utilization
         self.quantization = quantization
+        self.tensor_parallel_size = tensor_parallel_size
         logger.info("Verify model loaded: %s", model_path)
 
     @staticmethod
@@ -249,14 +260,16 @@ _verifier: Optional[CloudVerifier] = None
 async def _lifespan(app: FastAPI):
     global _verifier
     model_path = _env("VERIFY_MODEL_PATH", _DEFAULT_MODEL_PATH)
-    gpu_mem = float(_env("VERIFY_GPU_MEM", "0.90"))
+    gpu_mem = float(_env("VERIFY_GPU_MEM", "0.55"))
     max_len = int(_env("VERIFY_MAX_LEN", "4096"))
     quant = _env("VERIFY_QUANTIZATION", "awq")
+    tensor_parallel_size = int(_env("VERIFY_TENSOR_PARALLEL_SIZE", "2"))
     _verifier = CloudVerifier(
         model_path=model_path,
         gpu_memory_utilization=gpu_mem,
         max_model_len=max_len,
         quantization=quant,
+        tensor_parallel_size=tensor_parallel_size,
     )
     yield
 

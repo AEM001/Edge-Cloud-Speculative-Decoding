@@ -4,11 +4,11 @@ version = "1.0.0"
 description = "PicoSpec — synchronous and asynchronous speculative decoding toolkit"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "vllm==0.20.1",
-    "torch>=2.11.0",
-    "torchaudio>=2.11.0",
-    "torchvision>=0.26.0",
-    "transformers==5.7.0",
+    "vllm==0.10.2",
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
+    "torchvision==0.23.0",
+    "transformers==4.55.4",
     "accelerate==1.13.0",
     "numpy==2.2.6",
     "requests==2.33.1",
@@ -21,8 +21,9 @@ dependencies = [
     "pydantic-core==2.46.3",
     "pydantic-settings==2.14.0",
     "matplotlib==3.10.9",
-    "huggingface-hub==1.13.0",
+    "huggingface-hub==0.34.4",
     "sglang==0.5.2",
+    "flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl",
 ]
 
 [build-system]
@@ -31,6 +32,9 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["scripts", "models"]

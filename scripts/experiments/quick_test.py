@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from client.edge_client import EdgeClient
 from client.http_cloud_client import create_http_cloud_client
-from config import DRAFT_GPU_MEM as GPU_MEMORY_UTILIZATION, DRAFT_MAX_LEN as MAX_MODEL_LEN, DRAFT_MODEL_NAME as MODEL_NAME, DRAFT_MODEL_PATH as MODEL_PATH
+from config import DRAFT_GPU_ID, DRAFT_GPU_MEM as GPU_MEMORY_UTILIZATION, DRAFT_MAX_LEN as MAX_MODEL_LEN, DRAFT_MODEL_NAME as MODEL_NAME, DRAFT_MODEL_PATH as MODEL_PATH
 from core.draft_generator import VLLMDraftGenerator
 from core.protocol import DraftRequest, EdgeRequest
 from experiments.network_conditions import NetworkCondition, ThrottledCloudClient
@@ -39,7 +39,7 @@ SERVER_URL = "http://localhost:6006"
 MAX_TOKENS = 128
 K_VALUES  = [7]      # draft length
 LOOKAHEAD = 1        # 1 verify in flight while 1 draft runs concurrently
-PROMPT_COUNT = 15   # per dataset
+PROMPT_COUNT = 3   # per dataset
 DIRECT_SESSION = requests.Session()
 DIRECT_SESSION.trust_env = False
 
@@ -266,9 +266,15 @@ def run_sync_spec_case(
     avg_verify_prefix_len = _avg([s.get("verify_prefix_len", 0) or 0 for s in metrics.round_details])
     avg_verify_draft_len = _avg([s.get("verify_draft_len", 0) or 0 for s in metrics.round_details])
     avg_verify_input_len = _avg([s.get("verify_input_len", 0) or 0 for s in metrics.round_details])
+    avg_server_verify_ms = _avg([s.get("server_time_ms", 0) or 0 for s in metrics.round_details])
+    avg_network_ms = (
+        net_stats["total_simulated_overhead_ms"] / net_stats["num_calls"]
+        if net_stats["num_calls"]
+        else 0.0
+    )
     logger.info(
         "    %s: %d tok  %5.0f ms  %5.1f tok/s  accept=%4.1f%%  net_useful=%.2f tok/round  "
-        "rounds=%d  rtt=%d ms  verify_prefix=%.0f  verify_input=%.0f",
+        "rounds=%d  rtt=%d ms  verify_ms=%.0f  sim_net=%.0f  verify_prefix=%.0f  verify_input=%.0f",
         method_name,
         metrics.generated_tokens,
         total_ms,
@@ -277,6 +283,8 @@ def run_sync_spec_case(
         net_useful,
         metrics.total_rounds,
         metrics.average_rtt_ms,
+        avg_server_verify_ms,
+        avg_network_ms,
         avg_verify_prefix_len,
         avg_verify_input_len,
     )
@@ -367,9 +375,15 @@ def run_tree_spec_case(
     avg_verify_prefix_len = _avg([s.get("verify_prefix_len", 0) or 0 for s in metrics.slot_details])
     avg_verify_draft_len = _avg([s.get("verify_draft_len", 0) or 0 for s in metrics.slot_details])
     avg_verify_input_len = _avg([s.get("verify_input_len", 0) or 0 for s in metrics.slot_details])
+    avg_server_verify_ms = _avg([s.get("verify_ms", 0) or 0 for s in metrics.slot_details])
+    avg_network_ms = (
+        net_stats["total_simulated_overhead_ms"] / net_stats["num_calls"]
+        if net_stats["num_calls"]
+        else 0.0
+    )
     logger.info(
         "    %s: %d tok  %5.0f ms  %5.1f tok/s  accept=%4.1f%%  net_useful=%.2f tok/round  "
-        "rounds=%d  rtt=%d ms  bubble=%.0fms  offset=%.1f  verify_prefix=%.0f  verify_input=%.0f",
+        "rounds=%d  rtt=%d ms  verify_ms=%.0f  sim_net=%.0f  bubble=%.0fms  offset=%.1f  verify_prefix=%.0f  verify_input=%.0f",
         method_name,
         metrics.generated_tokens,
         total_ms,
@@ -378,6 +392,8 @@ def run_tree_spec_case(
         net_useful,
         metrics.total_rounds,
         metrics.average_rtt_ms,
+        avg_server_verify_ms,
+        avg_network_ms,
         metrics.avg_bubble_ms,
         selected_offset,
         avg_verify_prefix_len,
@@ -530,8 +546,8 @@ def run_quick_test():
 
     base_client = create_http_cloud_client(SERVER_URL, timeout=120.0)
 
-    logger.info("Loading draft model on GPU 1 ...")
-    model_manager = VLLMModelManager(MODEL_PATH, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN, gpu_id=1)
+    logger.info("Loading draft model on GPU %d ...", DRAFT_GPU_ID)
+    model_manager = VLLMModelManager(MODEL_PATH, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN, gpu_id=DRAFT_GPU_ID)
     llm, tokenizer = model_manager.load()
     draft_generator = VLLMDraftGenerator(llm, tokenizer)
     edge_client = EdgeClient(
@@ -582,7 +598,7 @@ def run_quick_test():
     results: List[ExperimentResult] = []
     tree_method_suffix = f"b{tree_async_client.branch_width}"
 
-    for condition in [NetworkCondition.good(), NetworkCondition.medium()]:
+    for condition in [NetworkCondition.good()]:
         throttled = ThrottledCloudClient(base_client, condition)
         edge_client.cloud_client  = throttled
         tree_async_client.cloud_client = throttled
@@ -628,7 +644,7 @@ def run_quick_test():
     )
     logger.info(header)
     logger.info("-" * len(header))
-    for net in [c.name for c in NetworkCondition.all_profiles()]:
+    for net in ["good"]:
         d_tps = _avg([r.output.tokens_per_second for r in results if r.method == "direct" and r.network == net])
         row = f"{net:<10}  {d_tps:>8.1f}"
         for mname in methods_to_show:

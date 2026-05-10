@@ -12,8 +12,8 @@ a calibrated throttle wrapper so every method sees identical link parameters.
 ## Hardware
 
 ```
-GPU 0 (RTX 4090)  →  cloud / verify server   Qwen2.5-14B-Instruct-AWQ
-GPU 1 (RTX 4090)  →  edge  / draft model     Qwen2.5-3B-Instruct-AWQ
+GPU 0 (RTX 3090)  →  cloud / verify server   Qwen2.5-32B-Instruct-AWQ
+GPU 1 (RTX 3090)  →  edge  / draft model     Qwen2.5-1.5B-Instruct-AWQ
 ```
 
 ---
