@@ -312,66 +312,117 @@ class TreeAsyncEdgeClient:
                 prefix.extend(base_draft[:offset])
                 branch_prefixes.append((offset, prefix))
 
-            branch_result: List = []
+            branch_base_id = tree_id * 100
+            branch_lock = threading.Lock()
+            branch_stop = threading.Event()
+            branch_done_at: List[float] = []
+            branch_batch_ms: List[float] = [0.0]
+            branch_records: Dict[int, TreeBranch] = {
+                branch_base_id + branch_index: TreeBranch(
+                    branch_id=branch_base_id + branch_index,
+                    offset=offset,
+                    prefix=list(prefix),
+                    draft_ids=[],
+                    draft_logprobs=[],
+                    draft_time_ms=0.0,
+                )
+                for branch_index, (offset, prefix) in enumerate(branch_prefixes, start=1)
+            }
 
             def _run_branch_draft(
                 prefixes=branch_prefixes,
-                out=branch_result,
-                branch_base_id=tree_id * 100,
+                branch_base_id=branch_base_id,
             ):
-                batch_t0 = time.perf_counter()
+                """Stream branch drafts token-by-token for early reuse.
+
+                The snapshot consumed after verification may contain partial
+                branches. That is intentional: a partial branch is enough when
+                it bridges the accepted base suffix plus correction token.
+                """
                 try:
-                    if prefixes and hasattr(self.draft_generator, "generate_draft_tokens_batch"):
-                        draft_resps_ = self.draft_generator.generate_draft_tokens_batch(
-                            [
-                                DraftRequest(verified_prefix=list(prefix), num_draft_tokens=k)
-                                for _, prefix in prefixes
-                            ],
-                            temperature=self.temperature,
-                        )
-                    else:
-                        draft_resps_ = []
-                        for _, prefix in prefixes:
-                            draft_resps_.append(
+                    active = [
+                        {
+                            "branch_id": branch_base_id + branch_index,
+                            "prefix": list(prefix),
+                            "draft_ids": [],
+                        }
+                        for branch_index, (_, prefix) in enumerate(prefixes, start=1)
+                    ]
+
+                    for _ in range(k):
+                        if branch_stop.is_set() or not active:
+                            break
+
+                        step_t0 = time.perf_counter()
+                        if hasattr(self.draft_generator, "generate_draft_tokens_batch"):
+                            draft_resps_ = self.draft_generator.generate_draft_tokens_batch(
+                                [
+                                    DraftRequest(
+                                        verified_prefix=item["prefix"] + item["draft_ids"],
+                                        num_draft_tokens=1,
+                                    )
+                                    for item in active
+                                ],
+                                temperature=self.temperature,
+                            )
+                        else:
+                            draft_resps_ = [
                                 self.draft_generator.generate_draft_tokens(
                                     DraftRequest(
-                                        verified_prefix=list(prefix),
-                                        num_draft_tokens=k,
+                                        verified_prefix=item["prefix"] + item["draft_ids"],
+                                        num_draft_tokens=1,
                                     ),
                                     temperature=self.temperature,
                                 )
-                            )
-                    batch_draft_ms_ = (time.perf_counter() - batch_t0) * 1000
-                    per_branch_draft_ms_ = (
-                        batch_draft_ms_ / len(draft_resps_) if draft_resps_ else 0.0
-                    )
-                    drafted_branches = []
-                    for branch_index, ((offset, prefix), draft_resp) in enumerate(
-                        zip(prefixes, draft_resps_),
-                        start=1,
-                    ):
-                        if not draft_resp.draft_token_ids:
-                            continue
-                        drafted_branches.append(
-                            TreeBranch(
-                                branch_id=branch_base_id + branch_index,
-                                offset=offset,
-                                prefix=list(prefix),
-                                draft_ids=draft_resp.draft_token_ids,
-                                draft_logprobs=draft_resp.logprobs,
-                                draft_time_ms=per_branch_draft_ms_,
-                            )
-                        )
-                    out.append(
-                        (
-                            drafted_branches,
-                            batch_draft_ms_,
-                            per_branch_draft_ms_,
-                            time.perf_counter(),
-                        )
-                    )
+                                for item in active
+                            ]
+
+                        step_ms = (time.perf_counter() - step_t0) * 1000
+                        if branch_stop.is_set():
+                            break
+                        per_branch_step_ms = step_ms / len(active) if active else 0.0
+                        next_active = []
+                        with branch_lock:
+                            branch_batch_ms[0] += step_ms
+                            for item, draft_resp in zip(active, draft_resps_):
+                                if not draft_resp.draft_token_ids:
+                                    continue
+
+                                token_id = draft_resp.draft_token_ids[0]
+                                logprob = (
+                                    draft_resp.logprobs[0]
+                                    if draft_resp.logprobs
+                                    else -float("inf")
+                                )
+                                item["draft_ids"].append(token_id)
+                                record = branch_records[item["branch_id"]]
+                                record.draft_ids.append(token_id)
+                                record.draft_logprobs.append(float(logprob))
+                                record.draft_time_ms += per_branch_step_ms
+                                next_active.append(item)
+                        active = next_active
+
+                    with branch_lock:
+                        branch_done_at.append(time.perf_counter())
                 except Exception as exc:
                     logger.error("Branch draft error: %s", exc)
+
+            def _snapshot_streamed_branches():
+                with branch_lock:
+                    streamed = [
+                        TreeBranch(
+                            branch_id=record.branch_id,
+                            offset=record.offset,
+                            prefix=list(record.prefix),
+                            draft_ids=list(record.draft_ids),
+                            draft_logprobs=list(record.draft_logprobs),
+                            draft_time_ms=record.draft_time_ms,
+                        )
+                        for record in branch_records.values()
+                        if record.draft_ids
+                    ]
+                    done_at = branch_done_at[0] if branch_done_at else None
+                    return streamed, branch_batch_ms[0], done_at
 
             branch_thread = threading.Thread(target=_run_branch_draft, daemon=True)
             if branch_prefixes:
@@ -394,15 +445,14 @@ class TreeAsyncEdgeClient:
             if not base_verify_result:
                 break
             base_resp_cloud, verify_done = base_verify_result[0]
-            branch_ready_at_verify = bool(branch_result)
-            draft_resps = []
-            batch_draft_ms = 0.0
-            per_branch_draft_ms = 0.0
-            branch_done = None
-            if branch_ready_at_verify:
-                drafted_branches, batch_draft_ms, per_branch_draft_ms, branch_done = branch_result[0]
+            branch_stop.set()
+            if branch_thread.is_alive():
+                branch_thread.join(timeout=0.001)
+            drafted_branches, batch_draft_ms, branch_done = _snapshot_streamed_branches()
+            if drafted_branches:
                 branches.extend(drafted_branches)
                 metrics.total_edge_draft_time_ms += batch_draft_ms
+            streamed_branch_tokens = sum(len(branch.draft_ids) for branch in drafted_branches)
             verify_rtt_ms = base_resp_cloud.rtt_ms or ((verify_done - verify_start) * 1000)
             exposed_branch_ms = 0.0
             if branch_done is not None:
@@ -470,6 +520,7 @@ class TreeAsyncEdgeClient:
                     "base_accepted": base_accepted,
                     "base_draft_ms": base_draft_ms,
                     "branch_draft_ms": batch_draft_ms,
+                    "streamed_branch_tokens": streamed_branch_tokens,
                     "exposed_branch_ms": exposed_branch_ms,
                     "active_spec_branches": len(branch_offsets),
                     "base_wait_ms": base_wait_ms,

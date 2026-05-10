@@ -1,4 +1,4 @@
-from typing import List
+from typing import Iterator, List, Tuple
 import logging
 
 from core.protocol import DraftRequest, DraftResponse
@@ -128,6 +128,33 @@ class VLLMDraftGenerator:
             ))
 
         return responses
+
+    def stream_draft_tokens(
+        self,
+        request: DraftRequest,
+        temperature: float = 0.0,
+        top_p: float = 0.95,
+    ) -> Iterator[Tuple[int, float]]:
+        """Yield draft tokens as soon as each token is available.
+
+        vLLM's offline ``LLM.generate`` API returns a complete request, so this
+        uses one-token decode steps to expose a streaming interface to callers
+        that can benefit from partial draft work.
+        """
+        prefix = list(request.verified_prefix)
+        for _ in range(request.num_draft_tokens):
+            response = self.generate_draft_tokens(
+                DraftRequest(verified_prefix=list(prefix), num_draft_tokens=1),
+                temperature=temperature,
+                top_p=top_p,
+            )
+            if not response.draft_token_ids:
+                break
+
+            token_id = response.draft_token_ids[0]
+            logprob = response.logprobs[0] if response.logprobs else -float("inf")
+            prefix.append(token_id)
+            yield token_id, logprob
     
     def decode_tokens(self, token_ids: List[int]) -> str:
         """Decode token IDs to text."""
