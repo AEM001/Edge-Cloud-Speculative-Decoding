@@ -332,6 +332,11 @@ class TreeAsyncEdgeClient:
             def _run_branch_draft(
                 prefixes=branch_prefixes,
                 branch_base_id=branch_base_id,
+                local_branch_records=branch_records,
+                local_branch_lock=branch_lock,
+                local_branch_stop=branch_stop,
+                local_branch_done_at=branch_done_at,
+                local_branch_batch_ms=branch_batch_ms,
             ):
                 """Stream branch drafts token-by-token for early reuse.
 
@@ -350,7 +355,7 @@ class TreeAsyncEdgeClient:
                     ]
 
                     for _ in range(k):
-                        if branch_stop.is_set() or not active:
+                        if local_branch_stop.is_set() or not active:
                             break
 
                         step_t0 = time.perf_counter()
@@ -378,12 +383,12 @@ class TreeAsyncEdgeClient:
                             ]
 
                         step_ms = (time.perf_counter() - step_t0) * 1000
-                        if branch_stop.is_set():
+                        if local_branch_stop.is_set():
                             break
                         per_branch_step_ms = step_ms / len(active) if active else 0.0
                         next_active = []
-                        with branch_lock:
-                            branch_batch_ms[0] += step_ms
+                        with local_branch_lock:
+                            local_branch_batch_ms[0] += step_ms
                             for item, draft_resp in zip(active, draft_resps_):
                                 if not draft_resp.draft_token_ids:
                                     continue
@@ -395,15 +400,15 @@ class TreeAsyncEdgeClient:
                                     else -float("inf")
                                 )
                                 item["draft_ids"].append(token_id)
-                                record = branch_records[item["branch_id"]]
+                                record = local_branch_records[item["branch_id"]]
                                 record.draft_ids.append(token_id)
                                 record.draft_logprobs.append(float(logprob))
                                 record.draft_time_ms += per_branch_step_ms
                                 next_active.append(item)
                         active = next_active
 
-                    with branch_lock:
-                        branch_done_at.append(time.perf_counter())
+                    with local_branch_lock:
+                        local_branch_done_at.append(time.perf_counter())
                 except Exception as exc:
                     logger.error("Branch draft error: %s", exc)
 

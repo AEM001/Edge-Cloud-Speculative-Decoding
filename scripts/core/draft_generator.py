@@ -1,5 +1,6 @@
-from typing import Iterator, List, Tuple
 import logging
+import threading
+from typing import Iterator, List, Tuple
 
 from core.protocol import DraftRequest, DraftResponse
 
@@ -11,6 +12,7 @@ class VLLMDraftGenerator:
     def __init__(self, llm, tokenizer):
         self.llm = llm
         self.tokenizer = tokenizer
+        self._generate_lock = threading.Lock()
         
     def generate_draft_tokens(
         self, 
@@ -35,11 +37,12 @@ class VLLMDraftGenerator:
         )
 
         from vllm import TokensPrompt
-        outputs = self.llm.generate(
-            prompts=[TokensPrompt(prompt_token_ids=list(prefix))],
-            sampling_params=sampling_params,
-            use_tqdm=False,
-        )
+        with self._generate_lock:
+            outputs = self.llm.generate(
+                prompts=[TokensPrompt(prompt_token_ids=list(prefix))],
+                sampling_params=sampling_params,
+                use_tqdm=False,
+            )
         
         output = outputs[0]
         
@@ -95,11 +98,12 @@ class VLLMDraftGenerator:
             max_tokens=k,
             logprobs=1,
         )
-        outputs = self.llm.generate(
-            prompts=[TokensPrompt(prompt_token_ids=list(req.verified_prefix)) for req in requests],
-            sampling_params=sampling_params,
-            use_tqdm=False,
-        )
+        with self._generate_lock:
+            outputs = self.llm.generate(
+                prompts=[TokensPrompt(prompt_token_ids=list(req.verified_prefix)) for req in requests],
+                sampling_params=sampling_params,
+                use_tqdm=False,
+            )
 
         responses: List[DraftResponse] = []
         for output, req in zip(outputs, requests):

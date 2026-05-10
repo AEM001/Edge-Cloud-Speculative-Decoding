@@ -1,6 +1,35 @@
-vllm>=0.4.0
-torch>=2.0.0
-transformers>=4.35.0
-accelerate>=0.24.0
-numpy>=1.26.0
-requests>=2.31.0
+# Core ML/LLM dependencies
+vllm==0.20.1
+torch>=2.11.0
+torchaudio>=2.11.0
+torchvision>=0.26.0
+transformers==5.7.0
+accelerate==1.13.0
+
+# Numerical computing
+numpy==2.2.6
+
+# HTTP and API
+requests==2.33.1
+aiohttp==3.13.5
+httpx==0.28.1
+
+# Web framework
+fastapi==0.136.1
+uvicorn==0.46.0
+starlette==0.52.1
+pydantic==2.13.3
+pydantic-core==2.46.3
+pydantic-settings==2.14.0
+
+# Hugging Face
+huggingface-hub==1.13.0
+
+# Visualization
+matplotlib==3.10.9
+
+# Alternative LLM framework
+sglang==0.5.2
+
+# Flash Attention (pip will find appropriate pre-compiled wheel for your CUDA/PyTorch version)
+flash-attn>=2.8.0
