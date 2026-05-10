@@ -2,22 +2,39 @@
 name = "picospec"
 version = "1.0.0"
 description = "PicoSpec — synchronous and asynchronous speculative decoding toolkit"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 dependencies = [
-    "torch==2.8.0",
-    "torchaudio==2.8.0",
-    "torchvision",
-    "transformers>=4.35.0",
-    "accelerate>=0.24.0",
-    "numpy>=1.26.0",
-    "requests>=2.31.0",
-    "fastapi>=0.110.0",
-    "uvicorn>=0.29.0",
-    "matplotlib>=3.8.0",
-    "huggingface-hub>=0.23.0",
+    "vllm==0.20.1",
+    "torch>=2.11.0",
+    "torchaudio>=2.11.0",
+    "torchvision>=0.26.0",
+    "transformers==5.7.0",
+    "accelerate==1.13.0",
+    "numpy==2.2.6",
+    "requests==2.33.1",
+    "aiohttp==3.13.5",
+    "httpx==0.28.1",
+    "fastapi==0.136.1",
+    "uvicorn==0.46.0",
+    "starlette==0.52.1",
+    "pydantic==2.13.3",
+    "pydantic-core==2.46.3",
+    "pydantic-settings==2.14.0",
+    "matplotlib==3.10.9",
+    "huggingface-hub==1.13.0",
     "sglang==0.5.2",
 ]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv]
+index-strategy = "unsafe-best-match"
+
+[tool.hatch.build.targets.wheel]
+packages = ["scripts", "models"]
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cu128"
+name = "pytorch-cu128"
