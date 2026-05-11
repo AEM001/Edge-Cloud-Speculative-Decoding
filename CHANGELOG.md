@@ -2,6 +2,17 @@
 
 ## 2026-05-11
 
+08:55
+- Added `scripts/experiments/analyze_quick_results.py` to analyze raw quick-test `quick_test_results.json` and `quick_test_rounds.jsonl` records directly.
+- Generated raw-data analysis CSV tables and PNG charts under `scripts/experiments/outputs_quick/analysis/`.
+- Wrote `scripts/experiments/outputs_quick/analysis/report.md` manually from inspected raw tables/charts, including throughput, prompt-type, acceptance, tree-offset, and verifier-scaling observations.
+- Noted that the raw run contains completed `good` and `medium` records only; bursty entries in the summary are zero-filled and excluded from the report.
+
+09:06
+- Added `scripts/experiments/analyze_acceptance_dynamics.py` to study raw acceptance-length dynamics separately from the main summary analysis.
+- Generated acceptance-dynamics charts/tables for state timelines, dead-zone clustering, transition probabilities, prefix-length effects, round-position drift, and middle-acceptance lengths.
+- Extended the raw-data report with acceptance-dynamics observations: dead zones cluster by prompt/phase, recent acceptance is predictive, prefix length alone is not a reliable acceptance predictor, and middle acceptance should be handled as conditional branch-policy value.
+
 - Updated quick-test analysis to derive Tree Async diagnostics from raw `quick_test_results.json` / `quick_test_rounds.jsonl` records instead of relying only on aggregated `quick_test_summary.json`.
 - Reframed the Tree Async objective as using the edge draft pipeline to absorb cloud verification + RTT wait, rather than saying draft time disappears.
 - Added raw pipeline diagnostics for `base_draft_ms`, `branch_draft_ms`, `total_wait_ms`, `exposed_branch_ms`, `prefetched_tokens`, and `selected_offset`.
