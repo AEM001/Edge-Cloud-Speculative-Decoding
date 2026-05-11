@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-05-11
+
+- Updated quick-test analysis to derive Tree Async diagnostics from raw `quick_test_results.json` / `quick_test_rounds.jsonl` records instead of relying only on aggregated `quick_test_summary.json`.
+- Reframed the Tree Async objective as using the edge draft pipeline to absorb cloud verification + RTT wait, rather than saying draft time disappears.
+- Added raw pipeline diagnostics for `base_draft_ms`, `branch_draft_ms`, `total_wait_ms`, `exposed_branch_ms`, `prefetched_tokens`, and `selected_offset`.
+- Fixed the time-breakdown chart/report so Tree draft time is taken from raw branch draft timing instead of near-zero exposed tail time.
+- Found from raw slot results that the previous K=8/B=3 offset heuristic effectively used speculative offsets `[8, 4]`, while offset `4` was never selected.
+- Changed the Tree Async branch-offset heuristic to prioritize the full-acceptance branch and the strongest short-acceptance mode, making K=8/B=3 use speculative offsets `[8, 1]`.
+- Verified the updated tree async client with `py_compile` and a direct `_tree_offsets(8, 8)` check.
+
 ## 2026-05-10
 
 - Updated hardware configuration from 2x RTX 4090 to 2x RTX 3090.

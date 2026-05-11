@@ -165,9 +165,10 @@ class TreeAsyncEdgeClient:
         if spec_ahead <= 0:
             return [0]
         max_offset = min(k, spec_ahead)
+        short_mode = 1 if max_offset >= 1 else 0
         center = max(0, min(max_offset, int(round(self.BASE_ACCEPTANCE_RATIO * k))))
         lower_mid = max(1, int(round(0.45 * k)))
-        seeds = [max_offset, lower_mid, center]
+        seeds = [max_offset, short_mode, center, lower_mid]
 
         offsets: List[int] = []
         for offset in seeds:
@@ -177,7 +178,7 @@ class TreeAsyncEdgeClient:
 
         delta = 1
         while len(offsets) < self.branch_width and delta <= k:
-            for candidate in (lower_mid - delta, center - delta, center + delta, max_offset - delta):
+            for candidate in (short_mode + delta, center - delta, lower_mid - delta, center + delta, max_offset - delta):
                 clipped = max(0, min(max_offset, candidate))
                 if clipped not in offsets:
                     offsets.append(clipped)
