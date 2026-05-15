@@ -80,14 +80,10 @@ class SpeculativeMetrics:
 
 @dataclass
 class AsyncDetailMetrics:
-    launched_branch_count: float = 0.0
-    ready_branch_count: float = 0.0
-    reused_branch_count: float = 0.0
-    prefetched_tokens: float = 0.0
-    exposed_branch_ms: float = 0.0
-    selected_offset: float = 0.0
-    base_accepted: float = 0.0
-    stale_branch_count: float = 0.0
+    branch_reused: bool = False
+    reused_tokens: float = 0.0
+    predraft_window_ms: float = 0.0
+    reuse_prep_time_ms: float = 0.0
 
 
 @dataclass
@@ -358,32 +354,23 @@ def run_tree_spec_case(
     net_useful = accepted / metrics.total_rounds if metrics.total_rounds else 0
     correction_tokens = max(0, metrics.generated_tokens - accepted)
     method_name = f"tree_k{k}_b{tree_async_client.branch_width}"
-    branch_width = _avg([s.get("tree_branch_width", 0) for s in metrics.slot_details])
-    selected_offset = _avg([s.get("selected_offset", 0) for s in metrics.slot_details])
-    stale_branches = _avg([s.get("stale_branches", 0) for s in metrics.slot_details])
-    base_accept = _avg([s.get("base_accepted", 0) for s in metrics.slot_details])
-    base_draft_ms = _avg([s.get("base_draft_ms", 0) for s in metrics.slot_details])
-    branch_draft_ms = _avg([s.get("branch_draft_ms", 0) for s in metrics.slot_details])
-    active_spec_branches = _avg([s.get("active_spec_branches", 0) for s in metrics.slot_details])
-    exposed_branch_ms = _avg([s.get("exposed_branch_ms", 0) for s in metrics.slot_details])
-    ready_branch_count = _avg([max(0, s.get("tree_branch_width", 0) - 1) for s in metrics.slot_details])
-    reused_branch_count = _avg([1 if s.get("selected_offset", 0) > 0 else 0 for s in metrics.slot_details])
-    prefetched_tokens = _avg([s.get("prefetched_tokens", 0) for s in metrics.slot_details])
-    base_wait_ms = _avg([s.get("base_wait_ms", 0) for s in metrics.slot_details])
-    total_wait_ms = _avg([s.get("total_wait_ms", 0) for s in metrics.slot_details])
-    spec_verify_wall_ms = _avg([s.get("spec_verify_wall_ms", 0) for s in metrics.slot_details])
-    avg_verify_prefix_len = _avg([s.get("verify_prefix_len", 0) or 0 for s in metrics.slot_details])
-    avg_verify_draft_len = _avg([s.get("verify_draft_len", 0) or 0 for s in metrics.slot_details])
-    avg_verify_input_len = _avg([s.get("verify_input_len", 0) or 0 for s in metrics.slot_details])
-    avg_server_verify_ms = _avg([s.get("verify_ms", 0) or 0 for s in metrics.slot_details])
+    
+    # Simplified metrics from AsyncRequestMetrics
+    branch_reused = metrics.branch_reused
+    reused_tokens = metrics.reused_tokens / metrics.total_rounds if metrics.total_rounds else 0.0
+    predraft_window_ms = metrics.predraft_window_ms / metrics.total_rounds if metrics.total_rounds else 0.0
+    reuse_prep_time_ms = metrics.reuse_prep_time_ms / metrics.total_rounds if metrics.total_rounds else 0.0
+    
     avg_network_ms = (
         net_stats["total_simulated_overhead_ms"] / net_stats["num_calls"]
         if net_stats["num_calls"]
         else 0.0
     )
+    avg_server_verify_ms = metrics.total_server_verify_time_ms / metrics.total_rounds if metrics.total_rounds else 0.0
+    
     logger.info(
         "    %s: %d tok  %5.0f ms  %5.1f tok/s  accept=%4.1f%%  net_useful=%.2f tok/round  "
-        "rounds=%d  rtt=%d ms  verify_ms=%.0f  sim_net=%.0f  bubble=%.0fms  offset=%.1f  verify_prefix=%.0f  verify_input=%.0f",
+        "rounds=%d  rtt=%d ms  verify_ms=%.0f  sim_net=%.0f  bubble=%.0fms",
         method_name,
         metrics.generated_tokens,
         total_ms,
@@ -395,23 +382,13 @@ def run_tree_spec_case(
         avg_server_verify_ms,
         avg_network_ms,
         metrics.avg_bubble_ms,
-        selected_offset,
-        avg_verify_prefix_len,
-        avg_verify_input_len,
     )
     logger.info(
-        "      tree_diag: base_accept=%.2f  base_draft=%.0fms  branch_draft=%.0fms  "
-        "exposed_branch=%.0fms  active_spec=%.1f  base_wait=%.0fms  total_wait=%.0fms  "
-        "spec_verify_wall=%.0fms  stale=%.1f",
-        base_accept,
-        base_draft_ms,
-        branch_draft_ms,
-        exposed_branch_ms,
-        active_spec_branches,
-        base_wait_ms,
-        total_wait_ms,
-        spec_verify_wall_ms,
-        stale_branches,
+        "      tree_diag: branch_reused=%s  reused_tokens=%.1f  predraft_window=%.0fms  reuse_prep=%.0fms",
+        branch_reused,
+        reused_tokens,
+        predraft_window_ms,
+        reuse_prep_time_ms,
     )
     return ExperimentResult(
         method=method_name,
@@ -452,33 +429,14 @@ def run_tree_spec_case(
             wasted_draft_tokens=max(0, metrics.total_drafted_tokens - accepted),
         ),
         async_detail=AsyncDetailMetrics(
-            launched_branch_count=active_spec_branches,
-            ready_branch_count=ready_branch_count,
-            reused_branch_count=reused_branch_count,
-            prefetched_tokens=prefetched_tokens,
-            exposed_branch_ms=exposed_branch_ms,
-            selected_offset=selected_offset,
-            base_accepted=base_accept,
-            stale_branch_count=stale_branches,
+            branch_reused=branch_reused,
+            reused_tokens=reused_tokens,
+            predraft_window_ms=predraft_window_ms,
+            reuse_prep_time_ms=reuse_prep_time_ms,
         ),
-        verify_runtime=VerifyRuntimeMetrics(
-            avg_prefix_len=avg_verify_prefix_len,
-            avg_draft_len=avg_verify_draft_len,
-            avg_input_len=avg_verify_input_len,
-            prefix_caching=_first([s.get("enable_prefix_caching") for s in metrics.slot_details]),
-            enforce_eager=_first([s.get("enforce_eager") for s in metrics.slot_details]),
-            attention_backend=_first([s.get("attention_backend") for s in metrics.slot_details]),
-            vllm_version=_first([s.get("vllm_version") for s in metrics.slot_details]),
-        ),
+        verify_runtime=VerifyRuntimeMetrics(),
         raw={
-            "slot_details": metrics.slot_details,
             "network": net_stats,
-            "avg_branch_width": branch_width,
-            "avg_base_draft_ms": base_draft_ms,
-            "avg_branch_draft_ms": branch_draft_ms,
-            "avg_base_wait_ms": base_wait_ms,
-            "avg_total_wait_ms": total_wait_ms,
-            "avg_spec_verify_wall_ms": spec_verify_wall_ms,
         },
     )
 

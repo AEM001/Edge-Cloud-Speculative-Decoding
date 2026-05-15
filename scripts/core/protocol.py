@@ -61,7 +61,14 @@ class CloudResponse:
     accepted_len: int
     correction_token_id: Optional[int]
     server_verify_time_ms: float
-    rtt_ms: Optional[float] = None
+    rtt_ms: Optional[float] = None  # Pure network delay
+    end_to_end_ms: Optional[float] = None  # End-to-end latency (server + network)
+    
+    # Detailed timing breakdown
+    model_time_ms: Optional[float] = None  # Actual vLLM model processing time
+    http_overhead_ms: Optional[float] = None  # FastAPI + serialization overhead
+    network_tx_ms: Optional[float] = None  # Time to send request (uplink transmission)
+    network_rx_ms: Optional[float] = None  # Time to receive response (downlink transmission)
     
     def to_dict(self):
         return {
@@ -70,6 +77,11 @@ class CloudResponse:
             "correction_token_id": self.correction_token_id,
             "server_verify_time_ms": self.server_verify_time_ms,
             "rtt_ms": self.rtt_ms,
+            "end_to_end_ms": self.end_to_end_ms,
+            "model_time_ms": self.model_time_ms,
+            "http_overhead_ms": self.http_overhead_ms,
+            "network_tx_ms": self.network_tx_ms,
+            "network_rx_ms": self.network_rx_ms,
         }
     
     @classmethod
@@ -80,4 +92,9 @@ class CloudResponse:
             correction_token_id=data.get("correction_token_id"),
             server_verify_time_ms=data["server_verify_time_ms"],
             rtt_ms=data.get("rtt_ms"),
+            end_to_end_ms=data.get("end_to_end_ms"),
+            model_time_ms=data.get("model_time_ms"),
+            http_overhead_ms=data.get("http_overhead_ms"),
+            network_tx_ms=data.get("network_tx_ms"),
+            network_rx_ms=data.get("network_rx_ms"),
         )

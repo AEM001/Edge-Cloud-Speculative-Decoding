@@ -28,16 +28,20 @@ class RequestMetrics:
     total_network_time_ms: float = 0.0
     average_rtt_ms: float = 0.0
     
+    # Detailed timing breakdown
+    total_model_time_ms: float = 0.0  # Actual vLLM model processing time
+    total_http_overhead_ms: float = 0.0  # FastAPI + serialization overhead
+    total_network_tx_ms: float = 0.0  # Time to send request (uplink transmission)
+    total_network_rx_ms: float = 0.0  # Time to receive response (downlink transmission)
+    
     # Token metrics
     generated_tokens: int = 0
     total_rounds: int = 0
-    mean_K_chosen: float = 0.0
     
     # Acceptance metrics
     acceptance_ratio: float = 0.0
     total_drafted_tokens: int = 0
     total_accepted_drafted_tokens: int = 0
-    wasted_drafted_tokens: int = 0
     
     # Network metrics
     uplink_bytes: int = 0
@@ -50,10 +54,6 @@ class RequestMetrics:
         """Compute derived metrics from collected data."""
         if self.total_drafted_tokens > 0:
             self.acceptance_ratio = self.total_accepted_drafted_tokens / self.total_drafted_tokens
-        self.wasted_drafted_tokens = self.total_drafted_tokens - self.total_accepted_drafted_tokens
-        
-        if self.total_rounds > 0:
-            self.mean_K_chosen = self.total_drafted_tokens / self.total_rounds
 
 
 class EdgeClient:
@@ -170,7 +170,8 @@ class EdgeClient:
             # Send to cloud
             cloud_response = self.cloud_client(edge_request)
             
-            request_time_ms = (time.time() - request_start) * 1000
+            request_end = time.time()
+            request_time_ms = (request_end - request_start) * 1000
             
             downlink_size = 48
             metrics.downlink_bytes += downlink_size
@@ -196,13 +197,27 @@ class EdgeClient:
             metrics.total_accepted_drafted_tokens += accepted_len
             metrics.total_edge_draft_time_ms += draft_time_ms
             metrics.total_server_verify_time_ms += cloud_response.server_verify_time_ms
+            
+            # Record detailed timing from server
+            if hasattr(cloud_response, 'model_time_ms') and cloud_response.model_time_ms:
+                metrics.total_model_time_ms += cloud_response.model_time_ms
+            if hasattr(cloud_response, 'http_overhead_ms') and cloud_response.http_overhead_ms:
+                metrics.total_http_overhead_ms += cloud_response.http_overhead_ms
+            
             # Network time = RTT (client-measured round-trip) - server verify time
             # rtt_ms is set by http_cloud_client as total round-trip including server
             if cloud_response.rtt_ms is not None:
                 network_time_ms = cloud_response.rtt_ms - cloud_response.server_verify_time_ms
+                # Estimate network tx/rx split (rough approximation based on payload sizes)
+                total_size = uplink_size + downlink_size
+                if total_size > 0:
+                    network_tx_ms = network_time_ms * (uplink_size / total_size)
+                    network_rx_ms = network_time_ms * (downlink_size / total_size)
+                    metrics.total_network_tx_ms += network_tx_ms
+                    metrics.total_network_rx_ms += network_rx_ms
             else:
                 network_time_ms = request_time_ms - cloud_response.server_verify_time_ms
-            metrics.total_network_time_ms += max(0.0, network_time_ms)
+                metrics.total_network_time_ms += max(0.0, network_time_ms)
             
             if cloud_response.rtt_ms:
                 # Update average RTT

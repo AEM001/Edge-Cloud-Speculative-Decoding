@@ -63,6 +63,8 @@ class VerifyResponse(BaseModel):
     accepted_len: int
     correction_token_id: Optional[int]
     server_verify_time_ms: float
+    model_time_ms: Optional[float] = None
+    http_overhead_ms: Optional[float] = None
 
 
 class GenerateRequest(BaseModel):
@@ -288,15 +290,24 @@ async def health():
 async def verify_draft(req: VerifyRequest):
     if _verifier is None:
         raise HTTPException(503, "Not ready")
-    accepted_len, correction, verify_ms = _verifier.verify(
+    
+    # Measure HTTP overhead (before model processing)
+    http_overhead_start = time.time()
+    
+    accepted_len, correction, model_ms = _verifier.verify(
         prefix_ids=req.prefix_ids,
         draft_ids=req.draft_ids,
     )
+    
+    http_overhead_ms = (time.time() - http_overhead_start) * 1000 - model_ms
+    
     return VerifyResponse(
         request_id=req.request_id,
         accepted_len=accepted_len,
         correction_token_id=correction,
-        server_verify_time_ms=verify_ms,
+        server_verify_time_ms=model_ms + http_overhead_ms,  # Total server time
+        model_time_ms=model_ms,
+        http_overhead_ms=http_overhead_ms,
     )
 
 

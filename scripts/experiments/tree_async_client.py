@@ -32,7 +32,7 @@ class _VerifyResult:
 
 @dataclass
 class AsyncRequestMetrics:
-    """Metrics for tree-based speculative decoding."""
+    """Metrics for tree-based speculative decoding (simplified)."""
     request_id: str
     prompt: str
 
@@ -46,21 +46,21 @@ class AsyncRequestMetrics:
     total_drafted_tokens: int = 0
     total_accepted_tokens: int = 0
     acceptance_ratio: float = 0.0
-    mean_k_chosen: float = 0.0
 
     # Timing breakdown
     total_edge_draft_time_ms: float = 0.0
     total_server_verify_time_ms: float = 0.0
     total_network_time_ms: float = 0.0
     average_rtt_ms: float = 0.0
-    total_bubble_ms: float = 0.0
     avg_bubble_ms: float = 0.0
 
-    # Pipeline metrics
-    async_speedup_vs_sync: float = 0.0
+    # Branch reuse metrics
+    branch_reused: bool = False
+    reused_tokens: int = 0
 
-    # Per-slot details
-    slot_details: List[Dict[str, Any]] = field(default_factory=list)
+    # Pre-draft timing
+    predraft_window_ms: float = 0.0
+    reuse_prep_time_ms: float = 0.0
 
     # Network
     uplink_bytes: int = 0
@@ -69,17 +69,8 @@ class AsyncRequestMetrics:
     def compute_derived(self):
         if self.total_drafted_tokens > 0:
             self.acceptance_ratio = self.total_accepted_tokens / self.total_drafted_tokens
-        if self.total_rounds > 0:
-            self.mean_k_chosen = self.total_drafted_tokens / self.total_rounds
-            self.avg_bubble_ms = self.total_bubble_ms / self.total_rounds
         if self.total_latency_ms > 0:
             self.tokens_per_second = 1000 * self.generated_tokens / self.total_latency_ms
-
-        mean_draft = self.total_edge_draft_time_ms / self.total_rounds if self.total_rounds else 0
-        mean_verify = self.total_server_verify_time_ms / self.total_rounds if self.total_rounds else 0
-        sync_time = mean_draft + mean_verify
-        async_time = max(mean_draft, mean_verify)
-        self.async_speedup_vs_sync = sync_time / async_time if async_time > 0 else 1.0
 
 
 @dataclass
@@ -456,27 +447,30 @@ class TreeAsyncEdgeClient:
             metrics.total_drafted_tokens += len(base_draft)
             metrics.total_edge_draft_time_ms += base_draft_ms
 
+            # Start timing: pre-draft window (send verify → receive response)
             bubble_t0 = time.perf_counter()
             verify_thread.join(timeout=120)
-            base_wait_ms = (time.perf_counter() - bubble_t0) * 1000
-            total_wait_ms = (time.perf_counter() - bubble_t0) * 1000
-            metrics.total_bubble_ms += total_wait_ms
+            verify_done = time.perf_counter()
+            predraft_window_ms = (verify_done - verify_start) * 1000
+            metrics.predraft_window_ms += predraft_window_ms
 
             if not base_verify_result:
                 break
-            base_resp_cloud, verify_done = base_verify_result[0]
+            base_resp_cloud, _ = base_verify_result[0]
             branch_stop.set()
             if branch_thread.is_alive():
                 branch_thread.join(timeout=0.001)
-            drafted_branches, batch_draft_ms, branch_done = _snapshot_streamed_branches()
+            
+            # Track bubble time (wait for async operations)
+            bubble_ms = (verify_done - bubble_t0) * 1000
+            if metrics.total_rounds > 0:
+                metrics.avg_bubble_ms = (metrics.avg_bubble_ms * (metrics.total_rounds - 1) + bubble_ms) / metrics.total_rounds
+
+            drafted_branches, batch_draft_ms, _ = _snapshot_streamed_branches()
             if drafted_branches:
                 branches.extend(drafted_branches)
                 metrics.total_edge_draft_time_ms += batch_draft_ms
-            streamed_branch_tokens = sum(len(branch.draft_ids) for branch in drafted_branches)
             verify_rtt_ms = base_resp_cloud.rtt_ms or ((verify_done - verify_start) * 1000)
-            exposed_branch_ms = 0.0
-            if branch_done is not None:
-                exposed_branch_ms = max(0.0, (branch_done - verify_done) * 1000)
             base_accepted = base_resp_cloud.accepted_len
             correction = base_resp_cloud.correction_token_id
             branch_results = [
@@ -484,8 +478,6 @@ class TreeAsyncEdgeClient:
                                             base_resp_cloud.rtt_ms or 0.0))
             ]
             metrics.uplink_bytes += (len(committed_prefix) + len(base_draft)) * 4 + 64
-            verify_prefix_len = len(committed_prefix)
-            verify_draft_len = len(base_draft)
 
             if not branch_results:
                 break
@@ -501,6 +493,9 @@ class TreeAsyncEdgeClient:
             if correction is not None:
                 new_committed.append(correction)
 
+            # Start timing: reuse prep time (receive response → send next request)
+            prep_start = time.perf_counter()
+            
             selected_branch = branches[0]
             prefetched_ids = []
             prefetched_logprobs = []
@@ -522,35 +517,17 @@ class TreeAsyncEdgeClient:
                 prefetched_ids, prefetched_logprobs = reusable
                 break
 
+            # Record branch reuse metrics
+            if prefetched_ids:
+                metrics.branch_reused = True
+                metrics.reused_tokens += len(prefetched_ids)
+            
+            prep_end = time.perf_counter()
+            reuse_prep_ms = (prep_end - prep_start) * 1000
+            metrics.reuse_prep_time_ms += reuse_prep_ms
+
             total_drafted = sum(len(b.draft_ids) for b in branches)
             metrics.total_accepted_tokens += base_accepted
-            metrics.slot_details.append(
-                {
-                    "slot_id": selected_branch.branch_id,
-                    "drafted": total_drafted,
-                    "accepted": base_accepted,
-                    "draft_ms": sum(b.draft_time_ms for b in branches),
-                    "verify_ms": sum(
-                        vr.cloud_response.server_verify_time_ms for _, vr in branch_results
-                    ),
-                    "rtt_ms": max(vr.rtt_ms for _, vr in branch_results),
-                    "tree_branch_width": len(branches),
-                    "selected_offset": selected_branch.offset,
-                    "stale_branches": sum(1 for b in branches if b.branch_id != selected_branch.branch_id),
-                    "base_accepted": base_accepted,
-                    "base_draft_ms": base_draft_ms,
-                    "branch_draft_ms": batch_draft_ms,
-                    "streamed_branch_tokens": streamed_branch_tokens,
-                    "exposed_branch_ms": exposed_branch_ms,
-                    "active_spec_branches": len(branch_offsets),
-                    "base_wait_ms": base_wait_ms,
-                    "total_wait_ms": total_wait_ms,
-                    "prefetched_tokens": len(prefetched_ids),
-                    "verify_prefix_len": verify_prefix_len,
-                    "verify_draft_len": verify_draft_len,
-                    "verify_input_len": verify_prefix_len + verify_draft_len,
-                }
-            )
             committed_prefix.clear()
             committed_prefix.extend(new_committed)
 

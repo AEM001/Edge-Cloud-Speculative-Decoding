@@ -59,10 +59,10 @@ def load_results() -> pd.DataFrame:
                 "acceptance_rate": row["speculative"]["acceptance_rate"],
                 "accepted_per_round": row["speculative"]["accepted_draft_per_round"],
                 "generated_per_round": row["speculative"]["generated_per_round"],
-                "prefetched_tokens": row["async_detail"]["prefetched_tokens"],
-                "reused_branch_count": row["async_detail"]["reused_branch_count"],
-                "selected_offset": row["async_detail"]["selected_offset"],
-                "exposed_branch_ms": row["async_detail"]["exposed_branch_ms"],
+                "branch_reused": row["async_detail"]["branch_reused"],
+                "reused_tokens": row["async_detail"]["reused_tokens"],
+                "predraft_window_ms": row["async_detail"]["predraft_window_ms"],
+                "reuse_prep_time_ms": row["async_detail"]["reuse_prep_time_ms"],
             }
         )
     df = pd.DataFrame(flat_rows)
@@ -115,8 +115,10 @@ def write_tables(df: pd.DataFrame, rounds: pd.DataFrame) -> None:
             rounds=("rounds", "mean"),
             acceptance_rate=("acceptance_rate", "mean"),
             accepted_per_round=("accepted_per_round", "mean"),
-            prefetched_tokens=("prefetched_tokens", "mean"),
-            reused_branch_count=("reused_branch_count", "mean"),
+            branch_reused=("branch_reused", "mean"),
+            reused_tokens=("reused_tokens", "mean"),
+            predraft_window_ms=("predraft_window_ms", "mean"),
+            reuse_prep_time_ms=("reuse_prep_time_ms", "mean"),
         )
         .reset_index()
     )
@@ -131,7 +133,8 @@ def write_tables(df: pd.DataFrame, rounds: pd.DataFrame) -> None:
             speedup_vs_direct=("speedup_vs_direct", "mean"),
             rounds=("rounds", "mean"),
             acceptance_rate=("acceptance_rate", "mean"),
-            prefetched_tokens=("prefetched_tokens", "mean"),
+            branch_reused=("branch_reused", "mean"),
+            reused_tokens=("reused_tokens", "mean"),
         )
         .reset_index()
     )
@@ -149,33 +152,7 @@ def write_tables(df: pd.DataFrame, rounds: pd.DataFrame) -> None:
         )["rounds"].transform("sum")
         acceptance.to_csv(ANALYSIS_DIR / "table_acceptance_distribution.csv", index=False)
 
-    if "selected_offset" in rounds:
-        tree = rounds[rounds["method"] == "tree_k8_b3"].copy()
-        offset_cols = [
-            "network",
-            "selected_offset",
-            "accepted",
-            "prefetched_tokens",
-            "base_draft_ms",
-            "branch_draft_ms",
-            "total_wait_ms",
-            "exposed_branch_ms",
-        ]
-        offset_summary = (
-            tree[offset_cols]
-            .groupby(["network", "selected_offset"], observed=True)
-            .agg(
-                slots=("accepted", "size"),
-                accepted=("accepted", "mean"),
-                prefetched_tokens=("prefetched_tokens", "mean"),
-                base_draft_ms=("base_draft_ms", "mean"),
-                branch_draft_ms=("branch_draft_ms", "mean"),
-                total_wait_ms=("total_wait_ms", "mean"),
-                exposed_branch_ms=("exposed_branch_ms", "mean"),
-            )
-            .reset_index()
-        )
-        offset_summary.to_csv(ANALYSIS_DIR / "table_tree_offsets.csv", index=False)
+    # Tree offsets table removed - slot_details no longer tracked in simplified metrics
 
     if "verify_input_len" in rounds:
         verify = rounds[rounds["method"].isin(["sync_k8", "tree_k8_b3"])].copy()
@@ -286,23 +263,6 @@ def plot_verify_scaling(rounds: pd.DataFrame) -> None:
     plt.close(fig)
 
 
-def plot_tree_offsets(rounds: pd.DataFrame) -> None:
-    tree = rounds[rounds["method"] == "tree_k8_b3"].copy()
-    fig, axes = plt.subplots(1, 2, figsize=(8.6, 3.8), sharey=True)
-    for ax, network in zip(axes, sorted(tree["network"].unique())):
-        sub = tree[tree["network"] == network]
-        counts = sub["selected_offset"].value_counts().sort_index()
-        ax.bar([str(int(x)) for x in counts.index], counts.values, color=COLORS["tree_k8_b3"])
-        ax.set_title(network)
-        ax.set_xlabel("Selected branch offset")
-        ax.grid(axis="y", alpha=0.25)
-    axes[0].set_ylabel("Tree rounds")
-    fig.suptitle("Tree Branch Reuse Decisions")
-    fig.tight_layout(rect=[0, 0, 1, 0.94])
-    fig.savefig(ANALYSIS_DIR / "chart_tree_selected_offsets.png", dpi=180)
-    plt.close(fig)
-
-
 def main() -> None:
     ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
     df = add_speedups(load_results())
@@ -314,7 +274,6 @@ def main() -> None:
     plot_speedup_by_prompt(df)
     plot_acceptance(rounds)
     plot_verify_scaling(rounds)
-    plot_tree_offsets(rounds)
     print(f"Wrote analysis outputs to {ANALYSIS_DIR}")
 
 

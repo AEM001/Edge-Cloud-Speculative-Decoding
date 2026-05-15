@@ -173,36 +173,15 @@ Already minimized in the current protocol:
 - Direct `/generate` uses a persistent `requests.Session`.
 
 This overhead is **intentional** when the research goal is measuring realistic
-cloud API latency. The five main architectural options, in order of impact:
+cloud API latency. Alternative architectural options:
 
-| Option | Description | Tradeoff |
-|--------|-------------|----------|
-| **vLLM OpenAI-compatible API** | Use `--served-model-name` + persistent HTTP connection; GPU batching is automatic; edge client becomes a standard `openai` call | Loses custom `prefix_ids` / `prompt_logprobs` control; requires re-engineering the verify logic |
-| **Batch multiple rounds per HTTP call** | Send 3–5 draft batches in one request; server verifies all and returns all results; amortises HTTP + IPC overhead across rounds | Increases latency per individual result; complicates the async pipeline |
-| **Raw socket / gRPC** | Replace FastAPI with a binary framing protocol; send token-ID arrays as `int32` arrays; eliminates Pydantic + JSON serialisation | High implementation cost; loses HTTP ecosystem (retries, health checks, load balancers) |
-| **Run vLLM in-process** | Embed vLLM directly in the verify server process instead of subprocess IPC; eliminates ZMQ (~15–20 ms/round) | Single-process; harder to isolate GPU memory between draft and verify |
-| **Accept HTTP as realistic cost** | If the research goal is measuring *network impact* on speculative decoding, HTTP overhead is part of realistic cloud-server latency — measure it, don't remove it | Means reported numbers include transport cost, not just model cost |
+- vLLM OpenAI-compatible API
+- Batch multiple rounds per HTTP call
+- Raw socket / gRPC
+- Run vLLM in-process
+- Accept HTTP as realistic cost (current approach)
 
 ---
-
-## Results
-
-For recent diagnostic findings on tree-based speculative decoding, see:
-`experiments/outputs_quick/DIAGNOSTIC_REPORT_2025-05-05.md`
-
----
-
-## Known Bottlenecks and Next Steps
-
-| Priority | Change | Expected gain |
-|----------|--------|---------------|
-| **High** | Improve tree offset prediction accuracy | Tree currently underperforms due to poor rejection point prediction; better prediction could enable true prefetch benefit |
-| **High** | Upgrade draft to `Qwen2.5-7B-Instruct-AWQ` | Higher acceptance rate reduces rounds; speculative methods more competitive |
-| **High** | Send token delta only (not full prefix_ids) per round | Cuts uplink payload sharply; requires server-side session state and recovery logic |
-| Medium | Run vLLM in-process to eliminate ZMQ IPC | Saves ~15–20 ms/round; simplifies deployment |
-| Medium | Binary token transport for `/verify` | Avoids JSON/Pydantic list overhead for token IDs |
-| Low | Shorter max_tokens (64 instead of 128) | Fewer rounds, less accumulated prefix overhead |
-| Low | Batch 3–5 verify rounds per HTTP call | Amortises transport cost; useful on very high-latency links |
 
 ### Tree-Based Decoding
 

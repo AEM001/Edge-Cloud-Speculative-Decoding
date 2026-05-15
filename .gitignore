@@ -19,8 +19,6 @@ wheels/
 .installed.cfg
 *.egg
 
-# learn
-/Docs/
 
 # Virtual environments
 .venv/

@@ -163,7 +163,8 @@ class ThrottledCloudClient:
         _sleep_ms(downlink_delay)
 
         simulated_overhead = uplink_delay + downlink_delay
-        response.rtt_ms = actual_server_ms + simulated_overhead
+        response.rtt_ms = simulated_overhead  # Pure network delay
+        response.end_to_end_ms = actual_server_ms + simulated_overhead  # End-to-end latency
 
         s = self.stats
         s.num_calls += 1
