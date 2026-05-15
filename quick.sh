@@ -1,0 +1,108 @@
+#!/bin/bash
+
+# Quick Test Configuration Script
+# Edit the variables below to customize your test run
+
+# ============================================
+# NETWORK CONDITION
+# Options: good, medium, bursty
+# You can specify multiple (space-separated)
+# ============================================
+NETWORK_CONDITIONS="good"
+
+# ============================================
+# MAX TOKENS TO GENERATE
+# Default: 128
+# ============================================
+MAX_TOKENS=128
+
+# ============================================
+# PROMPT COUNT PER TYPE
+# Number of prompts to load for each prompt type
+# Default: 10
+# ============================================
+PROMPT_COUNT=10
+
+# ============================================
+# PROMPT TYPES
+# Options: gsm8k, humaneval
+# You can specify multiple (space-separated)
+# ============================================
+PROMPT_TYPES="gsm8k humaneval"
+
+# ============================================
+# DRAFT MODEL SETTINGS
+# ============================================
+# These will be set after SCRIPT_DIR is defined below
+
+# ============================================
+# SPECULATIVE DECODING SETTINGS
+# ============================================
+K_VALUES="${K_VALUES:-17}"  # Draft length K (space-separated for multiple values)
+
+# ============================================
+# TREE ASYNC SETTINGS
+# ============================================
+TREE_BRANCH_WIDTH="${TREE_BRANCH_WIDTH:-3}"  # Number of tree branches
+TREE_BRANCH_DRAFT_LENGTH="${TREE_BRANCH_DRAFT_LENGTH:-15}"  # Pre-draft length for each tree branch
+
+# ============================================
+# VERIFY SERVER SETTINGS
+# ============================================
+VERIFY_SERVER_URL="${VERIFY_SERVER_URL:-http://localhost:6006}"
+
+# ============================================
+# END OF CONFIGURATION
+# ============================================
+
+# Script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Use .venv environment
+PYTHON="$SCRIPT_DIR/.venv/bin/python3"
+
+# ============================================
+# DRAFT MODEL SETTINGS (set after SCRIPT_DIR is defined)
+# ============================================
+DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-$SCRIPT_DIR/models/Qwen2.5-1.5B-Instruct-AWQ}"
+DRAFT_MODEL_NAME="${DRAFT_MODEL_NAME:-Qwen/Qwen2.5-1.5B-Instruct}"
+DRAFT_GPU_ID="${DRAFT_GPU_ID:-1}"
+DRAFT_GPU_MEM="${DRAFT_GPU_MEM:-0.4}"
+DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-4096}"
+
+# Export environment variables
+export DRAFT_MODEL_PATH
+export DRAFT_MODEL_NAME
+export DRAFT_GPU_ID
+export DRAFT_GPU_MEM
+export DRAFT_MAX_LEN
+export VERIFY_SERVER_URL
+
+# Build command
+CMD="$PYTHON scripts/experiments/quick_test.py \
+    --network ${NETWORK_CONDITIONS} \
+    --max-tokens ${MAX_TOKENS} \
+    --prompt-count ${PROMPT_COUNT} \
+    --prompt-types ${PROMPT_TYPES} \
+    --k-values ${K_VALUES} \
+    --tree-branch-width ${TREE_BRANCH_WIDTH} \
+    --tree-branch-draft-length ${TREE_BRANCH_DRAFT_LENGTH}"
+
+echo "=========================================="
+echo "Running Quick Test with Configuration:"
+echo "=========================================="
+echo "Network Conditions: ${NETWORK_CONDITIONS}"
+echo "Max Tokens: ${MAX_TOKENS}"
+echo "Prompt Count (per type): ${PROMPT_COUNT}"
+echo "Prompt Types: ${PROMPT_TYPES}"
+echo "=========================================="
+echo ""
+echo "Command:"
+echo "$CMD"
+echo ""
+echo "=========================================="
+echo ""
+
+# Run the test
+eval $CMD

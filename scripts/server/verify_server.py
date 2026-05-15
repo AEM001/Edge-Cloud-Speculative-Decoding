@@ -1,17 +1,3 @@
-"""
-Verify server — runs the target (7B) model and exposes an HTTP API
-for draft verification and direct generation.
-
-Start with:
-    python3 scripts/server/verify_server.py --port 6006
-
-Environment variables (override via .env or shell export):
-    VERIFY_MODEL_PATH   — path to the 7B AWQ model dir
-    VERIFY_GPU_MEM      — GPU memory utilization (default 0.90)
-    VERIFY_MAX_LEN      — max model length (default 4096)
-    VERIFY_QUANTIZATION — quantization method (default "awq")
-"""
-
 import argparse
 import importlib.metadata
 import logging
@@ -45,7 +31,7 @@ def _bool_env(name: str, default: bool) -> bool:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
-_DEFAULT_MODEL_PATH = "/root/code/draft/models/Qwen2.5-14B-Instruct-AWQ"
+_DEFAULT_MODEL_PATH = os.getenv("VERIFY_MODEL_PATH", "/root/code/draft/models/Qwen2.5-14B-Instruct-AWQ")
 
 
 # ---------------------------------------------------------------------------
@@ -146,35 +132,7 @@ class CloudVerifier:
         draft_ids: List[int],
         temperature: float = 0.0,
     ):
-        """
-        Greedy verification via a single prefill pass.
-        Returns (accepted_len, correction_token_id, ms).
 
-        How it works
-        ------------
-        Feed ``prefix_ids + draft_ids`` as the prompt with
-        ``prompt_logprobs=1`` and ``max_tokens=1``.
-
-        vLLM runs ONE prefill forward pass over all tokens, then ONE
-        decode step for the correction token.  Total GPU work:
-            prefill(prefix_len + K tokens)  +  1 decode step
-        vs the old approach:
-            K+1 sequential decode steps  (6× slower, measured empirically)
-
-        Prefix caching means the ``prefix_ids`` KV entries are reused
-        from the previous round — only the K draft positions are newly
-        computed.
-
-        ``prompt_logprobs`` semantics in vLLM
-        -------------------------------------
-        ``output.prompt_logprobs[i]`` contains requested logprob entries for
-        position ``i``, conditioned on tokens 0..i-1.
-        Positions 0..(prefix_len-1) are ``None`` (not requested).
-        Positions prefix_len..(prefix_len+K-1) hold the top-1 target
-        token we need for greedy verification. This verifier is correct
-        for temperature=0 greedy decoding; stochastic speculative sampling
-        needs target probabilities and rejection resampling instead.
-        """
         t0 = time.time()
 
         if not draft_ids:
@@ -217,10 +175,7 @@ class CloudVerifier:
             else:
                 break
 
-        # Correction token: what the verify model would generate at the
-        # first divergence point.  For accepted_len < K this is the
-        # argmax at position prefix_len+accepted_len (already in plp).
-        # For accepted_len == K it's the decode output token.
+
         correction = None
         if accepted_len < num_draft:
             pos = prefix_len + accepted_len
@@ -262,10 +217,10 @@ _verifier: Optional[CloudVerifier] = None
 async def _lifespan(app: FastAPI):
     global _verifier
     model_path = _env("VERIFY_MODEL_PATH", _DEFAULT_MODEL_PATH)
-    gpu_mem = float(_env("VERIFY_GPU_MEM", "0.55"))
+    gpu_mem = float(_env("VERIFY_GPU_MEM", "0.9"))
     max_len = int(_env("VERIFY_MAX_LEN", "4096"))
     quant = _env("VERIFY_QUANTIZATION", "awq")
-    tensor_parallel_size = int(_env("VERIFY_TENSOR_PARALLEL_SIZE", "2"))
+    tensor_parallel_size = int(_env("VERIFY_TENSOR_PARALLEL_SIZE", "1"))
     _verifier = CloudVerifier(
         model_path=model_path,
         gpu_memory_utilization=gpu_mem,

@@ -133,6 +133,39 @@ hidden with `async_detail.exposed_branch_ms`.
 
 ---
 
+## Prompt Datasets
+
+The system uses two prompt datasets for evaluation:
+
+**GSM8K (Grade School Math 8K)**
+- Test split: 1,319 prompts
+- Train split: 7,473 prompts
+- Format: Math word problems
+- Default: test split
+
+**HumanEval**
+- Test split: 164 prompts
+- Format: Python function completion problems
+- Source: OpenAI's HumanEval benchmark
+
+**Prompt Selection**
+- Prompts are **randomly sampled** from each dataset using `random.sample()`
+- Selection is filtered by character length (default: 200-500 characters)
+- Each prompt is assigned a sequential ID (1, 2, 3, ...) within the selected batch
+- The random selection ensures different prompts are used across test runs
+- Use `--prompt-count` in quick_test.py or quick.sh to control how many prompts are loaded per type
+
+**Configuration Example**
+```bash
+# Load 5 random prompts from each type
+./quick.sh  # with PROMPT_COUNT=5
+
+# Load only from GSM8K
+./quick.sh  # with PROMPT_TYPES="gsm8k"
+```
+
+---
+
 ## Metrics
 
 `quick_test.py` normalizes direct, sync speculative, and tree async rows into:

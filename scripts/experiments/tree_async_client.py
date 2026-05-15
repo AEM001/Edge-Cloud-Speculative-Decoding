@@ -100,8 +100,8 @@ class TreeAsyncEdgeClient:
         cloud_client: Callable[[EdgeRequest], CloudResponse],
         max_new_tokens: int = 128,
         temperature: float = 0.0,
-        lookahead: int = 1,
         branch_width: int = BRANCH_WIDTH,
+        branch_draft_length: int = 8,
         eos_token_id: Optional[int] = None,
     ):
         self.model_manager = model_manager
@@ -109,12 +109,12 @@ class TreeAsyncEdgeClient:
         self.cloud_client = cloud_client
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
-        self.lookahead = max(1, lookahead)
         self.tokenizer = draft_generator.tokenizer
         self.eos_token_id = eos_token_id
         if self.eos_token_id is None and self.tokenizer:
             self.eos_token_id = getattr(self.tokenizer, "eos_token_id", None)
         self.branch_width = max(1, branch_width)
+        self.branch_draft_length = branch_draft_length
 
     def generate(
         self,

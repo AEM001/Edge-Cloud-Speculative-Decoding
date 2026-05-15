@@ -1,16 +1,7 @@
-#!/usr/bin/env python3
-"""
-Quick sanity check: does speculative decoding (K=7) beat throttled direct?
-
-For each network condition the SAME throttle wrapper is applied to both
-direct and speculative, so the comparison is apples-to-apples.
-
-Results use a normalized metric schema so direct, sync speculative, and
-tree async runs can be compared through the same output/timing/speculative
-fields while keeping method-specific raw round details separately.
-"""
+import argparse
 import json
 import logging
+import os
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -24,7 +15,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from client.edge_client import EdgeClient
 from client.http_cloud_client import create_http_cloud_client
-from config import DRAFT_GPU_ID, DRAFT_GPU_MEM as GPU_MEMORY_UTILIZATION, DRAFT_MAX_LEN as MAX_MODEL_LEN, DRAFT_MODEL_NAME as MODEL_NAME, DRAFT_MODEL_PATH as MODEL_PATH
 from core.draft_generator import VLLMDraftGenerator
 from core.protocol import DraftRequest, EdgeRequest
 from experiments.network_conditions import NetworkCondition, ThrottledCloudClient
@@ -35,11 +25,14 @@ from experiments.tree_async_client import TreeAsyncEdgeClient
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-SERVER_URL = "http://localhost:6006"
-MAX_TOKENS = 128
-K_VALUES  = [8]      # draft length
-LOOKAHEAD = 1        # 1 verify in flight while 1 draft runs concurrently
-PROMPT_COUNT = 10   # per dataset
+# Read settings from environment variables (set by quick.sh)
+SERVER_URL = os.getenv("VERIFY_SERVER_URL", "http://localhost:6006")
+DRAFT_MODEL_PATH = Path(os.getenv("DRAFT_MODEL_PATH", "/root/code/draft/models/Qwen2.5-1.5B-Instruct-AWQ"))
+DRAFT_MODEL_NAME = os.getenv("DRAFT_MODEL_NAME", "Qwen/Qwen2.5-1.5B-Instruct")
+DRAFT_GPU_MEM = float(os.getenv("DRAFT_GPU_MEM", "0.4"))
+DRAFT_MAX_LEN = int(os.getenv("DRAFT_MAX_LEN", "4096"))
+DRAFT_GPU_ID = int(os.getenv("DRAFT_GPU_ID", "1"))
+
 DIRECT_SESSION = requests.Session()
 DIRECT_SESSION.trust_env = False
 
@@ -123,19 +116,18 @@ class DirectTiming:
     dl_ms: float
 
 
-def _load_prompt_set():
-    """Load 15 prompts each from gsm8k and humaneval, roughly same length."""
+def _load_prompt_set(prompt_types: List[str], prompt_count: int):
+    """Load prompts from specified types with given count per type."""
     prompts = []
-    for src in ("gsm8k", "humaneval"):
-        loaded = load_prompts(source=src, count=PROMPT_COUNT, min_length=200, max_length=500)
+    for src in prompt_types:
+        loaded = load_prompts(source=src, count=prompt_count, min_length=200, max_length=500)
         prompts.extend((p, src) for p in loaded)
-    logger.info("Loaded %d prompts: %d gsm8k + %d humaneval", len(prompts),
-                sum(1 for _, t in prompts if t == "gsm8k"),
-                sum(1 for _, t in prompts if t == "humaneval"))
+    type_counts = {t: sum(1 for _, pt in prompts if pt == t) for t in prompt_types}
+    logger.info("Loaded %d prompts: %s", len(prompts), ", ".join(f"{count} {t}" for t, count in type_counts.items()))
     return prompts
 
 
-def _direct_with_throttle(prompt: str, throttled: ThrottledCloudClient) -> DirectTiming:
+def _direct_with_throttle(prompt: str, throttled: ThrottledCloudClient, max_tokens: int) -> DirectTiming:
     """Direct /generate with same simulated network delay applied to direct too."""
     cond = throttled.condition
     now = time.perf_counter() - throttled._start_wall
@@ -148,7 +140,7 @@ def _direct_with_throttle(prompt: str, throttled: ThrottledCloudClient) -> Direc
     try:
         resp = DIRECT_SESSION.post(
             f"{SERVER_URL}/generate",
-            json={"prompt": prompt, "max_tokens": MAX_TOKENS, "temperature": 0.0},
+            json={"prompt": prompt, "max_tokens": max_tokens, "temperature": 0.0},
             timeout=120.0,
         )
         resp.raise_for_status()
@@ -196,9 +188,9 @@ def _tree_async_speculative(async_client: TreeAsyncEdgeClient, prompt: str, k: i
         return None
 
 
-def run_direct_case(prompt_meta, text: str, throttled: ThrottledCloudClient) -> Optional[ExperimentResult]:
+def run_direct_case(prompt_meta, text: str, throttled: ThrottledCloudClient, max_tokens: int) -> Optional[ExperimentResult]:
     throttled.reset_stats()
-    timing = _direct_with_throttle(text, throttled)
+    timing = _direct_with_throttle(text, throttled, max_tokens)
     if timing.tokens <= 0:
         return None
     tps = timing.tokens / (timing.total_ms / 1000)
@@ -320,7 +312,7 @@ def run_sync_spec_case(
             generated_per_round=metrics.generated_tokens / metrics.total_rounds if metrics.total_rounds else 0.0,
             accepted_draft_per_round=net_useful,
             acceptance_rate=metrics.acceptance_ratio,
-            wasted_draft_tokens=metrics.wasted_drafted_tokens,
+            wasted_draft_tokens=max(0, metrics.total_drafted_tokens - accepted),
         ),
         async_detail=AsyncDetailMetrics(),
         verify_runtime=VerifyRuntimeMetrics(
@@ -451,9 +443,11 @@ def _first(lst):
     return None
 
 
-def _build_summary(results: List[ExperimentResult], methods_to_show: List[str]) -> Dict[str, Any]:
-    summary: Dict[str, Any] = {}
-    for net in [c.name for c in NetworkCondition.all_profiles()]:
+def _build_summary(results: List[ExperimentResult], methods_to_show: List[str], config: Dict[str, Any]) -> Dict[str, Any]:
+    summary: Dict[str, Any] = {"config": config}
+    
+    # Overall summary by network condition
+    for net in config["network_conditions"]:
         direct_rows = [r for r in results if r.method == "direct" and r.network == net]
         direct_tps = _avg([r.output.tokens_per_second for r in direct_rows])
         methods: Dict[str, Any] = {
@@ -482,47 +476,70 @@ def _build_summary(results: List[ExperimentResult], methods_to_show: List[str]) 
                 "server_model_ms": _avg([r.timing.server_model_ms for r in rows]),
                 "avg_rtt_ms": _avg([r.timing.avg_rtt_ms for r in rows]),
                 "simulated_network_ms": _avg([r.timing.simulated_network_ms for r in rows]),
-                "launched_branch_count": _avg([
-                    r.async_detail.launched_branch_count for r in rows
-                ]),
-                "ready_branch_count": _avg([r.async_detail.ready_branch_count for r in rows]),
-                "reused_branch_count": _avg([r.async_detail.reused_branch_count for r in rows]),
-                "prefetched_tokens": _avg([r.async_detail.prefetched_tokens for r in rows]),
-                "exposed_branch_ms": _avg([r.async_detail.exposed_branch_ms for r in rows]),
             }
         summary[net] = methods
+    
+    # Per-prompt-type breakdown
+    for ptype in config["prompt_types"]:
+        ptype_summary: Dict[str, Any] = {}
+        for net in config["network_conditions"]:
+            direct_rows = [r for r in results if r.method == "direct" and r.network == net and r.prompt_type == ptype]
+            direct_tps = _avg([r.output.tokens_per_second for r in direct_rows])
+            methods: Dict[str, Any] = {
+                "direct": {
+                    "tokens_per_second": direct_tps,
+                    "total_time_ms": _avg([r.output.total_time_ms for r in direct_rows]),
+                }
+            }
+            for method in methods_to_show:
+                rows = [r for r in results if r.method == method and r.network == net and r.prompt_type == ptype]
+                tps = _avg([r.output.tokens_per_second for r in rows])
+                methods[method] = {
+                    "tokens_per_second": tps,
+                    "speedup_vs_direct": tps / direct_tps if direct_tps else 0.0,
+                    "total_time_ms": _avg([r.output.total_time_ms for r in rows]),
+                    "rounds": _avg([r.speculative.rounds for r in rows]),
+                    "acceptance_rate": _avg([r.speculative.acceptance_rate for r in rows]),
+                }
+            ptype_summary[net] = methods
+        summary[f"by_type_{ptype}"] = ptype_summary
+    
     return summary
 
 
-def run_quick_test():
+def run_quick_test(config: Dict[str, Any]):
     logger.info("=" * 70)
-    logger.info("QUICK TEST  —  Direct (throttled) vs Speculative K=%s (throttled)", K_VALUES)
-    logger.info("Draft model : %s", MODEL_NAME)
+    logger.info("QUICK TEST  —  Direct (throttled) vs Speculative K=%s (throttled)", config["k_values"])
+    logger.info("Draft model : %s", DRAFT_MODEL_NAME)
+    logger.info("Config: max_tokens=%d, prompt_count=%d, prompt_types=%s, networks=%s",
+                config["max_tokens"], config["prompt_count"], ",".join(config["prompt_types"]), ",".join(config["network_conditions"]))
+    logger.info("Speculative: k_values=%s, tree_branch_width=%d, tree_branch_draft_length=%d",
+                config["k_values"], config["tree_branch_width"], config["tree_branch_draft_length"])
     logger.info("=" * 70)
 
-    prompts = _load_prompt_set()
+    prompts = _load_prompt_set(config["prompt_types"], config["prompt_count"])
 
     base_client = create_http_cloud_client(SERVER_URL, timeout=120.0)
 
     logger.info("Loading draft model on GPU %d ...", DRAFT_GPU_ID)
-    model_manager = VLLMModelManager(MODEL_PATH, GPU_MEMORY_UTILIZATION, MAX_MODEL_LEN, gpu_id=DRAFT_GPU_ID)
+    model_manager = VLLMModelManager(DRAFT_MODEL_PATH, DRAFT_GPU_MEM, DRAFT_MAX_LEN, gpu_id=DRAFT_GPU_ID)
     llm, tokenizer = model_manager.load()
     draft_generator = VLLMDraftGenerator(llm, tokenizer)
     edge_client = EdgeClient(
         model_manager=model_manager,
         draft_generator=draft_generator,
         cloud_client=base_client,   # swapped per condition below
-        max_new_tokens=MAX_TOKENS,
+        max_new_tokens=config["max_tokens"],
         temperature=0.0,
     )
     tree_async_client = TreeAsyncEdgeClient(
         model_manager=model_manager,
         draft_generator=draft_generator,
         cloud_client=base_client,   # swapped per condition below
-        max_new_tokens=MAX_TOKENS,
+        max_new_tokens=config["max_tokens"],
         temperature=0.0,
-        lookahead=LOOKAHEAD,
-        branch_width=3,
+        branch_width=config["tree_branch_width"],
+        branch_draft_length=config["tree_branch_draft_length"],
     )
     logger.info("Draft model loaded.")
 
@@ -556,7 +573,19 @@ def run_quick_test():
     results: List[ExperimentResult] = []
     tree_method_suffix = f"b{tree_async_client.branch_width}"
 
-    for condition in [NetworkCondition.good(), NetworkCondition.medium()]:
+    # Build network conditions based on config
+    conditions = []
+    for net_name in config["network_conditions"]:
+        if net_name == "good":
+            conditions.append(NetworkCondition.good())
+        elif net_name == "medium":
+            conditions.append(NetworkCondition.medium())
+        elif net_name == "bursty":
+            conditions.append(NetworkCondition.bursty())
+        else:
+            logger.warning("Unknown network condition: %s", net_name)
+    
+    for condition in conditions:
         throttled = ThrottledCloudClient(base_client, condition)
         edge_client.cloud_client  = throttled
         tree_async_client.cloud_client = throttled
@@ -568,20 +597,20 @@ def run_quick_test():
             pid  = prompt_data["id"]
             text = prompt_data["text"]
             prompt_meta = {"id": pid, "type": ptype}
-            logger.info("  [%s | prompt %d] %s...", ptype, pid, text[:55])
+            logger.info("  [%s | prompt %d]", ptype, pid)
 
-            result = run_direct_case(prompt_meta, text, throttled)
+            result = run_direct_case(prompt_meta, text, throttled, config["max_tokens"])
             if result:
                 results.append(result)
             time.sleep(0.3)
 
-            for k in K_VALUES:
+            for k in config["k_values"]:
                 spec_result = run_sync_spec_case(edge_client, throttled, prompt_meta, text, k)
                 if spec_result:
                     results.append(spec_result)
                 time.sleep(0.3)
 
-            for k in K_VALUES:
+            for k in config["k_values"]:
                 tree_result = run_tree_spec_case(tree_async_client, throttled, prompt_meta, text, k)
                 if tree_result:
                     results.append(tree_result)
@@ -593,8 +622,8 @@ def run_quick_test():
     logger.info("SUMMARY  —  tok/s and speedup per network condition")
     logger.info("=" * 70)
     methods_to_show = (
-        [f"sync_k{k}" for k in K_VALUES]
-        + [f"tree_k{k}_{tree_method_suffix}" for k in K_VALUES]
+        [f"sync_k{k}" for k in config["k_values"]]
+        + [f"tree_k{k}_{tree_method_suffix}" for k in config["k_values"]]
     )
     col_w = 28
     header = f"{'Network':<10}  {'direct':>8}" + "".join(
@@ -602,7 +631,7 @@ def run_quick_test():
     )
     logger.info(header)
     logger.info("-" * len(header))
-    for net in ["good", "medium"]:
+    for net in config["network_conditions"]:
         d_tps = _avg([r.output.tokens_per_second for r in results if r.method == "direct" and r.network == net])
         row = f"{net:<10}  {d_tps:>8.1f}"
         for mname in methods_to_show:
@@ -616,6 +645,29 @@ def run_quick_test():
             col     = f"{s_tps:.1f} ({speedup:.3f}x{flag})"
             row    += f"  {col:>{col_w}}"
         logger.info(row)
+
+    # ── Per-prompt-type summary ──────────────────────────────────────────
+    for ptype in config["prompt_types"]:
+        logger.info("")
+        logger.info("=" * 70)
+        logger.info(f"SUMMARY  —  tok/s and speedup for {ptype}")
+        logger.info("=" * 70)
+        logger.info(header)
+        logger.info("-" * len(header))
+        for net in config["network_conditions"]:
+            d_tps = _avg([r.output.tokens_per_second for r in results if r.method == "direct" and r.network == net and r.prompt_type == ptype])
+            row = f"{net:<10}  {d_tps:>8.1f}"
+            for mname in methods_to_show:
+                s_tps = _avg([
+                    r.output.tokens_per_second
+                    for r in results
+                    if r.method == mname and r.network == net and r.prompt_type == ptype
+                ])
+                speedup = s_tps / d_tps if d_tps else 0
+                flag    = " ✓" if speedup >= 1.0 else ""
+                col     = f"{s_tps:.1f} ({speedup:.3f}x{flag})"
+                row    += f"  {col:>{col_w}}"
+            logger.info(row)
 
     # ── Save ─────────────────────────────────────────────────────────────
     output_dir = Path(__file__).parent / "outputs_quick"
@@ -643,7 +695,7 @@ def run_quick_test():
                 f.write(json.dumps({**base, "detail_index": index, "detail": detail}) + "\n")
 
     summary_file = output_dir / "quick_test_summary.json"
-    summary = _build_summary(results, methods_to_show)
+    summary = _build_summary(results, methods_to_show, config)
     with open(summary_file, "w") as f:
         json.dump(summary, f, indent=2)
 
@@ -653,6 +705,37 @@ def run_quick_test():
     return True
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run quick test with configurable settings")
+    parser.add_argument("--network", type=str, nargs='+', default=["good", "medium"],
+                        choices=["good", "medium", "bursty"],
+                        help="Network condition(s) to test (default: good medium)")
+    parser.add_argument("--max-tokens", type=int, default=128,
+                        help="Maximum tokens to generate (default: 128)")
+    parser.add_argument("--prompt-count", type=int, default=10,
+                        help="Number of prompts per type (default: 10)")
+    parser.add_argument("--prompt-types", type=str, nargs='+', default=["gsm8k", "humaneval"],
+                        choices=["gsm8k", "humaneval"],
+                        help="Prompt type(s) to use (default: gsm8k humaneval)")
+    parser.add_argument("--k-values", type=int, nargs='+', default=[8],
+                        help="Draft length K values (default: 8)")
+    parser.add_argument("--tree-branch-width", type=int, default=3,
+                        help="Number of tree branches (default: 3)")
+    parser.add_argument("--tree-branch-draft-length", type=int, default=8,
+                        help="Pre-draft length for each tree branch (default: 8)")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    success = run_quick_test()
+    args = parse_args()
+    config = {
+        "max_tokens": args.max_tokens,
+        "prompt_count": args.prompt_count,
+        "prompt_types": args.prompt_types,
+        "network_conditions": args.network,
+        "k_values": args.k_values,
+        "tree_branch_width": args.tree_branch_width,
+        "tree_branch_draft_length": args.tree_branch_draft_length,
+    }
+    success = run_quick_test(config)
     sys.exit(0 if success else 1)

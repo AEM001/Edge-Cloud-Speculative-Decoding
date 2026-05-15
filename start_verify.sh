@@ -3,7 +3,7 @@
 # By default the 14B verifier runs on GPU 0.
 #
 # Usage:
-#   bash scripts/start_verify.sh [--port 6006]
+#   bash start_verify.sh [--port 6006]
 #
 # Stop with: Ctrl+C
 
@@ -12,16 +12,37 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 PORT=${PORT:-6006}
 
+# ============================================
+# VERIFY SERVER CONFIGURATION
+# ============================================
+
+# Verify Model Settings
+VERIFY_MODEL_PATH="${VERIFY_MODEL_PATH:-$REPO_DIR/models/Qwen2.5-14B-Instruct-AWQ}"
+VERIFY_GPU_ID="${VERIFY_GPU_ID:-0}"
+VERIFY_GPU_MEM="${VERIFY_GPU_MEM:-0.9}"
+VERIFY_MAX_LEN="${VERIFY_MAX_LEN:-4096}"
+VERIFY_QUANTIZATION="${VERIFY_QUANTIZATION:-awq}"
+VERIFY_TENSOR_PARALLEL_SIZE="${VERIFY_TENSOR_PARALLEL_SIZE:-1}"
+
+# CUDA Graph Settings
+VERIFY_ENFORCE_EAGER="${VERIFY_ENFORCE_EAGER:-1}"  # 0 = enable CUDA graph, 1 = disable
+VERIFY_ENABLE_PREFIX_CACHING="${VERIFY_ENABLE_PREFIX_CACHING:-1}"
+
+# Attention Backend
+VLLM_ATTENTION_BACKEND="${VLLM_ATTENTION_BACKEND:-FLASH_ATTN}"
+
 # Use .venv environment
 PYTHON="$REPO_DIR/.venv/bin/python3"
 
-export VLLM_ATTENTION_BACKEND=FLASH_ATTN
-
-export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
-export VERIFY_TENSOR_PARALLEL_SIZE=${VERIFY_TENSOR_PARALLEL_SIZE:-1}
-export VERIFY_GPU_MEM=${VERIFY_GPU_MEM:-0.9}
-export VERIFY_ENFORCE_EAGER=${VERIFY_ENFORCE_EAGER:-1}
-export VERIFY_ENABLE_PREFIX_CACHING=${VERIFY_ENABLE_PREFIX_CACHING:-1}
+export CUDA_VISIBLE_DEVICES=$VERIFY_GPU_ID
+export VERIFY_MODEL_PATH
+export VERIFY_GPU_MEM
+export VERIFY_MAX_LEN
+export VERIFY_QUANTIZATION
+export VERIFY_TENSOR_PARALLEL_SIZE
+export VERIFY_ENFORCE_EAGER
+export VERIFY_ENABLE_PREFIX_CACHING
+export VLLM_ATTENTION_BACKEND
 
 # Parse optional --port arg
 while [[ $# -gt 0 ]]; do

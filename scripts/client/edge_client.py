@@ -112,7 +112,7 @@ class EdgeClient:
         verified_prefix = list(prompt_ids)
         
         logger.info(f"Starting generation for request {request_id} with policy {policy_name}")
-        logger.info(f"Prompt: {prompt!r}")
+        # logger.info(f"Prompt: {prompt!r}")  # Removed to avoid logging prompt text
         logger.info(f"Prompt tokens: {len(prompt_ids)}")
         
         round_id = 0
