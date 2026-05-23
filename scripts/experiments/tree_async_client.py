@@ -91,7 +91,7 @@ class TreeAsyncEdgeClient:
     """
 
     BRANCH_WIDTH: int = 3
-    BASE_ACCEPTANCE_RATIO: float = 0.60
+    PREDRAFT_ACCEPTANCE_RATIO: float = 0.60
 
     def __init__(
         self,
@@ -152,31 +152,19 @@ class TreeAsyncEdgeClient:
         )
         return metrics
 
-    def _tree_offsets(self, k: int, spec_ahead: int) -> List[int]:
-        if spec_ahead <= 0:
-            return [0]
-        max_offset = min(k, spec_ahead)
-        short_mode = 1 if max_offset >= 1 else 0
-        center = max(0, min(max_offset, int(round(self.BASE_ACCEPTANCE_RATIO * k))))
-        lower_mid = max(1, int(round(0.45 * k)))
-        seeds = [max_offset, short_mode, center, lower_mid]
+    def _tree_offsets(self, sent_draft_len: int) -> List[int]:
+        """Return the three simple pre-draft offsets for the current verify draft."""
+        if sent_draft_len <= 0:
+            return []
+
+        predraft_center = int(round(self.PREDRAFT_ACCEPTANCE_RATIO * self.branch_draft_length))
+        candidates = [1, sent_draft_len, predraft_center]
 
         offsets: List[int] = []
-        for offset in seeds:
-            clipped = max(0, min(max_offset, int(offset)))
+        for candidate in candidates:
+            clipped = max(1, min(sent_draft_len, int(candidate)))
             if clipped not in offsets:
                 offsets.append(clipped)
-
-        delta = 1
-        while len(offsets) < self.branch_width and delta <= k:
-            for candidate in (short_mode + delta, center - delta, lower_mid - delta, center + delta, max_offset - delta):
-                clipped = max(0, min(max_offset, candidate))
-                if clipped not in offsets:
-                    offsets.append(clipped)
-                if len(offsets) >= self.branch_width:
-                    break
-            delta += 1
-
         return offsets[:self.branch_width]
 
     def _prefetch_from_branch(
@@ -243,31 +231,22 @@ class TreeAsyncEdgeClient:
             tree_id = next_tree_id
             next_tree_id += 1
             k = policy(tree_id, [])
+            remaining_budget = max_tokens - (len(committed_prefix) - len(prompt_ids))
             branches: List[TreeBranch] = []
             if prefetched_ids:
-                base_draft = prefetched_ids[:k]
+                # Reused tokens are already available and valid for the current
+                # prefix. Send them immediately instead of waiting to fill K.
+                send_len = min(len(prefetched_ids), remaining_budget)
+                base_draft = prefetched_ids[:send_len]
                 base_logprobs = prefetched_logprobs[:len(base_draft)]
                 base_draft_ms = 0.0
                 prefetched_ids = prefetched_ids[len(base_draft):]
                 prefetched_logprobs = prefetched_logprobs[len(base_draft):]
-
-                remaining_k = k - len(base_draft)
-                if remaining_k > 0:
-                    base_t0 = time.perf_counter()
-                    topup_resp = self.draft_generator.generate_draft_tokens(
-                        DraftRequest(
-                            verified_prefix=list(committed_prefix) + base_draft,
-                            num_draft_tokens=remaining_k,
-                        ),
-                        temperature=self.temperature,
-                    )
-                    base_draft_ms = (time.perf_counter() - base_t0) * 1000
-                    base_draft.extend(topup_resp.draft_token_ids)
-                    base_logprobs.extend(topup_resp.logprobs)
             else:
+                draft_len = min(k, remaining_budget)
                 base_t0 = time.perf_counter()
                 base_resp = self.draft_generator.generate_draft_tokens(
-                    DraftRequest(verified_prefix=list(committed_prefix), num_draft_tokens=k),
+                    DraftRequest(verified_prefix=list(committed_prefix), num_draft_tokens=draft_len),
                     temperature=self.temperature,
                 )
                 base_draft_ms = (time.perf_counter() - base_t0) * 1000
@@ -310,8 +289,7 @@ class TreeAsyncEdgeClient:
             # Draft speculative branches in a separate background task. The
             # critical path never waits for this task; it only consumes branch
             # results that are already ready when base verification returns.
-            offsets = self._tree_offsets(k, len(base_draft))
-            branch_offsets = [o for o in offsets if o > 0][: max(0, self.branch_width - 1)]
+            branch_offsets = self._tree_offsets(len(base_draft))
             branch_prefixes = []
             for offset in branch_offsets:
                 prefix = list(committed_prefix)
@@ -360,7 +338,7 @@ class TreeAsyncEdgeClient:
                         for branch_index, (_, prefix) in enumerate(prefixes, start=1)
                     ]
 
-                    for _ in range(k):
+                    for _ in range(self.branch_draft_length):
                         if local_branch_stop.is_set() or not active:
                             break
 

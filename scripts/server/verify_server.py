@@ -76,7 +76,7 @@ class CloudVerifier:
         self,
         model_path: str,
         gpu_memory_utilization: float = 0.90,
-        max_model_len: int = 4096,
+        max_model_len: int = 32768,
         quantization: str = "awq",
         tensor_parallel_size: int = 1,
     ):
@@ -218,7 +218,7 @@ async def _lifespan(app: FastAPI):
     global _verifier
     model_path = _env("VERIFY_MODEL_PATH", _DEFAULT_MODEL_PATH)
     gpu_mem = float(_env("VERIFY_GPU_MEM", "0.9"))
-    max_len = int(_env("VERIFY_MAX_LEN", "4096"))
+    max_len = int(_env("VERIFY_MAX_LEN", "32768"))
     quant = _env("VERIFY_QUANTIZATION", "awq")
     tensor_parallel_size = int(_env("VERIFY_TENSOR_PARALLEL_SIZE", "1"))
     _verifier = CloudVerifier(

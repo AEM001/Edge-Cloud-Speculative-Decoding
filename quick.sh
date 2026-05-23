@@ -4,24 +4,17 @@
 # Edit the variables below to customize your test run
 
 # ============================================
-# NETWORK CONDITION
-# Options: good, medium, bursty
-# You can specify multiple (space-separated)
-# ============================================
-NETWORK_CONDITIONS="good"
-
-# ============================================
 # MAX TOKENS TO GENERATE
 # LongWriter prompts are intended for long-form generation.
 # ============================================
-MAX_TOKENS="${MAX_TOKENS:-2048}"
+MAX_TOKENS="${MAX_TOKENS:-4096}"
 
 # ============================================
 # PROMPT COUNT PER TYPE
 # Number of prompts to load for each prompt type
 # Default: 10
 # ============================================
-PROMPT_COUNT=10
+PROMPT_COUNT="${PROMPT_COUNT:-10}"
 
 # ============================================
 # PROMPT TYPES
@@ -30,7 +23,7 @@ PROMPT_COUNT=10
 #          longwriter_single_turn:input_8k, longwriter_single_turn:input_10k
 # You can specify multiple (space-separated)
 # ============================================
-PROMPT_TYPES="${PROMPT_TYPES:-longwriter_single_turn:input_8k}"
+PROMPT_TYPES="${PROMPT_TYPES:-longwriter_single_turn:input_10k}"
 
 # ============================================
 # DRAFT MODEL SETTINGS
@@ -38,15 +31,15 @@ PROMPT_TYPES="${PROMPT_TYPES:-longwriter_single_turn:input_8k}"
 # These will be set after SCRIPT_DIR is defined below
 
 # ============================================
-# SPECULATIVE DECODING SETTINGS
+# TREE BASE DRAFT SETTINGS
 # ============================================
-K_VALUES="${K_VALUES:-17}"  # Draft length K (space-separated for multiple values)
+K="${K:-12}"  # Base draft length
 
 # ============================================
 # TREE ASYNC SETTINGS
 # ============================================
 TREE_BRANCH_WIDTH="${TREE_BRANCH_WIDTH:-3}"  # Number of tree branches
-TREE_BRANCH_DRAFT_LENGTH="${TREE_BRANCH_DRAFT_LENGTH:-15}"  # Pre-draft length for each tree branch
+TREE_BRANCH_DRAFT_LENGTH="${TREE_BRANCH_DRAFT_LENGTH:-10}"  # Pre-draft length for each tree branch
 
 # ============================================
 # VERIFY SERVER SETTINGS
@@ -71,7 +64,7 @@ DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-$SCRIPT_DIR/models/Qwen2.5-1.5B-Instruct-A
 DRAFT_MODEL_NAME="${DRAFT_MODEL_NAME:-Qwen/Qwen2.5-1.5B-Instruct}"
 DRAFT_GPU_ID="${DRAFT_GPU_ID:-1}"
 DRAFT_GPU_MEM="${DRAFT_GPU_MEM:-0.4}"
-DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-8192}"
+DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-32768}"
 
 # Export environment variables
 export DRAFT_MODEL_PATH
@@ -83,21 +76,22 @@ export VERIFY_SERVER_URL
 
 # Build command
 CMD="$PYTHON scripts/experiments/quick_test.py \
-    --network ${NETWORK_CONDITIONS} \
     --max-tokens ${MAX_TOKENS} \
     --prompt-count ${PROMPT_COUNT} \
     --prompt-types ${PROMPT_TYPES} \
-    --k-values ${K_VALUES} \
+    --k ${K} \
     --tree-branch-width ${TREE_BRANCH_WIDTH} \
     --tree-branch-draft-length ${TREE_BRANCH_DRAFT_LENGTH}"
 
 echo "=========================================="
 echo "Running Quick Test with Configuration:"
 echo "=========================================="
-echo "Network Conditions: ${NETWORK_CONDITIONS}"
+echo "Network: good"
+echo "Methods: direct, tree_async"
 echo "Max Tokens: ${MAX_TOKENS}"
 echo "Prompt Count (per type): ${PROMPT_COUNT}"
 echo "Prompt Types: ${PROMPT_TYPES}"
+echo "K: ${K}"
 echo "=========================================="
 echo ""
 echo "Command:"

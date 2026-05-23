@@ -1,3 +1,11 @@
+5-23 21:16 +08
+- Simplified `quick_test.py` to a fixed quick run: good network only, direct generation plus tree async only.
+- Moved quick-result analysis out of `quick_test.py` into `scripts/experiments/analyze_quick_run.py`.
+- Updated `quick.sh` to match the fixed direct/tree quick-test shape and use `--k`.
+- Raised default draft and verify max model length to 32768 for long-input LongWriter runs.
+- Updated tree async reuse policy: reusable prefetched tokens are sent immediately in the next verify request, without topping up to full K.
+- Simplified tree branch offsets to `1`, last sent draft length, and `round(0.6 * tree_branch_draft_length)`.
+
 5-23 20:34
 - Updated dataset support for long-context / long-generation experiments.
 - Removed LongBench-v2 because it is multiple-choice with very short expected outputs.
