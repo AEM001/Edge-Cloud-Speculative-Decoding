@@ -120,7 +120,10 @@ def _load_prompt_set(prompt_types: List[str], prompt_count: int):
     """Load prompts from specified types with given count per type."""
     prompts = []
     for src in prompt_types:
-        loaded = load_prompts(source=src, count=prompt_count, min_length=200, max_length=500)
+        if src.startswith("longwriter"):
+            loaded = load_prompts(source=src, count=prompt_count)
+        else:
+            loaded = load_prompts(source=src, count=prompt_count, min_length=200, max_length=500)
         prompts.extend((p, src) for p in loaded)
     type_counts = {t: sum(1 for _, pt in prompts if pt == t) for t in prompt_types}
     logger.info("Loaded %d prompts: %s", len(prompts), ", ".join(f"{count} {t}" for t, count in type_counts.items()))
@@ -710,13 +713,16 @@ def parse_args():
     parser.add_argument("--network", type=str, nargs='+', default=["good", "medium"],
                         choices=["good", "medium", "bursty"],
                         help="Network condition(s) to test (default: good medium)")
-    parser.add_argument("--max-tokens", type=int, default=128,
-                        help="Maximum tokens to generate (default: 128)")
+    parser.add_argument("--max-tokens", type=int, default=2048,
+                        help="Maximum tokens to generate (default: 2048)")
     parser.add_argument("--prompt-count", type=int, default=10,
                         help="Number of prompts per type (default: 10)")
     parser.add_argument("--prompt-types", type=str, nargs='+', default=["gsm8k", "humaneval"],
-                        choices=["gsm8k", "humaneval"],
-                        help="Prompt type(s) to use (default: gsm8k humaneval)")
+                        help=(
+                            "Prompt type(s) to use. Supported: gsm8k, humaneval, "
+                            "longwriter, or "
+                            "longwriter_single_turn:input_8k"
+                        ))
     parser.add_argument("--k-values", type=int, nargs='+', default=[8],
                         help="Draft length K values (default: 8)")
     parser.add_argument("--tree-branch-width", type=int, default=3,

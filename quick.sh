@@ -12,9 +12,9 @@ NETWORK_CONDITIONS="good"
 
 # ============================================
 # MAX TOKENS TO GENERATE
-# Default: 128
+# LongWriter prompts are intended for long-form generation.
 # ============================================
-MAX_TOKENS=128
+MAX_TOKENS="${MAX_TOKENS:-2048}"
 
 # ============================================
 # PROMPT COUNT PER TYPE
@@ -25,10 +25,12 @@ PROMPT_COUNT=10
 
 # ============================================
 # PROMPT TYPES
-# Options: gsm8k, humaneval
+# Options: gsm8k, humaneval, longwriter,
+#          longwriter_single_turn:input_4k, longwriter_single_turn:input_6k,
+#          longwriter_single_turn:input_8k, longwriter_single_turn:input_10k
 # You can specify multiple (space-separated)
 # ============================================
-PROMPT_TYPES="gsm8k humaneval"
+PROMPT_TYPES="${PROMPT_TYPES:-longwriter_single_turn:input_8k}"
 
 # ============================================
 # DRAFT MODEL SETTINGS
@@ -69,7 +71,7 @@ DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-$SCRIPT_DIR/models/Qwen2.5-1.5B-Instruct-A
 DRAFT_MODEL_NAME="${DRAFT_MODEL_NAME:-Qwen/Qwen2.5-1.5B-Instruct}"
 DRAFT_GPU_ID="${DRAFT_GPU_ID:-1}"
 DRAFT_GPU_MEM="${DRAFT_GPU_MEM:-0.4}"
-DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-4096}"
+DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-8192}"
 
 # Export environment variables
 export DRAFT_MODEL_PATH

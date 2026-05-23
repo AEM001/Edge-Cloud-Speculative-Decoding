@@ -1,0 +1,12 @@
+5-23 20:34
+- Updated dataset support for long-context / long-generation experiments.
+- Removed LongBench-v2 because it is multiple-choice with very short expected outputs.
+- Added original LongWriter-6k as `data/longwriter_6k/train.jsonl`.
+- Removed duplicated raw LongWriter partition files; only the original normalized file is kept.
+- Added derived single-turn long-input dataset under `data/longwriter_single_turn/`:
+  - `input_4k.jsonl`: 256 examples, 4000 input words
+  - `input_6k.jsonl`: 256 examples, 6000 input words
+  - `input_8k.jsonl`: 256 examples, 8000 input words
+  - `input_10k.jsonl`: 256 examples, 10000 input words
+- Each derived single-turn example keeps a long target response with at least 4000 target words.
+- Updated `prompt_loader.py`, `quick_test.py`, and `quick.sh` to use `longwriter` and `longwriter_single_turn:input_*` sources.
