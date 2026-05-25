@@ -1,18 +1,19 @@
 # Edge-Cloud Speculative Decoding
 
-Research system measuring the effect of network latency and bandwidth on
-speculative decoding when the draft and verify models are physically separated.
+Research system for edge-cloud speculative decoding when the draft and verify
+models are physically separated.
 
 A small draft model runs on the **edge device** (GPU 1); a large verify model
-runs on the **cloud server** (GPU 0). Network conditions are simulated with
-a calibrated throttle wrapper so every method sees identical link parameters.
+runs on the **cloud server** (GPU 0). The current quick experiment is fixed to
+the `good` network profile and compares direct generation against the tree async
+method.
 
 ---
 
 ## Hardware
 
 ```
-GPU 0 (RTX 3090)  →  cloud / verify server   Qwen2.5-32B-Instruct-AWQ
+GPU 0 (RTX 3090)  →  cloud / verify server   Qwen2.5-14B-Instruct-AWQ
 GPU 1 (RTX 3090)  →  edge  / draft model     Qwen2.5-1.5B-Instruct-AWQ
 ```
 
@@ -35,10 +36,11 @@ draft/
 │   │   ├── __init__.py
 │   │   └── verify_server.py       # FastAPI server: /verify (speculative) + /generate (direct)
 │   └── experiments/               # Experiment-specific utilities
-│       ├── network_conditions.py  # Throttle simulation: good / medium / bursty profiles
-│       ├── prompt_loader.py       # Prompt dataset (simple + complex categories)
-│       ├── tree_async_client.py   # Tree-based async speculative baseline
-│       ├── quick_test.py          # Fast sanity check: direct vs sync_k7 vs tree_k7_b3
+│       ├── network_conditions.py  # Throttle simulation profiles; quick test uses good
+│       ├── prompt_loader.py       # GSM8K, HumanEval, LongWriter prompt loader
+│       ├── tree_async_client.py   # Tree-based async speculative client
+│       ├── quick_test.py          # Direct vs tree async on good network
+│       ├── analyze_quick_run.py   # Builds summaries / round details from quick results
 │       └── outputs_quick/
 │           ├── quick_test_results.json
 │           ├── quick_test_rounds.jsonl
@@ -59,21 +61,55 @@ draft/
 
 ## Quick Start
 
-### 1. Start the verify server (GPU 0)
+### 1. Start the verify server on GPU 0
 
 ```bash
-VERIFY_GPU_MEM=0.85 python3 scripts/server/verify_server.py --port 6006
+bash start_verify.sh
 ```
 
-### 2. Run the quick sanity check (GPU 1)
+`start_verify.sh` defaults to:
+
+- verify model: `models/Qwen2.5-14B-Instruct-AWQ`
+- GPU: `0`
+- max model length: `32768`
+- prefix caching: enabled
+- eager mode: enabled by default via `VERIFY_ENFORCE_EAGER=1`
+
+### 2. Run the quick test on GPU 1
 
 ```bash
-python3 scripts/experiments/quick_test.py
+./quick.sh
 ```
 
-Runs **direct** vs **sync_k7** vs **tree_k7_b3** (tree-based with branch prefetch)
-over the configured prompt/network subset. It writes normalized result rows,
-raw per-round details, and grouped summaries to `scripts/experiments/outputs_quick/`.
+The wrapper runs **direct** vs **tree async** on the `good` network profile.
+Current wrapper defaults are:
+
+- prompt source: `longwriter_single_turn:input_10k`
+- prompt count: `10`
+- max generated tokens: `4096`
+- tree base draft length: `K=12`
+- tree branch width: `3`
+- tree branch pre-draft length: `10`
+- draft max model length: `32768`
+
+`quick_test.py` writes normalized result rows to:
+
+```text
+scripts/experiments/outputs_quick/quick_test_results.json
+```
+
+### 3. Analyze the quick-test output
+
+```bash
+python3 scripts/experiments/analyze_quick_run.py
+```
+
+The analyzer reads `quick_test_results.json` and writes:
+
+```text
+quick_test_summary.json   # direct vs tree averages and speedup
+quick_test_rounds.jsonl   # flattened direct / per-method detail rows
+```
 
 ## Verify Method — Greedy Single Prefill Pass
 
@@ -93,7 +129,7 @@ llm.generate([TokensPrompt(prefix_ids + draft_ids)], ...)
 ```
 
 vLLM prefix caching means the `prefix_ids` KV entries are reused from the
-previous round — only the K new draft positions are computed from scratch.
+previous round, so only new draft positions are computed from scratch.
 
 The `/verify` protocol is intentionally slim:
 
@@ -102,25 +138,47 @@ The `/verify` protocol is intentionally slim:
 - Response sends `request_id`, `accepted_len`, `correction_token_id`, and `server_verify_time_ms`.
 - Accepted token IDs are not returned because the edge already has `draft_ids[:accepted_len]`.
 
-- **Current cost:** ~30 ms/round on 14B AWQ (K=7, simple prompts)
-- **Previous broken approach:** `generate(prefix, max_tokens=K+1)` — 196 ms/round (6.5×)
+- Default verify context length is `32768` for long-input LongWriter runs.
 
 ---
 
-## Tree Async Baseline
+## Tree Async Method
 
 ```
 Round n:
-  draft K base tokens
-  send base draft to verifier in a background thread
-  start tree branch drafting in another background thread
+  if reusable prefetched tokens exist:
+      send those tokens immediately as the verify draft
+  else:
+      draft K base tokens and send them as the verify draft
+
+  while verification runs:
+      pre-draft local branches from simple offsets
+
   when verify returns:
       commit accepted base tokens + correction
-      use a branch only if it is already ready and matches the verified path
+      reuse branch suffix tokens only if a branch reconnects to the verified path
 ```
 
-Branch offsets are centered around `round(0.60 * K)`. A branch is reusable only
-when it reconnects exactly to the target-verified path:
+The tree client is latency-oriented: if any reusable prefetched tokens are
+available from the previous round, it sends them immediately. It does **not**
+wait to top them up to the full base draft length `K`.
+
+If no reusable tokens exist, the edge model drafts a fresh base draft of length
+`K`, capped by the remaining generation budget.
+
+The current pre-draft offset policy is deliberately simple. For a verify draft
+of length `sent_draft_len`, branches are started at:
+
+```text
+1
+sent_draft_len
+round(0.6 * tree_branch_draft_length)
+```
+
+Offsets are clipped into `[1, sent_draft_len]`, duplicates are removed, and the
+result is bounded by `tree_branch_width`.
+
+A branch is reusable only when it reconnects exactly to the target-verified path:
 
 ```text
 branch.offset <= accepted_len
@@ -128,14 +186,14 @@ branch.draft_ids starts with base_draft[branch.offset:accepted_len] + correction
 ```
 
 If a branch is still running when the verifier result arrives, the critical path
-does not wait for it. The benchmark records whether branch drafting was actually
-hidden with `async_detail.exposed_branch_ms`.
+does not wait for it. Only branch tokens already available at verifier return
+time are considered.
 
 ---
 
 ## Prompt Datasets
 
-The system uses two prompt datasets for evaluation:
+The system supports three prompt families for evaluation:
 
 **GSM8K (Grade School Math 8K)**
 - Test split: 1,319 prompts
@@ -148,41 +206,51 @@ The system uses two prompt datasets for evaluation:
 - Format: Python function completion problems
 - Source: OpenAI's HumanEval benchmark
 
+**LongWriter / Long-Input Sources**
+- Original LongWriter data: `data/longwriter_6k/train.jsonl`
+- Derived single-turn partitions:
+  - `longwriter_single_turn:input_4k`
+  - `longwriter_single_turn:input_6k`
+  - `longwriter_single_turn:input_8k`
+  - `longwriter_single_turn:input_10k`
+- Current quick wrapper default: `longwriter_single_turn:input_10k`
+
 **Prompt Selection**
-- Prompts are **randomly sampled** from each dataset using `random.sample()`
-- Selection is filtered by character length (default: 200-500 characters)
+- Prompts are randomly sampled from each dataset using `random.sample()`
+- GSM8K and HumanEval selection is filtered by character length, defaulting to 200-500 characters in the quick loader
+- LongWriter sources are not length-filtered by the quick loader
 - Each prompt is assigned a sequential ID (1, 2, 3, ...) within the selected batch
 - The random selection ensures different prompts are used across test runs
 - Use `--prompt-count` in quick_test.py or quick.sh to control how many prompts are loaded per type
 
 **Configuration Example**
 ```bash
-# Load 5 random prompts from each type
-./quick.sh  # with PROMPT_COUNT=5
+PROMPT_COUNT=5 ./quick.sh
 
-# Load only from GSM8K
-./quick.sh  # with PROMPT_TYPES="gsm8k"
+PROMPT_TYPES="gsm8k" ./quick.sh
+
+K=8 TREE_BRANCH_DRAFT_LENGTH=8 ./quick.sh
 ```
 
 ---
 
 ## Metrics
 
-`quick_test.py` normalizes direct, sync speculative, and tree async rows into:
+`quick_test.py` normalizes direct and tree async rows into:
 
 - `output`: generated tokens, total wall time, tok/s
 - `timing`: local draft time, server model time, HTTP/RPC overhead, simulated UL/DL/network, RTT
 - `speculative`: rounds, K, drafted tokens, accepted draft tokens, correction tokens, acceptance
-- `async_detail`: launched/ready/reused branches, prefetched tokens, exposed branch time
+- `async_detail`: branch reuse flag, average reused tokens, pre-draft window, reuse prep time
 - `verify_runtime`: prefix/draft/input lengths and vLLM runtime settings
-- `raw`: method-specific direct timing or per-round details
+- `raw`: method-specific direct timing or tree network stats
 
 Output files:
 
 ```text
-quick_test_results.json   # normalized per-run rows
-quick_test_rounds.jsonl   # raw direct/round/slot details
-quick_test_summary.json   # grouped averages and speedups
+quick_test_results.json   # written by quick_test.py
+quick_test_summary.json   # written by analyze_quick_run.py
+quick_test_rounds.jsonl   # written by analyze_quick_run.py
 ```
 
 ---
@@ -216,13 +284,9 @@ cloud API latency. Alternative architectural options:
 
 ---
 
-### Tree-Based Decoding
+### Current Scope
 
-The tree-based client (`tree_async_client.py`) attempts to hide branch drafting behind verify RTT by predicting the rejection point and prefetching continuation tokens. Current limitations:
-
-- **Requires exact offset prediction**: Branch prefetch only helps when `branch.offset == actual accepted_len` and `branch.draft_ids[0] == correction_token`
-- **Earlier offsets are allowed but must bridge**: If `branch.offset < accepted_len`, the branch must first reproduce `base_draft[offset:accepted_len] + correction_token`.
-- **Prediction quality is the bottleneck**: Branch work only helps when it is ready before verify returns and reconnects to the target path.
-- **Alternative strategies**: Consider hybrid approaches (sync → tree when confidence high) or improved prediction using smaller history windows
-
-See `experiments/outputs_quick/DIAGNOSTIC_REPORT_2025-05-05.md` for detailed analysis.
+The synchronous speculative client still exists in `scripts/client/edge_client.py`,
+but it is not part of the current quick-test path. The quick experiment is now
+kept intentionally narrow: `good` network, direct baseline, tree async method,
+and separate post-run analysis.
