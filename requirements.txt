@@ -1,9 +1,11 @@
 # Core ML/LLM dependencies
-vllm==0.20.1
-torch>=2.11.0
-torchaudio>=2.11.0
-torchvision>=0.26.0
-transformers==5.7.0
+# Matches the project configuration in pyproject.toml.
+--extra-index-url https://download.pytorch.org/whl/cu128
+vllm==0.10.2
+torch==2.8.0
+torchaudio==2.8.0
+torchvision==0.23.0
+transformers==4.55.4
 accelerate==1.13.0
 
 # Numerical computing
@@ -23,7 +25,7 @@ pydantic-core==2.46.3
 pydantic-settings==2.14.0
 
 # Hugging Face
-huggingface-hub==1.13.0
+huggingface-hub==0.34.4
 datasets
 
 # Visualization
@@ -32,5 +34,5 @@ matplotlib==3.10.9
 # Alternative LLM framework
 sglang==0.5.2
 
-# Flash Attention (pip will find appropriate pre-compiled wheel for your CUDA/PyTorch version)
-flash-attn>=2.8.0
+# Flash Attention: pinned to the same wheel used by the project config.
+flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
