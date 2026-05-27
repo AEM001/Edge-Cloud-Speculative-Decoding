@@ -7,7 +7,7 @@
 # MAX TOKENS TO GENERATE
 # LongWriter prompts are intended for long-form generation.
 # ============================================
-MAX_TOKENS="${MAX_TOKENS:-256}"
+MAX_TOKENS="${MAX_TOKENS:-512}"
 
 # ============================================
 # PROMPT COUNT PER TYPE
@@ -41,7 +41,7 @@ K="${K:-7}"  # Base draft length
 # TREE ASYNC SETTINGS
 # ============================================
 TREE_BRANCH_WIDTH="${TREE_BRANCH_WIDTH:-3}"  # Number of tree branches
-TREE_BRANCH_DRAFT_LENGTH="${TREE_BRANCH_DRAFT_LENGTH:-5}"  # Pre-draft length for each tree branch
+TREE_BRANCH_DRAFT_LENGTH="${TREE_BRANCH_DRAFT_LENGTH:-7}"  # Pre-draft length for each tree branch
 
 # ============================================
 # VERIFY SERVER SETTINGS

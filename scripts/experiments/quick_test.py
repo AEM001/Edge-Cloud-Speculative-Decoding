@@ -34,7 +34,11 @@ DRAFT_GPU_ID = int(os.getenv("DRAFT_GPU_ID", "1"))
 REQUEST_TIMEOUT_SEC = float(os.getenv("QUICK_TEST_TIMEOUT_SEC", "600"))
 
 OUTPUT_DIR = Path(__file__).parent / "outputs_quick"
-RESULTS_PATH = OUTPUT_DIR / "quick_test_results.json"
+
+def get_results_path():
+    import time
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    return OUTPUT_DIR / f"quick_test_results_{timestamp}.json"
 
 DIRECT_SESSION = requests.Session()
 DIRECT_SESSION.trust_env = False
@@ -341,12 +345,13 @@ def warmup(draft_generator: VLLMDraftGenerator, base_client, prompt: str) -> Non
 
 def save_results(results: List[ExperimentResult], config: Dict[str, Any]) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    results_path = get_results_path()
     payload = {
         "config": config,
         "results": [asdict(result) for result in results],
     }
-    RESULTS_PATH.write_text(json.dumps(payload, indent=2))
-    logger.info("Results saved to: %s", RESULTS_PATH)
+    results_path.write_text(json.dumps(payload, indent=2))
+    logger.info("Results saved to: %s", results_path)
     logger.info("Run `python3 scripts/experiments/analyze_quick_run.py` to build summaries.")
 
 
