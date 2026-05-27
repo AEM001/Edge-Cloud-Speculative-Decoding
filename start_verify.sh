@@ -10,7 +10,7 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-PORT=${PORT:-6006}
+PORT=${PORT:-6007}
 
 # ============================================
 # VERIFY SERVER CONFIGURATION
@@ -19,8 +19,8 @@ PORT=${PORT:-6006}
 # Verify Model Settings
 VERIFY_MODEL_PATH="${VERIFY_MODEL_PATH:-$REPO_DIR/models/Qwen2.5-14B-Instruct-AWQ}"
 VERIFY_GPU_ID="${VERIFY_GPU_ID:-0}"
-VERIFY_GPU_MEM="${VERIFY_GPU_MEM:-0.6}"  # Reduced for single 48GB GPU setup
-VERIFY_MAX_LEN="${VERIFY_MAX_LEN:-32768}"
+VERIFY_GPU_MEM="${VERIFY_GPU_MEM:-0.65}"  # Reduced for single GPU setup
+VERIFY_MAX_LEN="${VERIFY_MAX_LEN:-12000}"
 VERIFY_QUANTIZATION="${VERIFY_QUANTIZATION:-awq}"
 VERIFY_TENSOR_PARALLEL_SIZE="${VERIFY_TENSOR_PARALLEL_SIZE:-1}"
 

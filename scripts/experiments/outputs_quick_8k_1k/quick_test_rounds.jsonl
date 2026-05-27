@@ -1,0 +1,2 @@
+{"method": "direct", "method_family": "direct", "network": "good", "prompt_type": "longbench_v2:short", "prompt_id": 1, "detail_index": 0, "detail": {"tokens": 1024, "total_ms": 24431.769919370712, "overhead_ms": 27.407133333333334, "server_ms": 24402.153253555298, "http_ms": 24404.36278603738, "ul_ms": 14.6504, "dl_ms": 12.756733333333333}}
+{"method": "tree_k5_b3", "method_family": "tree_async", "network": "good", "prompt_type": "longbench_v2:short", "prompt_id": 1, "detail_index": 0, "detail": {}}

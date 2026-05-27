@@ -7,14 +7,14 @@
 # MAX TOKENS TO GENERATE
 # LongWriter prompts are intended for long-form generation.
 # ============================================
-MAX_TOKENS="${MAX_TOKENS:-4096}"
+MAX_TOKENS="${MAX_TOKENS:-256}"
 
 # ============================================
 # PROMPT COUNT PER TYPE
 # Number of prompts to load for each prompt type
 # Default: 10
 # ============================================
-PROMPT_COUNT="${PROMPT_COUNT:-10}"
+PROMPT_COUNT="${PROMPT_COUNT:-1}"
 
 # ============================================
 # PROMPT TYPES
@@ -35,18 +35,18 @@ PROMPT_TYPES="${PROMPT_TYPES:-longbench_v2:short}"
 # ============================================
 # TREE BASE DRAFT SETTINGS
 # ============================================
-K="${K:-12}"  # Base draft length
+K="${K:-7}"  # Base draft length
 
 # ============================================
 # TREE ASYNC SETTINGS
 # ============================================
 TREE_BRANCH_WIDTH="${TREE_BRANCH_WIDTH:-3}"  # Number of tree branches
-TREE_BRANCH_DRAFT_LENGTH="${TREE_BRANCH_DRAFT_LENGTH:-10}"  # Pre-draft length for each tree branch
+TREE_BRANCH_DRAFT_LENGTH="${TREE_BRANCH_DRAFT_LENGTH:-5}"  # Pre-draft length for each tree branch
 
 # ============================================
 # VERIFY SERVER SETTINGS
 # ============================================
-VERIFY_SERVER_URL="${VERIFY_SERVER_URL:-http://localhost:6006}"
+VERIFY_SERVER_URL="${VERIFY_SERVER_URL:-http://localhost:6007}"
 
 # ============================================
 # END OF CONFIGURATION
@@ -62,11 +62,11 @@ PYTHON="$SCRIPT_DIR/.venv/bin/python3"
 # ============================================
 # DRAFT MODEL SETTINGS (set after SCRIPT_DIR is defined)
 # ============================================
-DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-$SCRIPT_DIR/models/Qwen2.5-1.5B-Instruct-AWQ}"
-DRAFT_MODEL_NAME="${DRAFT_MODEL_NAME:-Qwen/Qwen2.5-1.5B-Instruct}"
-DRAFT_GPU_ID="${DRAFT_GPU_ID:-0}"  # Changed to GPU 0 for single GPU setup
-DRAFT_GPU_MEM="${DRAFT_GPU_MEM:-0.3}"  # Reduced for single 48GB GPU setup
-DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-32768}"
+DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-$SCRIPT_DIR/models/Qwen2.5-3B-Instruct-AWQ}"
+DRAFT_MODEL_NAME="${DRAFT_MODEL_NAME:-Qwen/Qwen2.5-3B-Instruct}"
+DRAFT_GPU_ID="${DRAFT_GPU_ID:-0}"  # GPU 0 for single GPU setup
+DRAFT_GPU_MEM="${DRAFT_GPU_MEM:-0.25}"  # Reduced for single GPU setup with verify model
+DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-12000}"
 
 # Export environment variables
 export DRAFT_MODEL_PATH

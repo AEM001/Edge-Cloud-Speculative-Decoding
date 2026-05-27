@@ -180,9 +180,14 @@ def _load_longbench_v2(partition: Optional[str] = None) -> List[Dict]:
     with open(path) as f:
         for line in f:
             row = json.loads(line)
+            prompt_text = row["prompt"]
+            # Truncate prompt to ~1000 characters to fit within model max_len
+            max_chars = 1000
+            if len(prompt_text) > max_chars:
+                prompt_text = prompt_text[:max_chars]
             prompts.append(
                 {
-                    "text": row["prompt"],
+                    "text": prompt_text,
                     "target": row.get("answer", ""),
                     "original_id": row.get("original_id"),
                     "domain": row.get("domain"),
@@ -191,7 +196,7 @@ def _load_longbench_v2(partition: Optional[str] = None) -> List[Dict]:
                     "length": row.get("length"),
                     "question": row.get("question"),
                     "choices": row.get("choices"),
-                    "prompt_chars": row.get("prompt_chars"),
+                    "prompt_chars": min(len(prompt_text), row.get("prompt_chars", len(prompt_text))),
                     "prompt_words": row.get("prompt_words"),
                     "context_chars": row.get("context_chars"),
                     "context_words": row.get("context_words"),

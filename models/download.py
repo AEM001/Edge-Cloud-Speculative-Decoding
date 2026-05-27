@@ -8,8 +8,9 @@ from huggingface_hub import snapshot_download
 
 
 DEFAULT_MODELS = {
-    # "Qwen/Qwen2.5-1.5B-Instruct-AWQ": "Qwen2.5-1.5B-Instruct-AWQ",
+    "Qwen/Qwen2.5-3B-Instruct-AWQ": "Qwen2.5-3B-Instruct-AWQ",
     "Qwen/Qwen2.5-14B-Instruct-AWQ": "Qwen2.5-14B-Instruct-AWQ",
+
 }
 
 

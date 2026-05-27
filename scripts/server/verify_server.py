@@ -140,6 +140,8 @@ class CloudVerifier:
 
         num_draft = len(draft_ids)
         input_ids = prefix_ids + draft_ids
+        
+        logger.info(f"VERIFY METHOD: prefix_len={len(prefix_ids)}, draft_len={len(draft_ids)}, total_input_len={len(input_ids)}")
 
         sampling_params = SamplingParams(
             temperature=0.0,           # greedy
@@ -149,13 +151,21 @@ class CloudVerifier:
         )
 
         from vllm import TokensPrompt
-        outputs = self.llm.generate(
-            prompts=[TokensPrompt(prompt_token_ids=input_ids)],
-            sampling_params=sampling_params,
-            use_tqdm=False,
-        )
+        try:
+            outputs = self.llm.generate(
+                prompts=[TokensPrompt(prompt_token_ids=input_ids)],
+                sampling_params=sampling_params,
+                use_tqdm=False,
+            )
+            logger.info(f"VERIFY MODEL CALL completed successfully")
+        except Exception as e:
+            logger.error(f"VERIFY MODEL CALL failed: {str(e)}", exc_info=True)
+            raise
+            
         output = outputs[0]
         plp = output.prompt_logprobs   # list len == len(input_ids), None for prefix
+        
+        logger.info(f"VERIFY OUTPUT: prompt_logprobs_len={len(plp) if plp else None}, outputs_len={len(output.outputs) if output.outputs else 0}")
 
         accepted_len = 0
         prefix_len = len(prefix_ids)
@@ -163,6 +173,7 @@ class CloudVerifier:
         for j, draft_tok in enumerate(draft_ids):
             pos = prefix_len + j
             if plp is None or pos >= len(plp) or plp[pos] is None:
+                logger.warning(f"VERIFY BREAK: pos={pos}, plp_is_none={plp is None}, pos_out_of_range={pos >= len(plp) if plp else True}, plp_pos_is_none={plp[pos] is None if plp and pos < len(plp) else True}")
                 break
             lp_dict = plp[pos]
             # argmax over the returned top-1 entries at this position
@@ -173,6 +184,7 @@ class CloudVerifier:
             if best_tok == draft_tok:
                 accepted_len += 1
             else:
+                logger.debug(f"VERIFY MISMATCH: pos={pos}, draft={draft_tok}, best={best_tok}")
                 break
 
 
@@ -190,6 +202,7 @@ class CloudVerifier:
                 correction = output.outputs[0].token_ids[0]
 
         ms = (time.time() - t0) * 1000
+        logger.info(f"VERIFY RESULT: accepted_len={accepted_len}, correction={correction}, time_ms={ms:.2f}")
         return accepted_len, correction, ms
 
     def get_info(self) -> Dict[str, Any]:
@@ -246,13 +259,21 @@ async def verify_draft(req: VerifyRequest):
     if _verifier is None:
         raise HTTPException(503, "Not ready")
     
+    # Log request details for debugging
+    logger.info(f"VERIFY REQUEST: id={req.request_id}, prefix_len={len(req.prefix_ids)}, draft_len={len(req.draft_ids)}")
+    
     # Measure HTTP overhead (before model processing)
     http_overhead_start = time.time()
     
-    accepted_len, correction, model_ms = _verifier.verify(
-        prefix_ids=req.prefix_ids,
-        draft_ids=req.draft_ids,
-    )
+    try:
+        accepted_len, correction, model_ms = _verifier.verify(
+            prefix_ids=req.prefix_ids,
+            draft_ids=req.draft_ids,
+        )
+        logger.info(f"VERIFY SUCCESS: id={req.request_id}, accepted_len={accepted_len}, correction={correction}, model_ms={model_ms:.2f}")
+    except Exception as e:
+        logger.error(f"VERIFY ERROR: id={req.request_id}, error={str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
     
     http_overhead_ms = (time.time() - http_overhead_start) * 1000 - model_ms
     
@@ -270,18 +291,27 @@ async def verify_draft(req: VerifyRequest):
 async def generate(req: GenerateRequest):
     if _verifier is None:
         raise HTTPException(503, "Not ready")
+    
+    # Log request details for debugging
+    logger.info(f"GENERATE REQUEST: prompt_len={len(req.prompt)}, max_tokens={req.max_tokens}, temp={req.temperature}")
+    
     t0 = time.time()
-    sp = SamplingParams(temperature=req.temperature, max_tokens=req.max_tokens)
-    outputs = _verifier.llm.generate(
-        prompts=[req.prompt], sampling_params=sp, use_tqdm=False
-    )
-    out = outputs[0].outputs[0]
-    ms = (time.time() - t0) * 1000
-    return GenerateResponse(
-        text=out.text,
-        tokens_generated=len(out.token_ids),
-        generation_time_ms=ms,
-    )
+    try:
+        sp = SamplingParams(temperature=req.temperature, max_tokens=req.max_tokens)
+        outputs = _verifier.llm.generate(
+            prompts=[req.prompt], sampling_params=sp, use_tqdm=False
+        )
+        out = outputs[0].outputs[0]
+        ms = (time.time() - t0) * 1000
+        logger.info(f"GENERATE SUCCESS: tokens_generated={len(out.token_ids)}, time_ms={ms:.2f}")
+        return GenerateResponse(
+            text=out.text,
+            tokens_generated=len(out.token_ids),
+            generation_time_ms=ms,
+        )
+    except Exception as e:
+        logger.error(f"GENERATE ERROR: error={str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
 
 
 # ---------------------------------------------------------------------------
