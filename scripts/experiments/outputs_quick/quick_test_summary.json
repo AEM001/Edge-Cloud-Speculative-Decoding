@@ -1,0 +1,69 @@
+{
+  "config": {
+    "network": "good",
+    "methods": [
+      "direct",
+      "tree_async"
+    ],
+    "max_tokens": 256,
+    "prompt_count": 1,
+    "prompt_types": [
+      "longbench_v2:short"
+    ],
+    "k": 7,
+    "tree_branch_width": 3,
+    "tree_branch_draft_length": 5
+  },
+  "overall": {
+    "direct": {
+      "runs": 1,
+      "tokens_per_second": 41.47762262625411,
+      "speedup_vs_direct": 1.0,
+      "total_time_ms": 6172.002727995301,
+      "tokens_generated": 256.0,
+      "simulated_network_ms": 25.3696
+    },
+    "tree_k7_b3": {
+      "runs": 1,
+      "tokens_per_second": 14.04602447298771,
+      "speedup_vs_direct": 0.3386410209561286,
+      "total_time_ms": 18225.7976619876,
+      "tokens_generated": 256.0,
+      "simulated_network_ms": 1790.67,
+      "rounds": 70.0,
+      "acceptance_rate": 0.4124168514412417,
+      "accepted_draft_per_round": 2.657142857142857,
+      "branch_reused": 1.0,
+      "reused_tokens": 0.8,
+      "predraft_window_ms": 204.7165986699318,
+      "reuse_prep_time_ms": 0.01880075266983892
+    }
+  },
+  "by_prompt_type": {
+    "longbench_v2:short": {
+      "direct": {
+        "runs": 1,
+        "tokens_per_second": 41.47762262625411,
+        "speedup_vs_direct": 1.0,
+        "total_time_ms": 6172.002727995301,
+        "tokens_generated": 256.0,
+        "simulated_network_ms": 25.3696
+      },
+      "tree_k7_b3": {
+        "runs": 1,
+        "tokens_per_second": 14.04602447298771,
+        "speedup_vs_direct": 0.3386410209561286,
+        "total_time_ms": 18225.7976619876,
+        "tokens_generated": 256.0,
+        "simulated_network_ms": 1790.67,
+        "rounds": 70.0,
+        "acceptance_rate": 0.4124168514412417,
+        "accepted_draft_per_round": 2.657142857142857,
+        "branch_reused": 1.0,
+        "reused_tokens": 0.8,
+        "predraft_window_ms": 204.7165986699318,
+        "reuse_prep_time_ms": 0.01880075266983892
+      }
+    }
+  }
+}
