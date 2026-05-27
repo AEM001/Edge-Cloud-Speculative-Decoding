@@ -1,0 +1,142 @@
+{
+  "config": {
+    "network": "good",
+    "methods": [
+      "direct",
+      "tree_async"
+    ],
+    "max_tokens": 512,
+    "prompt_count": 1,
+    "prompt_types": [
+      "longbench_v2:short"
+    ],
+    "k": 7,
+    "tree_branch_width": 3,
+    "tree_branch_draft_length": 7
+  },
+  "results": [
+    {
+      "method": "direct",
+      "method_family": "direct",
+      "network": "good",
+      "prompt_type": "longbench_v2:short",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 512,
+        "total_time_ms": 12270.691739051108,
+        "tokens_per_second": 41.725439028883386
+      },
+      "timing": {
+        "client_wall_ms": 12270.691739051108,
+        "local_draft_ms": 0.0,
+        "server_model_ms": 12243.351221084595,
+        "server_total_ms": 12243.351221084595,
+        "http_rpc_ms": 12245.259739051107,
+        "simulated_ul_ms": 12.783733333333334,
+        "simulated_dl_ms": 12.648266666666666,
+        "simulated_network_ms": 25.432000000000002,
+        "avg_rtt_ms": 0.0,
+        "critical_path_wait_ms": 0.0
+      },
+      "speculative": {
+        "rounds": 0,
+        "k": 0,
+        "drafted_tokens": 0,
+        "accepted_draft_tokens": 0,
+        "correction_tokens": 0,
+        "generated_per_round": 0.0,
+        "accepted_draft_per_round": 0.0,
+        "acceptance_rate": 0.0,
+        "wasted_draft_tokens": 0
+      },
+      "async_detail": {
+        "branch_reused": false,
+        "reused_tokens": 0.0,
+        "predraft_window_ms": 0.0,
+        "reuse_prep_time_ms": 0.0
+      },
+      "verify_runtime": {
+        "avg_prefix_len": 0.0,
+        "avg_draft_len": 0.0,
+        "avg_input_len": 0.0,
+        "prefix_caching": null,
+        "enforce_eager": null,
+        "attention_backend": null,
+        "vllm_version": null
+      },
+      "raw": {
+        "direct_timing": {
+          "tokens": 512,
+          "total_ms": 12270.691739051108,
+          "overhead_ms": 25.432000000000002,
+          "server_ms": 12243.351221084595,
+          "http_ms": 12245.259739051107,
+          "ul_ms": 12.783733333333334,
+          "dl_ms": 12.648266666666666
+        }
+      }
+    },
+    {
+      "method": "tree_k7_b3",
+      "method_family": "tree_async",
+      "network": "good",
+      "prompt_type": "longbench_v2:short",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 512,
+        "total_time_ms": 29419.024816015735,
+        "tokens_per_second": 17.40370400453474
+      },
+      "timing": {
+        "client_wall_ms": 29419.024816015735,
+        "local_draft_ms": 20878.636760404333,
+        "server_model_ms": 22538.834810256958,
+        "server_total_ms": 0.0,
+        "http_rpc_ms": 19861.14481025696,
+        "simulated_ul_ms": 1375.46,
+        "simulated_dl_ms": 1302.23,
+        "simulated_network_ms": 2677.69,
+        "avg_rtt_ms": 25.747036538461543,
+        "critical_path_wait_ms": 243.72989052230528
+      },
+      "speculative": {
+        "rounds": 104,
+        "k": 7,
+        "drafted_tokens": 682,
+        "accepted_draft_tokens": 408,
+        "correction_tokens": 104,
+        "generated_per_round": 4.923076923076923,
+        "accepted_draft_per_round": 3.923076923076923,
+        "acceptance_rate": 0.5982404692082112,
+        "wasted_draft_tokens": 274
+      },
+      "async_detail": {
+        "branch_reused": true,
+        "reused_tokens": 2.7115384615384617,
+        "predraft_window_ms": 244.98527286722003,
+        "reuse_prep_time_ms": 0.020418383848244466
+      },
+      "verify_runtime": {
+        "avg_prefix_len": 0.0,
+        "avg_draft_len": 0.0,
+        "avg_input_len": 0.0,
+        "prefix_caching": null,
+        "enforce_eager": null,
+        "attention_backend": null,
+        "vllm_version": null
+      },
+      "raw": {
+        "network": {
+          "condition": "good",
+          "num_calls": 104,
+          "total_simulated_uplink_delay_ms": 1375.46,
+          "total_simulated_downlink_delay_ms": 1302.23,
+          "total_simulated_overhead_ms": 2677.69,
+          "total_uplink_bytes": 282963,
+          "total_downlink_bytes": 33525,
+          "avg_overhead_per_call_ms": 25.75
+        }
+      }
+    }
+  ]
+}
