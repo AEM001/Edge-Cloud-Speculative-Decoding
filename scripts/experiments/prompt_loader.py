@@ -1,4 +1,4 @@
-"""Prompt loader supporting GSM8K, HumanEval, and LongWriter datasets."""
+"""Prompt loader supporting GSM8K, HumanEval, LongWriter, and LongBench v2."""
 import json
 import random
 from pathlib import Path
@@ -20,7 +20,7 @@ def load_prompts(
 
     Args:
         source: Dataset name — "gsm8k", "humaneval", "longwriter",
-            or "longwriter_single_turn:<partition>".
+            "longwriter_single_turn:<partition>", or "longbench_v2:<partition>".
         count: Number of prompts to return.
         split: Dataset split ("train" or "test", gsm8k only).
         min_length: Minimum prompt text length in characters.
@@ -45,10 +45,12 @@ def load_prompts(
         prompts = _load_longwriter()
     elif base_source == "longwriter_single_turn":
         prompts = _load_longwriter_single_turn(partition)
+    elif base_source == "longbench_v2":
+        prompts = _load_longbench_v2(partition)
     else:
         raise ValueError(
             f"Unknown source: {source}. Use: gsm8k, humaneval, longwriter, "
-            "or longwriter_single_turn:<partition>"
+            "longwriter_single_turn:<partition>, or longbench_v2:<partition>"
         )
 
     filtered = [p for p in prompts if min_length <= len(p["text"]) <= max_length]
@@ -160,8 +162,55 @@ def _load_longwriter_single_turn(partition: Optional[str] = None) -> List[Dict]:
     return prompts
 
 
+def _load_longbench_v2(partition: Optional[str] = None) -> List[Dict]:
+    if not partition:
+        partition = "short"
+    path = _DATA_DIR / "longbench_v2" / f"{partition}.jsonl"
+
+    if not path.exists():
+        available = _available_longbench_v2_partitions()
+        suffix = f" Available partitions: {', '.join(available)}." if available else ""
+        raise FileNotFoundError(
+            f"LongBench v2 data not found at {path}. Run "
+            "`python scripts/download_data.py` first."
+            f"{suffix}"
+        )
+
+    prompts = []
+    with open(path) as f:
+        for line in f:
+            row = json.loads(line)
+            prompts.append(
+                {
+                    "text": row["prompt"],
+                    "target": row.get("answer", ""),
+                    "original_id": row.get("original_id"),
+                    "domain": row.get("domain"),
+                    "sub_domain": row.get("sub_domain"),
+                    "difficulty": row.get("difficulty"),
+                    "length": row.get("length"),
+                    "question": row.get("question"),
+                    "choices": row.get("choices"),
+                    "prompt_chars": row.get("prompt_chars"),
+                    "prompt_words": row.get("prompt_words"),
+                    "context_chars": row.get("context_chars"),
+                    "context_words": row.get("context_words"),
+                    "prompt_bucket": row.get("length"),
+                    "target_bucket": None,
+                }
+            )
+    return prompts
+
+
 def _available_longwriter_single_turn_partitions() -> List[str]:
     data_dir = _DATA_DIR / "longwriter_single_turn"
     if not data_dir.exists():
         return []
     return sorted(path.stem for path in data_dir.glob("input_*.jsonl"))
+
+
+def _available_longbench_v2_partitions() -> List[str]:
+    data_dir = _DATA_DIR / "longbench_v2"
+    if not data_dir.exists():
+        return []
+    return sorted(path.stem for path in data_dir.glob("*.jsonl"))

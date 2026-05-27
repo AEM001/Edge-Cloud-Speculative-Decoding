@@ -20,10 +20,12 @@ PROMPT_COUNT="${PROMPT_COUNT:-10}"
 # PROMPT TYPES
 # Options: gsm8k, humaneval, longwriter,
 #          longwriter_single_turn:input_4k, longwriter_single_turn:input_6k,
-#          longwriter_single_turn:input_8k, longwriter_single_turn:input_10k
+#          longwriter_single_turn:input_8k, longwriter_single_turn:input_10k,
+#          longbench_v2:short, longbench_v2:medium, longbench_v2:long,
+#          longbench_v2:train
 # You can specify multiple (space-separated)
 # ============================================
-PROMPT_TYPES="${PROMPT_TYPES:-longwriter_single_turn:input_10k}"
+PROMPT_TYPES="${PROMPT_TYPES:-longbench_v2:short}"
 
 # ============================================
 # DRAFT MODEL SETTINGS

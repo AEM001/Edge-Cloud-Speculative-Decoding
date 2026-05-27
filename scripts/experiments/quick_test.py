@@ -122,7 +122,7 @@ class DirectTiming:
 def load_prompt_set(prompt_types: List[str], prompt_count: int):
     prompts = []
     for source in prompt_types:
-        if source.startswith("longwriter"):
+        if source.startswith(("longwriter", "longbench_v2")):
             loaded = load_prompts(source=source, count=prompt_count)
         else:
             loaded = load_prompts(source=source, count=prompt_count, min_length=200, max_length=500)
@@ -420,10 +420,11 @@ def parse_args():
         "--prompt-types",
         type=str,
         nargs="+",
-        default=["longwriter_single_turn:input_10k"],
+        default=["longbench_v2:short"],
         help=(
-            "Prompt type(s): gsm8k, humaneval, longwriter, or "
-            "longwriter_single_turn:input_4k/input_6k/input_8k/input_10k."
+            "Prompt type(s): gsm8k, humaneval, longwriter, "
+            "longwriter_single_turn:input_4k/input_6k/input_8k/input_10k, "
+            "or longbench_v2:short/medium/long/train."
         ),
     )
     parser.add_argument("--k", type=int, default=17, help="Tree base draft length.")
