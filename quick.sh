@@ -64,8 +64,8 @@ PYTHON="$SCRIPT_DIR/.venv/bin/python3"
 # ============================================
 DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-$SCRIPT_DIR/models/Qwen2.5-1.5B-Instruct-AWQ}"
 DRAFT_MODEL_NAME="${DRAFT_MODEL_NAME:-Qwen/Qwen2.5-1.5B-Instruct}"
-DRAFT_GPU_ID="${DRAFT_GPU_ID:-1}"
-DRAFT_GPU_MEM="${DRAFT_GPU_MEM:-0.4}"
+DRAFT_GPU_ID="${DRAFT_GPU_ID:-0}"  # Changed to GPU 0 for single GPU setup
+DRAFT_GPU_MEM="${DRAFT_GPU_MEM:-0.3}"  # Reduced for single 48GB GPU setup
 DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-32768}"
 
 # Export environment variables
