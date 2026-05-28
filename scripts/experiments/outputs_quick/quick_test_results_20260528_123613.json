@@ -1,0 +1,140 @@
+{
+  "config": {
+    "network": "good",
+    "methods": [
+      "direct",
+      "tree_async"
+    ],
+    "max_tokens": 512,
+    "prompt_count": 1,
+    "prompt_types": [
+      "prompts_2048"
+    ],
+    "k": 7,
+    "tree_branch_width": 3,
+    "tree_branch_draft_length": 7
+  },
+  "results": [
+    {
+      "method": "direct",
+      "method_family": "direct",
+      "network": "good",
+      "prompt_type": "prompts_2048",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 361,
+        "total_time_ms": 6097.115563688762,
+        "tokens_per_second": 59.20832502338114
+      },
+      "timing": {
+        "client_wall_ms": 6097.115563688762,
+        "local_draft_ms": 0.0,
+        "server_model_ms": 6077.149391174316,
+        "server_total_ms": 6077.149391174316,
+        "http_rpc_ms": 6080.67443035543,
+        "simulated_ul_ms": 8.869733333333333,
+        "simulated_dl_ms": 7.5714,
+        "simulated_network_ms": 16.441133333333333,
+        "avg_rtt_ms": 0.0,
+        "critical_path_wait_ms": 0.0
+      },
+      "speculative": {
+        "rounds": 0,
+        "k": 0,
+        "drafted_tokens": 0,
+        "accepted_draft_tokens": 0,
+        "correction_tokens": 0,
+        "generated_per_round": 0.0,
+        "acceptance_length": 0.0,
+        "wasted_draft_tokens": 0
+      },
+      "async_detail": {
+        "branch_reused": false,
+        "reused_tokens": 0.0,
+        "predraft_window_ms": 0.0,
+        "reuse_prep_time_ms": 0.0
+      },
+      "verify_runtime": {
+        "avg_prefix_len": 0.0,
+        "avg_draft_len": 0.0,
+        "avg_input_len": 0.0,
+        "prefix_caching": null,
+        "enforce_eager": null,
+        "attention_backend": null,
+        "vllm_version": null
+      },
+      "raw": {
+        "direct_timing": {
+          "tokens": 361,
+          "total_ms": 6097.115563688762,
+          "overhead_ms": 16.441133333333333,
+          "server_ms": 6077.149391174316,
+          "http_ms": 6080.67443035543,
+          "ul_ms": 8.869733333333333,
+          "dl_ms": 7.5714
+        }
+      }
+    },
+    {
+      "method": "tree_k7_b3",
+      "method_family": "tree_async",
+      "network": "good",
+      "prompt_type": "prompts_2048",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 513,
+        "total_time_ms": 86638.5808698833,
+        "tokens_per_second": 5.921149617748708
+      },
+      "timing": {
+        "client_wall_ms": 86638.5808698833,
+        "local_draft_ms": 42506.478417664766,
+        "server_model_ms": 80437.45994567871,
+        "server_total_ms": 0.0,
+        "http_rpc_ms": 78327.48994567871,
+        "simulated_ul_ms": 1163.63,
+        "simulated_dl_ms": 946.34,
+        "simulated_network_ms": 2109.97,
+        "avg_rtt_ms": 16.74581164021164,
+        "critical_path_wait_ms": 614.8631324518526
+      },
+      "speculative": {
+        "rounds": 126,
+        "k": 7,
+        "drafted_tokens": 828,
+        "accepted_draft_tokens": 387,
+        "correction_tokens": 126,
+        "generated_per_round": 4.071428571428571,
+        "acceptance_length": 3.0714285714285716,
+        "wasted_draft_tokens": 441
+      },
+      "async_detail": {
+        "branch_reused": true,
+        "reused_tokens": 2.5714285714285716,
+        "predraft_window_ms": 659.1145316109298,
+        "reuse_prep_time_ms": 0.027969849133302294
+      },
+      "verify_runtime": {
+        "avg_prefix_len": 0.0,
+        "avg_draft_len": 0.0,
+        "avg_input_len": 0.0,
+        "prefix_caching": null,
+        "enforce_eager": null,
+        "attention_backend": null,
+        "vllm_version": null
+      },
+      "raw": {
+        "network": {
+          "condition": "good",
+          "num_calls": 126,
+          "total_simulated_uplink_delay_ms": 1163.63,
+          "total_simulated_downlink_delay_ms": 946.34,
+          "total_simulated_overhead_ms": 2109.97,
+          "total_uplink_bytes": 1639718,
+          "total_downlink_bytes": 40296,
+          "avg_overhead_per_call_ms": 16.75
+        }
+      }
+    }
+  ]
+}

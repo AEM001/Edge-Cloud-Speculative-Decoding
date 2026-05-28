@@ -137,7 +137,17 @@ def parse_args():
 
 def main() -> int:
     args = parse_args()
-    config, results = load_result_file(args.results)
+    results_path = args.results
+    if not results_path.exists():
+        # Auto-discover the most recent results file
+        candidates = sorted(OUTPUT_DIR.glob("quick_test_results_*.json"))
+        if candidates:
+            results_path = candidates[-1]
+            print(f"Auto-discovered results: {results_path}")
+        else:
+            print(f"No results file found at {results_path}")
+            return 1
+    config, results = load_result_file(results_path)
     args.summary.parent.mkdir(parents=True, exist_ok=True)
     args.rounds.parent.mkdir(parents=True, exist_ok=True)
 

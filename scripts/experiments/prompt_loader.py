@@ -20,7 +20,8 @@ def load_prompts(
 
     Args:
         source: Dataset name — "gsm8k", "humaneval", "longwriter",
-            "longwriter_single_turn:<partition>", or "longbench_v2:<partition>".
+            "longwriter_single_turn:<partition>", "longbench_v2:<partition>",
+            or "prompts_2048".
         count: Number of prompts to return.
         split: Dataset split ("train" or "test", gsm8k only).
         min_length: Minimum prompt text length in characters.
@@ -47,10 +48,12 @@ def load_prompts(
         prompts = _load_longwriter_single_turn(partition)
     elif base_source == "longbench_v2":
         prompts = _load_longbench_v2(partition)
+    elif base_source == "prompts_2048":
+        prompts = _load_prompts_2048()
     else:
         raise ValueError(
             f"Unknown source: {source}. Use: gsm8k, humaneval, longwriter, "
-            "longwriter_single_turn:<partition>, or longbench_v2:<partition>"
+            "longwriter_single_turn:<partition>, longbench_v2:<partition>, or prompts_2048"
         )
 
     filtered = [p for p in prompts if min_length <= len(p["text"]) <= max_length]
@@ -219,3 +222,15 @@ def _available_longbench_v2_partitions() -> List[str]:
     if not data_dir.exists():
         return []
     return sorted(path.stem for path in data_dir.glob("*.jsonl"))
+
+
+def _load_prompts_2048() -> List[Dict]:
+    path = _DATA_DIR / "prompts" / "prompts_2048.jsonl"
+    if not path.exists():
+        raise FileNotFoundError(f"Prompts 2048 data not found at {path}.")
+    prompts = []
+    with open(path) as f:
+        for line in f:
+            row = json.loads(line)
+            prompts.append({"text": row["prompt"]})
+    return prompts

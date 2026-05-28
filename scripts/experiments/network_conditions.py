@@ -32,12 +32,12 @@ class NetworkCondition:
 
     @classmethod
     def good(cls) -> "NetworkCondition":
-        """Good: RTT 25 ms, 120 Mbps down, 30 Mbps up."""
+
         return cls(
             name="good",
-            rtt_ms=25.0,
-            download_mbps=120.0,
-            upload_mbps=30.0,
+            rtt_ms=15.0,
+            download_mbps=240.0,
+            upload_mbps=60.0,
         )
 
     @classmethod

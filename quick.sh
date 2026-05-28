@@ -22,10 +22,10 @@ PROMPT_COUNT="${PROMPT_COUNT:-1}"
 #          longwriter_single_turn:input_4k, longwriter_single_turn:input_6k,
 #          longwriter_single_turn:input_8k, longwriter_single_turn:input_10k,
 #          longbench_v2:short, longbench_v2:medium, longbench_v2:long,
-#          longbench_v2:train
+#          longbench_v2:train, prompts_2048
 # You can specify multiple (space-separated)
 # ============================================
-PROMPT_TYPES="${PROMPT_TYPES:-longbench_v2:short}"
+PROMPT_TYPES="${PROMPT_TYPES:-prompts_2048}"
 
 # ============================================
 # DRAFT MODEL SETTINGS
@@ -35,13 +35,13 @@ PROMPT_TYPES="${PROMPT_TYPES:-longbench_v2:short}"
 # ============================================
 # TREE BASE DRAFT SETTINGS
 # ============================================
-K="${K:-7}"  # Base draft length
+K="${K:-15}"  # Base draft length
 
 # ============================================
 # TREE ASYNC SETTINGS
 # ============================================
-TREE_BRANCH_WIDTH="${TREE_BRANCH_WIDTH:-3}"  # Number of tree branches
-TREE_BRANCH_DRAFT_LENGTH="${TREE_BRANCH_DRAFT_LENGTH:-7}"  # Pre-draft length for each tree branch
+TREE_BRANCH_WIDTH="${TREE_BRANCH_WIDTH:-4}"  # Number of tree branches
+TREE_BRANCH_DRAFT_LENGTH="${TREE_BRANCH_DRAFT_LENGTH:-12}"  # Pre-draft length for each tree branch
 
 # ============================================
 # VERIFY SERVER SETTINGS
@@ -65,7 +65,7 @@ PYTHON="$SCRIPT_DIR/.venv/bin/python3"
 DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-$SCRIPT_DIR/models/Qwen2.5-3B-Instruct-AWQ}"
 DRAFT_MODEL_NAME="${DRAFT_MODEL_NAME:-Qwen/Qwen2.5-3B-Instruct}"
 DRAFT_GPU_ID="${DRAFT_GPU_ID:-0}"  # GPU 0 for single GPU setup
-DRAFT_GPU_MEM="${DRAFT_GPU_MEM:-0.25}"  # Reduced for single GPU setup with verify model
+DRAFT_GPU_MEM="${DRAFT_GPU_MEM:-0.30}"
 DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-12000}"
 
 # Export environment variables
