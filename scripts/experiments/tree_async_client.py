@@ -46,7 +46,6 @@ class AsyncRequestMetrics:
     total_rounds: int = 0
     total_drafted_tokens: int = 0
     total_accepted_tokens: int = 0
-    acceptance_ratio: float = 0.0
 
     # Timing breakdown
     total_edge_draft_time_ms: float = 0.0
@@ -68,8 +67,6 @@ class AsyncRequestMetrics:
     downlink_bytes: int = 0
 
     def compute_derived(self):
-        if self.total_drafted_tokens > 0:
-            self.acceptance_ratio = self.total_accepted_tokens / self.total_drafted_tokens
         if self.total_latency_ms > 0:
             self.tokens_per_second = 1000 * self.generated_tokens / self.total_latency_ms
 

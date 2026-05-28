@@ -107,7 +107,7 @@ satellite = NetworkCondition(
 |---------|---------|
 | `output` | Generated tokens, total wall time, tokens/sec |
 | `timing` | Local draft time, server model time, HTTP/RPC overhead, simulated UL/DL/network, RTT |
-| `speculative` | Rounds, K, drafted tokens, accepted draft tokens, correction tokens, acceptance |
+| `speculative` | Rounds, K, drafted tokens, accepted draft tokens, correction tokens, acceptance length |
 | `async_detail` | Branch launch/readiness/reuse, prefetched tokens, exposed branch time |
 | `verify_runtime` | Prefix/draft/input lengths and vLLM runtime settings |
 | `raw` | Direct timing or per-round details |

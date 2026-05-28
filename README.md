@@ -240,7 +240,7 @@ K=8 TREE_BRANCH_DRAFT_LENGTH=8 ./quick.sh
 
 - `output`: generated tokens, total wall time, tok/s
 - `timing`: local draft time, server model time, HTTP/RPC overhead, simulated UL/DL/network, RTT
-- `speculative`: rounds, K, drafted tokens, accepted draft tokens, correction tokens, acceptance
+- `speculative`: rounds, K, drafted tokens, accepted draft tokens, correction tokens, acceptance length
 - `async_detail`: branch reuse flag, average reused tokens, pre-draft window, reuse prep time
 - `verify_runtime`: prefix/draft/input lengths and vLLM runtime settings
 - `raw`: method-specific direct timing or tree network stats

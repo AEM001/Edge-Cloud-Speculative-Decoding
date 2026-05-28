@@ -38,9 +38,15 @@ COLORS = {
 
 
 def load_results() -> pd.DataFrame:
-    rows = json.loads(RESULTS_PATH.read_text())
+    payload = json.loads(RESULTS_PATH.read_text())
+    rows = payload["results"] if isinstance(payload, dict) and "results" in payload else payload
     flat_rows = []
     for row in rows:
+        speculative = row["speculative"]
+        acceptance_length = speculative.get(
+            "acceptance_length",
+            speculative.get("accepted_draft_per_round", 0.0),
+        )
         flat_rows.append(
             {
                 "network": row["network"],
@@ -56,8 +62,7 @@ def load_results() -> pd.DataFrame:
                 "sim_network_ms": row["timing"]["simulated_network_ms"],
                 "avg_rtt_ms": row["timing"]["avg_rtt_ms"],
                 "rounds": row["speculative"]["rounds"],
-                "acceptance_rate": row["speculative"]["acceptance_rate"],
-                "accepted_per_round": row["speculative"]["accepted_draft_per_round"],
+                "acceptance_length": acceptance_length,
                 "generated_per_round": row["speculative"]["generated_per_round"],
                 "branch_reused": row["async_detail"]["branch_reused"],
                 "reused_tokens": row["async_detail"]["reused_tokens"],
@@ -113,8 +118,7 @@ def write_tables(df: pd.DataFrame, rounds: pd.DataFrame) -> None:
             speedup_vs_direct=("speedup_vs_direct", "mean"),
             ms_saved_vs_direct=("ms_saved_vs_direct", "mean"),
             rounds=("rounds", "mean"),
-            acceptance_rate=("acceptance_rate", "mean"),
-            accepted_per_round=("accepted_per_round", "mean"),
+            acceptance_length=("acceptance_length", "mean"),
             branch_reused=("branch_reused", "mean"),
             reused_tokens=("reused_tokens", "mean"),
             predraft_window_ms=("predraft_window_ms", "mean"),
@@ -132,7 +136,7 @@ def write_tables(df: pd.DataFrame, rounds: pd.DataFrame) -> None:
             total_ms=("total_ms", "mean"),
             speedup_vs_direct=("speedup_vs_direct", "mean"),
             rounds=("rounds", "mean"),
-            acceptance_rate=("acceptance_rate", "mean"),
+            acceptance_length=("acceptance_length", "mean"),
             branch_reused=("branch_reused", "mean"),
             reused_tokens=("reused_tokens", "mean"),
         )

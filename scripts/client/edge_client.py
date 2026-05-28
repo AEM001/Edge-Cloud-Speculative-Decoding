@@ -39,7 +39,7 @@ class RequestMetrics:
     total_rounds: int = 0
     
     # Acceptance metrics
-    acceptance_ratio: float = 0.0
+    acceptance_length: float = 0.0
     total_drafted_tokens: int = 0
     total_accepted_drafted_tokens: int = 0
     
@@ -52,8 +52,8 @@ class RequestMetrics:
     
     def compute_derived_metrics(self):
         """Compute derived metrics from collected data."""
-        if self.total_drafted_tokens > 0:
-            self.acceptance_ratio = self.total_accepted_drafted_tokens / self.total_drafted_tokens
+        if self.total_rounds > 0:
+            self.acceptance_length = self.total_accepted_drafted_tokens / self.total_rounds
 
 
 class EdgeClient:
@@ -259,7 +259,7 @@ class EdgeClient:
         metrics.compute_derived_metrics()
         
         logger.info(f"Generation complete: {metrics.generated_tokens} tokens in {metrics.total_rounds} rounds")
-        logger.info(f"Acceptance ratio: {metrics.acceptance_ratio:.2%}")
+        logger.info(f"Acceptance length: {metrics.acceptance_length:.2f}")
         logger.info(f"Total latency: {metrics.total_latency_ms:.2f}ms")
         
         return metrics

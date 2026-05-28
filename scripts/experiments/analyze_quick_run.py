@@ -22,6 +22,17 @@ def avg(values: Iterable[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
+def acceptance_length(row: Dict[str, Any]) -> float:
+    speculative = row.get("speculative", {})
+    if "acceptance_length" in speculative:
+        return speculative["acceptance_length"]
+    if "accepted_draft_per_round" in speculative:
+        return speculative["accepted_draft_per_round"]
+    rounds = speculative.get("rounds") or 0
+    accepted = speculative.get("accepted_draft_tokens") or 0
+    return accepted / rounds if rounds else 0.0
+
+
 def load_result_file(path: Path) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
     payload = json.loads(path.read_text())
     if isinstance(payload, dict) and "results" in payload:
@@ -56,10 +67,7 @@ def method_summary(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
             summary[method].update(
                 {
                     "rounds": avg(row["speculative"]["rounds"] for row in method_rows),
-                    "acceptance_rate": avg(row["speculative"]["acceptance_rate"] for row in method_rows),
-                    "accepted_draft_per_round": avg(
-                        row["speculative"]["accepted_draft_per_round"] for row in method_rows
-                    ),
+                    "acceptance_length": avg(acceptance_length(row) for row in method_rows),
                     "branch_reused": avg(float(row["async_detail"]["branch_reused"]) for row in method_rows),
                     "reused_tokens": avg(row["async_detail"]["reused_tokens"] for row in method_rows),
                     "predraft_window_ms": avg(row["async_detail"]["predraft_window_ms"] for row in method_rows),

@@ -73,8 +73,7 @@ class SpeculativeMetrics:
     accepted_draft_tokens: int = 0
     correction_tokens: int = 0
     generated_per_round: float = 0.0
-    accepted_draft_per_round: float = 0.0
-    acceptance_rate: float = 0.0
+    acceptance_length: float = 0.0
     wasted_draft_tokens: int = 0
 
 
@@ -240,7 +239,7 @@ def run_tree_case(
     tps = metrics.generated_tokens / (total_ms / 1000)
     accepted = metrics.total_accepted_tokens
     correction_tokens = max(0, metrics.generated_tokens - accepted)
-    accepted_per_round = accepted / metrics.total_rounds if metrics.total_rounds else 0.0
+    acceptance_length = accepted / metrics.total_rounds if metrics.total_rounds else 0.0
     avg_network_ms = net_stats["total_simulated_overhead_ms"] / net_stats["num_calls"] if net_stats["num_calls"] else 0.0
     avg_verify_ms = metrics.total_server_verify_time_ms / metrics.total_rounds if metrics.total_rounds else 0.0
     reused_tokens = metrics.reused_tokens / metrics.total_rounds if metrics.total_rounds else 0.0
@@ -249,12 +248,12 @@ def run_tree_case(
     method = f"tree_k{k}_b{tree_client.branch_width}"
 
     logger.info(
-        "    %s: %d tok  %.0f ms  %.1f tok/s  accept=%.1f%%  rounds=%d  rtt=%.0f ms  verify=%.0f ms  sim_net=%.0f ms",
+        "    %s: %d tok  %.0f ms  %.1f tok/s  accept_len=%.2f  rounds=%d  rtt=%.0f ms  verify=%.0f ms  sim_net=%.0f ms",
         method,
         metrics.generated_tokens,
         total_ms,
         tps,
-        metrics.acceptance_ratio * 100,
+        acceptance_length,
         metrics.total_rounds,
         metrics.average_rtt_ms,
         avg_verify_ms,
@@ -298,8 +297,7 @@ def run_tree_case(
             accepted_draft_tokens=accepted,
             correction_tokens=correction_tokens,
             generated_per_round=metrics.generated_tokens / metrics.total_rounds if metrics.total_rounds else 0.0,
-            accepted_draft_per_round=accepted_per_round,
-            acceptance_rate=metrics.acceptance_ratio,
+            acceptance_length=acceptance_length,
             wasted_draft_tokens=max(0, metrics.total_drafted_tokens - accepted),
         ),
         async_detail=AsyncDetailMetrics(
