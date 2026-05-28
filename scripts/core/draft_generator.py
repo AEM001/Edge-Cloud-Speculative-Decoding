@@ -45,38 +45,12 @@ class VLLMDraftGenerator:
             )
         
         output = outputs[0]
+        response = self._draft_response_from_output(output, k)
         
-        if output.outputs:
-            generated_ids = output.outputs[0].token_ids[:k]
-        else:
-            generated_ids = []
+        if len(response.draft_token_ids) < k:
+            logger.warning(f"Generated only {len(response.draft_token_ids)} tokens, expected {k}")
         
-        if len(generated_ids) < k:
-            logger.warning(f"Generated only {len(generated_ids)} tokens, expected {k}")
-
-        out_logprobs = output.outputs[0].logprobs or []
-
-        draft_token_ids = []
-        draft_logprobs = []
-
-        for i, token_id in enumerate(generated_ids):
-            if i < len(out_logprobs) and out_logprobs[i] is not None:
-                logprobs_dict = out_logprobs[i]
-                token_logprob_obj = logprobs_dict.get(token_id, None)
-                if token_logprob_obj is not None:
-                    token_logprob_val = token_logprob_obj.logprob if hasattr(token_logprob_obj, 'logprob') else float(token_logprob_obj)
-                else:
-                    token_logprob_val = -float('inf')
-            else:
-                token_logprob_val = -float('inf')
-
-            draft_token_ids.append(token_id)
-            draft_logprobs.append(float(token_logprob_val))
-        
-        return DraftResponse(
-            draft_token_ids=draft_token_ids,
-            logprobs=draft_logprobs
-        )
+        return response
 
     def generate_draft_tokens_batch(
         self,
@@ -107,29 +81,7 @@ class VLLMDraftGenerator:
 
         responses: List[DraftResponse] = []
         for output, req in zip(outputs, requests):
-            generated_ids = output.outputs[0].token_ids[:req.num_draft_tokens] if output.outputs else []
-            out_logprobs = output.outputs[0].logprobs or [] if output.outputs else []
-            draft_token_ids = []
-            draft_logprobs = []
-
-            for i, token_id in enumerate(generated_ids):
-                if i < len(out_logprobs) and out_logprobs[i] is not None:
-                    logprobs_dict = out_logprobs[i]
-                    token_logprob_obj = logprobs_dict.get(token_id, None)
-                    if token_logprob_obj is not None:
-                        token_logprob_val = token_logprob_obj.logprob if hasattr(token_logprob_obj, 'logprob') else float(token_logprob_obj)
-                    else:
-                        token_logprob_val = -float('inf')
-                else:
-                    token_logprob_val = -float('inf')
-
-                draft_token_ids.append(token_id)
-                draft_logprobs.append(float(token_logprob_val))
-
-            responses.append(DraftResponse(
-                draft_token_ids=draft_token_ids,
-                logprobs=draft_logprobs
-            ))
+            responses.append(self._draft_response_from_output(output, req.num_draft_tokens))
 
         return responses
 
@@ -191,6 +143,35 @@ class VLLMDraftGenerator:
             all_candidates.append(candidates[:num_candidates])
 
         return all_candidates
+
+    def _draft_response_from_output(self, output, max_tokens: int) -> DraftResponse:
+        if not output.outputs:
+            return DraftResponse(draft_token_ids=[], logprobs=[])
+
+        completion = output.outputs[0]
+        generated_ids = completion.token_ids[:max_tokens]
+        out_logprobs = completion.logprobs or []
+
+        draft_logprobs = [
+            self._selected_token_logprob(out_logprobs, idx, token_id)
+            for idx, token_id in enumerate(generated_ids)
+        ]
+        return DraftResponse(
+            draft_token_ids=list(generated_ids),
+            logprobs=draft_logprobs,
+        )
+
+    @staticmethod
+    def _selected_token_logprob(out_logprobs, idx: int, token_id: int) -> float:
+        if idx >= len(out_logprobs) or out_logprobs[idx] is None:
+            return -float("inf")
+
+        token_logprob_obj = out_logprobs[idx].get(token_id)
+        if token_logprob_obj is None:
+            return -float("inf")
+        if hasattr(token_logprob_obj, "logprob"):
+            return float(token_logprob_obj.logprob)
+        return float(token_logprob_obj)
 
     def stream_draft_tokens(
         self,

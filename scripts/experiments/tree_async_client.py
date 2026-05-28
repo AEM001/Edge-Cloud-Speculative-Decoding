@@ -7,14 +7,14 @@ without the complexity of the parent async pipeline.
 from __future__ import annotations
 
 import logging
-import math
 import threading
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, List, Optional
 
 from core.protocol import CloudResponse, DraftRequest, EdgeRequest
+from experiments.proactive_tree import ProactiveTreeDraftPlanner, TreeBranch
 
 
 logger = logging.getLogger(__name__)
@@ -74,17 +74,6 @@ class AsyncRequestMetrics:
             self.tokens_per_second = 1000 * self.generated_tokens / self.total_latency_ms
 
 
-@dataclass
-class TreeBranch:
-    branch_id: int
-    offset: int
-    prefix: List[int]
-    draft_ids: List[int]
-    draft_logprobs: List[float]
-    draft_time_ms: float
-    score: float = 0.0
-
-
 class TreeAsyncEdgeClient:
     """Standalone tree-based speculative decoding client.
     
@@ -93,7 +82,6 @@ class TreeAsyncEdgeClient:
     """
 
     BRANCH_WIDTH: int = 3
-    PROACTIVE_DECAY: float = math.log(0.95)
 
     def __init__(
         self,
@@ -117,6 +105,12 @@ class TreeAsyncEdgeClient:
             self.eos_token_id = getattr(self.tokenizer, "eos_token_id", None)
         self.branch_width = max(1, branch_width)
         self.branch_draft_length = branch_draft_length
+        self.tree_planner = ProactiveTreeDraftPlanner(
+            draft_generator=draft_generator,
+            branch_width=self.branch_width,
+            branch_draft_length=self.branch_draft_length,
+            temperature=self.temperature,
+        )
 
     def generate(
         self,
@@ -135,7 +129,6 @@ class TreeAsyncEdgeClient:
                 prompt_ids=prompt_ids,
                 committed_prefix=committed_prefix,
                 policy=policy,
-                policy_name=policy_name,
                 request_id=request_id,
                 metrics=metrics,
             )
@@ -154,113 +147,11 @@ class TreeAsyncEdgeClient:
         )
         return metrics
 
-    def _proactive_seed_branches(
-        self,
-        committed_prefix: List[int],
-        base_draft: List[int],
-        base_logprobs: List[float],
-        branch_base_id: int,
-    ) -> List[TreeBranch]:
-        """Choose SpecEdge-style proactive branch roots from local logprobs.
-
-        SpecEdge picks the best bonus token by scoring leaf logprob plus the
-        next-token logprob and a decay. This local adaptation treats each
-        position along the sent linear draft as a possible verified leaf and
-        creates branches from the highest scoring bonus tokens.
-        """
-        if (
-            not base_draft
-            or self.branch_draft_length <= 0
-            or not hasattr(self.draft_generator, "generate_next_token_candidates_batch")
-        ):
-            return []
-
-        prefixes: List[List[int]] = []
-        accumulated_scores: List[float] = []
-        running_score = 0.0
-        for idx, _ in enumerate(base_draft):
-            logprob = base_logprobs[idx] if idx < len(base_logprobs) else -float("inf")
-            if math.isfinite(logprob):
-                running_score += float(logprob)
-            prefixes.append(list(committed_prefix) + base_draft[:idx + 1])
-            accumulated_scores.append(running_score)
-
-        candidate_lists = self.draft_generator.generate_next_token_candidates_batch(
-            prefixes=prefixes,
-            num_candidates=max(1, self.branch_width),
-            temperature=self.temperature,
-        )
-
-        ranked: List[Tuple[float, int, int, float]] = []
-        sent_tokens = set(base_draft)
-        for prefix_idx, candidates in enumerate(candidate_lists):
-            offset = prefix_idx + 1
-            for token_id, token_logprob in candidates:
-                if token_id in sent_tokens and offset < len(base_draft):
-                    continue
-                score = accumulated_scores[prefix_idx] + self.PROACTIVE_DECAY + token_logprob
-                ranked.append((score, offset, token_id, token_logprob))
-
-        ranked.sort(key=lambda item: item[0], reverse=True)
-        branches: List[TreeBranch] = []
-        seen_roots = set()
-        for score, offset, token_id, token_logprob in ranked:
-            root_key = (offset, token_id)
-            if root_key in seen_roots:
-                continue
-            seen_roots.add(root_key)
-            branch_id = branch_base_id + len(branches) + 1
-            branches.append(
-                TreeBranch(
-                    branch_id=branch_id,
-                    offset=offset,
-                    prefix=list(committed_prefix) + base_draft[:offset],
-                    draft_ids=[token_id],
-                    draft_logprobs=[token_logprob],
-                    draft_time_ms=0.0,
-                    score=score,
-                )
-            )
-            if len(branches) >= self.branch_width:
-                break
-
-        return branches
-
-    def _prefetch_from_branch(
-        self,
-        branch: TreeBranch,
-        base_draft: List[int],
-        base_accepted: int,
-        correction: int | None,
-    ) -> tuple[List[int], List[float]] | None:
-        """Return reusable continuation tokens if a local branch matches reality."""
-        if branch.offset > base_accepted:
-            return None
-
-        # If offset < accepted, the branch was drafted before some tokens that
-        # the target later accepted. Those leading branch tokens must bridge
-        # back to reality before any remaining branch tokens can be reused.
-        expected_prefix = list(base_draft[branch.offset:base_accepted])
-        if correction is not None:
-            expected_prefix.append(correction)
-
-        if len(branch.draft_ids) < len(expected_prefix):
-            return None
-        if branch.draft_ids[:len(expected_prefix)] != expected_prefix:
-            return None
-
-        reuse_start = len(expected_prefix)
-        return (
-            list(branch.draft_ids[reuse_start:]),
-            list(branch.draft_logprobs[reuse_start:]),
-        )
-
     def _tree_pipeline_loop(
         self,
         prompt_ids,
         committed_prefix,
         policy,
-        policy_name,
         request_id,
         metrics,
     ):
@@ -350,120 +241,20 @@ class TreeAsyncEdgeClient:
             # results that are already ready when base verification returns.
             branch_base_id = tree_id * 100
             branch_seed_t0 = time.perf_counter()
-            proactive_seeds = self._proactive_seed_branches(
+            proactive_seeds = self.tree_planner.seed_branches(
                 committed_prefix=list(committed_prefix),
                 base_draft=base_draft,
                 base_logprobs=base_logprobs,
                 branch_base_id=branch_base_id,
             )
             branch_seed_ms = (time.perf_counter() - branch_seed_t0) * 1000
-            branch_lock = threading.Lock()
-            branch_stop = threading.Event()
-            branch_done_at: List[float] = []
-            branch_batch_ms: List[float] = [branch_seed_ms if proactive_seeds else 0.0]
-            branch_records: Dict[int, TreeBranch] = {
-                branch.branch_id: branch for branch in proactive_seeds
-            }
+            branch_state = self.tree_planner.new_state(proactive_seeds, branch_seed_ms)
 
-            def _run_branch_draft(
-                local_branch_records=branch_records,
-                local_branch_lock=branch_lock,
-                local_branch_stop=branch_stop,
-                local_branch_done_at=branch_done_at,
-                local_branch_batch_ms=branch_batch_ms,
-            ):
-                """Stream branch drafts token-by-token for early reuse.
-
-                The snapshot consumed after verification may contain partial
-                branches. That is intentional: a partial branch is enough when
-                it bridges the accepted base suffix plus correction token.
-                """
-                try:
-                    active = [
-                        {
-                            "branch_id": branch.branch_id,
-                            "prefix": list(branch.prefix),
-                            "draft_ids": list(branch.draft_ids),
-                        }
-                        for branch in local_branch_records.values()
-                    ]
-
-                    for _ in range(max(0, self.branch_draft_length - 1)):
-                        if local_branch_stop.is_set() or not active:
-                            break
-
-                        step_t0 = time.perf_counter()
-                        if hasattr(self.draft_generator, "generate_draft_tokens_batch"):
-                            draft_resps_ = self.draft_generator.generate_draft_tokens_batch(
-                                [
-                                    DraftRequest(
-                                        verified_prefix=item["prefix"] + item["draft_ids"],
-                                        num_draft_tokens=1,
-                                    )
-                                    for item in active
-                                ],
-                                temperature=self.temperature,
-                            )
-                        else:
-                            draft_resps_ = [
-                                self.draft_generator.generate_draft_tokens(
-                                    DraftRequest(
-                                        verified_prefix=item["prefix"] + item["draft_ids"],
-                                        num_draft_tokens=1,
-                                    ),
-                                    temperature=self.temperature,
-                                )
-                                for item in active
-                            ]
-
-                        step_ms = (time.perf_counter() - step_t0) * 1000
-                        if local_branch_stop.is_set():
-                            break
-                        per_branch_step_ms = step_ms / len(active) if active else 0.0
-                        next_active = []
-                        with local_branch_lock:
-                            local_branch_batch_ms[0] += step_ms
-                            for item, draft_resp in zip(active, draft_resps_):
-                                if not draft_resp.draft_token_ids:
-                                    continue
-
-                                token_id = draft_resp.draft_token_ids[0]
-                                logprob = (
-                                    draft_resp.logprobs[0]
-                                    if draft_resp.logprobs
-                                    else -float("inf")
-                                )
-                                item["draft_ids"].append(token_id)
-                                record = local_branch_records[item["branch_id"]]
-                                record.draft_ids.append(token_id)
-                                record.draft_logprobs.append(float(logprob))
-                                record.draft_time_ms += per_branch_step_ms
-                                next_active.append(item)
-                        active = next_active
-
-                    with local_branch_lock:
-                        local_branch_done_at.append(time.perf_counter())
-                except Exception as exc:
-                    logger.error("Branch draft error: %s", exc)
-
-            def _snapshot_streamed_branches():
-                with branch_lock:
-                    streamed = [
-                        TreeBranch(
-                            branch_id=record.branch_id,
-                            offset=record.offset,
-                            prefix=list(record.prefix),
-                            draft_ids=list(record.draft_ids),
-                            draft_logprobs=list(record.draft_logprobs),
-                            draft_time_ms=record.draft_time_ms,
-                        )
-                        for record in branch_records.values()
-                        if record.draft_ids
-                    ]
-                    done_at = branch_done_at[0] if branch_done_at else None
-                    return streamed, branch_batch_ms[0], done_at
-
-            branch_thread = threading.Thread(target=_run_branch_draft, daemon=True)
+            branch_thread = threading.Thread(
+                target=self.tree_planner.expand_until_stopped,
+                args=(branch_state,),
+                daemon=True,
+            )
             if proactive_seeds:
                 branch_thread.start()
 
@@ -485,7 +276,7 @@ class TreeAsyncEdgeClient:
             if not base_verify_result:
                 break
             base_resp_cloud, _ = base_verify_result[0]
-            branch_stop.set()
+            branch_state.stop.set()
             if branch_thread.is_alive():
                 branch_thread.join(timeout=0.001)
             
@@ -494,7 +285,7 @@ class TreeAsyncEdgeClient:
             if metrics.total_rounds > 0:
                 metrics.avg_bubble_ms = (metrics.avg_bubble_ms * (metrics.total_rounds - 1) + bubble_ms) / metrics.total_rounds
 
-            drafted_branches, batch_draft_ms, _ = _snapshot_streamed_branches()
+            drafted_branches, batch_draft_ms, _ = branch_state.snapshot()
             if drafted_branches:
                 branches.extend(drafted_branches)
                 metrics.total_edge_draft_time_ms += batch_draft_ms
@@ -503,7 +294,7 @@ class TreeAsyncEdgeClient:
             correction = base_resp_cloud.correction_token_id
             branch_results = [
                 (branches[0], _VerifyResult(branches[0].branch_id, base_resp_cloud,
-                                            base_resp_cloud.rtt_ms or 0.0))
+                                            verify_rtt_ms))
             ]
             metrics.uplink_bytes += (len(committed_prefix) + len(base_draft)) * 4 + 64
 
@@ -523,8 +314,7 @@ class TreeAsyncEdgeClient:
 
             # Start timing: reuse prep time (receive response → send next request)
             prep_start = time.perf_counter()
-            
-            selected_branch = branches[0]
+
             prefetched_ids = []
             prefetched_logprobs = []
             usable_branches = sorted(
@@ -533,7 +323,7 @@ class TreeAsyncEdgeClient:
                 reverse=True,
             )
             for branch in usable_branches:
-                reusable = self._prefetch_from_branch(
+                reusable = self.tree_planner.reusable_continuation(
                     branch=branch,
                     base_draft=base_draft,
                     base_accepted=base_accepted,
@@ -541,7 +331,6 @@ class TreeAsyncEdgeClient:
                 )
                 if reusable is None:
                     continue
-                selected_branch = branch
                 prefetched_ids, prefetched_logprobs = reusable
                 break
 
@@ -554,7 +343,6 @@ class TreeAsyncEdgeClient:
             reuse_prep_ms = (prep_end - prep_start) * 1000
             metrics.reuse_prep_time_ms += reuse_prep_ms
 
-            total_drafted = sum(len(b.draft_ids) for b in branches)
             metrics.total_accepted_tokens += base_accepted
             committed_prefix.clear()
             committed_prefix.extend(new_committed)
