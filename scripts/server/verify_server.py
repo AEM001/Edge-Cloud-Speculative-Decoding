@@ -12,7 +12,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from vllm import LLM, SamplingParams
 
 logger = logging.getLogger(__name__)
@@ -49,6 +49,31 @@ class VerifyResponse(BaseModel):
     accepted_len: int
     correction_token_id: Optional[int]
     server_verify_time_ms: float
+    model_time_ms: Optional[float] = None
+    http_overhead_ms: Optional[float] = None
+
+
+class SpecExtendVerifyRequest(BaseModel):
+    request_id: str
+    prefix_ids: List[int]
+    tree_input_ids: List[int]
+    tree_position_ids: List[int]
+    parent_indices: List[int]
+    tree_attention_mask: List[List[int]]
+    retrieve_attn_scores: bool = False
+    retrieval_chunk_size: int = 32
+    retrieve_top_k: int = 32
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SpecExtendVerifyResponse(BaseModel):
+    request_id: str
+    accepted_len: int
+    correction_token_id: Optional[int]
+    accepted_tree_indices: List[int]
+    server_verify_time_ms: float
+    target_attn_scores: Optional[List[float]] = None
+    selected_chunk_ids: Optional[List[int]] = None
     model_time_ms: Optional[float] = None
     http_overhead_ms: Optional[float] = None
 
@@ -123,6 +148,8 @@ class CloudVerifier:
             "enforce_eager": bool(self.llm_kwargs.get("enforce_eager")),
             "attention_backend": self.attention_backend,
             "vllm_version": self.vllm_version,
+            "specextend_tree_verify": False,
+            "specextend_reason": "current server backend is vLLM linear verification",
         }
 
     # ------------------------------------------------------------------
@@ -251,7 +278,11 @@ app = FastAPI(title="PicoSpec Verify Server", version="1.0.0", lifespan=_lifespa
 async def health():
     if _verifier is None:
         raise HTTPException(503, "Not ready")
-    return {"status": "healthy", "model_info": _verifier.get_info()}
+    return {
+        "status": "healthy",
+        "model_info": _verifier.get_info(),
+        "runtime": _verifier.runtime_debug_info(),
+    }
 
 
 @app.post("/verify", response_model=VerifyResponse)
@@ -284,6 +315,21 @@ async def verify_draft(req: VerifyRequest):
         server_verify_time_ms=model_ms + http_overhead_ms,  # Total server time
         model_time_ms=model_ms,
         http_overhead_ms=http_overhead_ms,
+    )
+
+
+@app.post("/specextend/verify", response_model=SpecExtendVerifyResponse)
+async def verify_specextend_tree(req: SpecExtendVerifyRequest):
+    if _verifier is None:
+        raise HTTPException(503, "Not ready")
+
+    raise HTTPException(
+        status_code=501,
+        detail=(
+            "SpecExtend tree verification requires a custom target backend that "
+            "accepts tree_attention_mask and returns target attention scores. "
+            "The active server is the vLLM linear verifier."
+        ),
     )
 
 

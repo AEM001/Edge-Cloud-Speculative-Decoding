@@ -12,7 +12,7 @@ MAX_TOKENS="${MAX_TOKENS:-512}"
 # ============================================
 # PROMPT COUNT PER TYPE
 # Number of prompts to load for each prompt type
-# Default: 10
+# Default: 1
 # ============================================
 PROMPT_COUNT="${PROMPT_COUNT:-1}"
 
@@ -29,8 +29,8 @@ PROMPT_TYPES="${PROMPT_TYPES:-prompts_2048}"
 
 # ============================================
 # DRAFT MODEL SETTINGS
+# Defaults are set after SCRIPT_DIR is defined.
 # ============================================
-# These will be set after SCRIPT_DIR is defined below
 
 # ============================================
 # TREE BASE DRAFT SETTINGS
@@ -94,6 +94,10 @@ echo "Max Tokens: ${MAX_TOKENS}"
 echo "Prompt Count (per type): ${PROMPT_COUNT}"
 echo "Prompt Types: ${PROMPT_TYPES}"
 echo "K: ${K}"
+echo "Tree Branch Width: ${TREE_BRANCH_WIDTH}"
+echo "Tree Branch Draft Length: ${TREE_BRANCH_DRAFT_LENGTH}"
+echo "Draft Model: ${DRAFT_MODEL_PATH}"
+echo "Verify Server URL: ${VERIFY_SERVER_URL}"
 echo "=========================================="
 echo ""
 echo "Command:"

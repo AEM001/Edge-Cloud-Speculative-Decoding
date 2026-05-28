@@ -3,7 +3,7 @@
 # By default the 14B verifier runs on GPU 0.
 #
 # Usage:
-#   bash start_verify.sh [--port 6006]
+#   bash start_verify.sh [--port 6007]
 #
 # Stop with: Ctrl+C
 

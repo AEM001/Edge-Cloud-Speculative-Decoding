@@ -244,6 +244,52 @@ These are not metrics per se, but data structures used for communication between
 - `rtt_ms`: Round-trip time (network delay only)
 - `end_to_end_ms`: End-to-end latency (server + network)
 
+### SpecExtendTreeRequest
+- `request_id`: Request identifier
+- `prefix_ids`: Verified prefix token IDs
+- `tree_input_ids`: Draft tree token IDs in backend-defined node order
+- `tree_position_ids`: Position IDs for each tree token
+- `parent_indices`: Parent index for each tree node
+- `tree_attention_mask`: Tree attention mask for target verification
+- `retrieve_attn_scores`: Whether the cloud should return target attention scores
+- `retrieval_chunk_size`: Edge retrieval chunk size
+- `retrieve_top_k`: Number of chunks to keep in the working draft cache
+- `metadata`: Optional debug/config metadata
+
+### SpecExtendTreeResponse
+- `request_id`: Request identifier
+- `accepted_len`: Number of accepted draft-tree tokens
+- `correction_token_id`: Correction token, if needed
+- `accepted_tree_indices`: Indices into `tree_input_ids` for the accepted path
+- `server_verify_time_ms`: Server-side verification time
+- `target_attn_scores`: Optional target attention scores used for retrieval
+- `selected_chunk_ids`: Optional cloud-selected retrieval chunks
+- `model_time_ms`: Optional target backend model time
+- `http_overhead_ms`: Optional server HTTP/serialization overhead
+- `rtt_ms`: Client-measured round-trip time
+
+### SpecExtendRequestMetrics
+
+**Location:** `scripts/client/specextend_edge_client.py`
+
+**Purpose:** Per-request metrics for the full SpecExtend edge-cloud orchestration
+path. This path requires a custom backend and is not emitted by the current vLLM
+quick test.
+
+**Fields:**
+- `request_id`: Unique request identifier
+- `prompt`: Input prompt text
+- `total_latency_ms`: End-to-end client wall time
+- `generated_tokens`: Number of generated tokens
+- `total_rounds`: Number of cloud tree-verification rounds
+- `total_edge_draft_time_ms`: Time spent constructing draft trees on the edge
+- `total_server_verify_time_ms`: Cloud tree-verification time
+- `total_network_time_ms`: Client-observed verification time minus server time
+- `total_accepted_tokens`: Accepted draft-tree tokens
+- `retrieval_updates`: Number of rounds where retrieval state was updated
+- `selected_chunk_ids`: Most recent selected retrieval chunks
+- `round_details`: Per-round tree size, acceptance, retrieval flag, and selected chunks
+
 ---
 
 ## Metrics Storage and Output

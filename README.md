@@ -4,9 +4,20 @@ Research system for edge-cloud speculative decoding when the draft and verify
 models are physically separated.
 
 A small draft model runs on the **edge device** (GPU 1); a large verify model
-runs on the **cloud server** (GPU 0). The current quick experiment is fixed to
-the `good` network profile and compares direct generation against the tree async
-method.
+runs on the **cloud server** (GPU 0). The runnable baseline uses vLLM/AWQ for
+direct generation and greedy speculative verification. The repository also has
+an explicit integration boundary for porting the full SpecExtend method into
+this edge-cloud split.
+
+**Current status**
+
+- Runnable today: direct cloud generation vs vLLM-backed tree-async edge
+  drafting on the `good` network profile.
+- Integrated contract: SpecExtend tree request/response, edge retrieval planner,
+  and client orchestration.
+- Not runnable yet: full SpecExtend tree verification on the cloud. The current
+  vLLM server returns `501` on `/specextend/verify` because vLLM does not expose
+  the target attention scores and KV-cache control required by SpecExtend.
 
 ---
 
@@ -14,7 +25,7 @@ method.
 
 ```
 GPU 0 (RTX 3090)  →  cloud / verify server   Qwen2.5-14B-Instruct-AWQ
-GPU 1 (RTX 3090)  →  edge  / draft model     Qwen2.5-1.5B-Instruct-AWQ
+GPU 1 (RTX 3090)  →  edge  / draft model     Qwen2.5-3B-Instruct-AWQ by default
 ```
 
 ---
@@ -25,16 +36,19 @@ GPU 1 (RTX 3090)  →  edge  / draft model     Qwen2.5-1.5B-Instruct-AWQ
 draft/
 ├── scripts/
 │   ├── core/                      # Core infrastructure (shared across codebase)
-│   │   ├── protocol.py            # EdgeRequest / CloudResponse dataclasses + wire format
+│   │   ├── protocol.py            # vLLM and SpecExtend wire dataclasses
 │   │   ├── model_manager.py       # Model loader / GPU assignment
-│   │   └── draft_generator.py     # vLLM draft token generator (TokensPrompt, prefix caching)
+│   │   ├── draft_generator.py     # vLLM draft token generator (TokensPrompt, prefix caching)
+│   │   ├── specextend_backend.py  # Backend protocols for full SpecExtend
+│   │   └── specextend_retrieval.py # Portable retrieval chunk selection
 │   ├── client/                    # Edge clients
 │   │   ├── __init__.py
 │   │   ├── edge_client.py         # Synchronous speculative decoding loop
+│   │   ├── specextend_edge_client.py # SpecExtend tree/retrieval orchestrator
 │   │   └── http_cloud_client.py   # HTTP/keep-alive transport to verify server
 │   ├── server/                    # Cloud verification server
 │   │   ├── __init__.py
-│   │   └── verify_server.py       # FastAPI server: /verify (speculative) + /generate (direct)
+│   │   └── verify_server.py       # /verify, /generate, /specextend/verify capability boundary
 │   └── experiments/               # Experiment-specific utilities
 │       ├── network_conditions.py  # Throttle simulation profiles; quick test uses good
 │       ├── prompt_loader.py       # GSM8K, HumanEval, LongWriter prompt loader
@@ -45,7 +59,9 @@ draft/
 │           ├── quick_test_results.json
 │           ├── quick_test_rounds.jsonl
 │           └── quick_test_summary.json
-├── config.py                      # Model paths, GPU memory fractions
+├── Docs/
+│   ├── specextend_integration.md  # Full SpecExtend edge-cloud contract
+│   └── metrics_system.md          # Output schemas and metric meanings
 └── models/                        # Downloaded model weight directories
     ├── Qwen2.5-1.5B-Instruct-AWQ
     ├── Qwen2.5-3B-Instruct-AWQ
@@ -71,9 +87,10 @@ bash start_verify.sh
 
 - verify model: `models/Qwen2.5-14B-Instruct-AWQ`
 - GPU: `0`
-- max model length: `32768`
+- max model length: `12000`
 - prefix caching: enabled
 - eager mode: enabled by default via `VERIFY_ENFORCE_EAGER=1`
+- endpoint: `http://localhost:6007`
 
 ### 2. Run the quick test on GPU 1
 
@@ -84,13 +101,14 @@ bash start_verify.sh
 The wrapper runs **direct** vs **tree async** on the `good` network profile.
 Current wrapper defaults are:
 
-- prompt source: `longwriter_single_turn:input_10k`
-- prompt count: `10`
-- max generated tokens: `4096`
-- tree base draft length: `K=12`
-- tree branch width: `3`
-- tree branch pre-draft length: `10`
-- draft max model length: `32768`
+- prompt source: `prompts_2048`
+- prompt count: `1`
+- max generated tokens: `512`
+- tree base draft length: `K=15`
+- tree branch width: `4`
+- tree branch pre-draft length: `12`
+- draft model: `models/Qwen2.5-3B-Instruct-AWQ`
+- draft max model length: `12000`
 
 `quick_test.py` writes normalized result rows to:
 
@@ -110,6 +128,34 @@ The analyzer reads `quick_test_results.json` and writes:
 quick_test_summary.json   # direct vs tree averages and speedup
 quick_test_rounds.jsonl   # flattened direct / per-method detail rows
 ```
+
+## Full SpecExtend Integration
+
+SpecExtend is not just "send a longer draft to the cloud." The full method
+requires:
+
+- a draft tree, not only a linear `draft_ids` list
+- target-side tree verification with tree attention masks
+- last-layer target attention scores for retrieval
+- edge-side full draft KV cache plus a smaller working KV cache selected by
+  target-attention-ranked chunks
+
+The new SpecExtend-facing API is separate from the vLLM baseline:
+
+- `SpecExtendTreeRequest`: prefix IDs, tree token IDs, tree position IDs,
+  parent indices, tree attention mask, and retrieval flags.
+- `SpecExtendTreeResponse`: accepted tree path indices, correction token,
+  optional target attention scores, and optional selected chunk IDs.
+- `SpecExtendEdgeClient`: coordinates draft-tree construction, cloud
+  verification, and retrieval-state updates.
+
+The current FastAPI server exposes `/specextend/verify`, but it intentionally
+returns `501` while the active backend is vLLM. That fail-fast behavior prevents
+experiments from being mislabeled as "full SpecExtend" when they are actually
+using the older linear verifier.
+
+See [Docs/specextend_integration.md](Docs/specextend_integration.md) for the
+backend contract and porting checklist.
 
 ## Verify Method — Greedy Single Prefill Pass
 
@@ -138,7 +184,8 @@ The `/verify` protocol is intentionally slim:
 - Response sends `request_id`, `accepted_len`, `correction_token_id`, and `server_verify_time_ms`.
 - Accepted token IDs are not returned because the edge already has `draft_ids[:accepted_len]`.
 
-- Default verify context length is `32768` for long-input LongWriter runs.
+- Default verify context length in `start_verify.sh` is `12000`. Override with
+  `VERIFY_MAX_LEN=32768` for long-input experiments when memory allows.
 
 ---
 
@@ -152,7 +199,7 @@ Round n:
       draft K base tokens and send them as the verify draft
 
   while verification runs:
-      pre-draft local branches from simple offsets
+      pre-draft local branches from draft-model candidate tokens
 
   when verify returns:
       commit accepted base tokens + correction
@@ -166,17 +213,9 @@ wait to top them up to the full base draft length `K`.
 If no reusable tokens exist, the edge model drafts a fresh base draft of length
 `K`, capped by the remaining generation budget.
 
-The current pre-draft offset policy is deliberately simple. For a verify draft
-of length `sent_draft_len`, branches are started at:
-
-```text
-1
-sent_draft_len
-round(0.6 * tree_branch_draft_length)
-```
-
-Offsets are clipped into `[1, sent_draft_len]`, duplicates are removed, and the
-result is bounded by `tree_branch_width`.
+The current pre-draft policy ranks branch roots using local draft logprobs and
+next-token candidates from the draft model. This is latency-oriented local
+prefetching, not full SpecExtend retrieval.
 
 A branch is reusable only when it reconnects exactly to the target-verified path:
 
@@ -213,7 +252,7 @@ The system supports three prompt families for evaluation:
   - `longwriter_single_turn:input_6k`
   - `longwriter_single_turn:input_8k`
   - `longwriter_single_turn:input_10k`
-- Current quick wrapper default: `longwriter_single_turn:input_10k`
+- Current quick wrapper default: `prompts_2048`
 
 **Prompt Selection**
 - Prompts are randomly sampled from each dataset using `random.sample()`
@@ -252,6 +291,8 @@ quick_test_results.json   # written by quick_test.py
 quick_test_summary.json   # written by analyze_quick_run.py
 quick_test_rounds.jsonl   # written by analyze_quick_run.py
 ```
+
+For field-level definitions, see [Docs/metrics_system.md](Docs/metrics_system.md).
 
 ---
 

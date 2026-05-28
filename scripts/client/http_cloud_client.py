@@ -3,7 +3,12 @@ import time
 import logging
 import requests
 
-from core.protocol import EdgeRequest, CloudResponse
+from core.protocol import (
+    CloudResponse,
+    EdgeRequest,
+    SpecExtendTreeRequest,
+    SpecExtendTreeResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +28,7 @@ class HTTPCloudClient:
         self.timeout = timeout
         self.retry_attempts = retry_attempts
         self.verify_endpoint = f"{self.server_url}/verify"
+        self.specextend_verify_endpoint = f"{self.server_url}/specextend/verify"
         self.session = requests.Session()
         self.session.trust_env = False
         
@@ -96,6 +102,50 @@ class HTTPCloudClient:
         # All retries failed
         logger.error(f"All retry attempts failed. Last error: {last_error}")
         raise RuntimeError(f"Failed to verify draft after {self.retry_attempts} attempts: {last_error}")
+
+    def verify_specextend_tree(self, request: SpecExtendTreeRequest) -> SpecExtendTreeResponse:
+        request_start = time.time()
+        request_data = request.to_dict()
+
+        last_error = None
+        for attempt in range(self.retry_attempts):
+            try:
+                response = self.session.post(
+                    self.specextend_verify_endpoint,
+                    json=request_data,
+                    timeout=self.timeout,
+                )
+                response.raise_for_status()
+
+                cloud_response = SpecExtendTreeResponse.from_dict(response.json())
+                cloud_response.rtt_ms = (time.time() - request_start) * 1000
+                return cloud_response
+
+            except requests.exceptions.Timeout as e:
+                last_error = e
+                logger.warning(
+                    "SpecExtend verify timeout (attempt %d/%d)",
+                    attempt + 1,
+                    self.retry_attempts,
+                )
+                if attempt < self.retry_attempts - 1:
+                    time.sleep(1.0)
+
+            except requests.exceptions.RequestException as e:
+                last_error = e
+                logger.warning(
+                    "SpecExtend verify failed (attempt %d/%d): %s",
+                    attempt + 1,
+                    self.retry_attempts,
+                    e,
+                )
+                if attempt < self.retry_attempts - 1:
+                    time.sleep(1.0)
+
+        logger.error("All SpecExtend retry attempts failed. Last error: %s", last_error)
+        raise RuntimeError(
+            f"Failed to verify SpecExtend tree after {self.retry_attempts} attempts: {last_error}"
+        )
 
     def check_health(self) -> bool:
         """

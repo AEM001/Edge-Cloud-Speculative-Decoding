@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -97,4 +97,99 @@ class CloudResponse:
             http_overhead_ms=data.get("http_overhead_ms"),
             network_tx_ms=data.get("network_tx_ms"),
             network_rx_ms=data.get("network_rx_ms"),
+        )
+
+
+@dataclass
+class SpecExtendTreeRequest:
+    """Wire request for full SpecExtend tree verification.
+
+    This is intentionally separate from EdgeRequest. EdgeRequest is the current
+    linear vLLM verifier contract; SpecExtend needs the whole draft tree plus
+    enough structural metadata for the cloud target model to run tree attention.
+    """
+
+    request_id: str
+    prefix_ids: List[int]
+    tree_input_ids: List[int]
+    tree_position_ids: List[int]
+    parent_indices: List[int]
+    tree_attention_mask: List[List[int]]
+    retrieve_attn_scores: bool = False
+    retrieval_chunk_size: int = 32
+    retrieve_top_k: int = 32
+    metadata: Optional[Dict[str, Any]] = None
+
+    def to_dict(self):
+        return {
+            "request_id": self.request_id,
+            "prefix_ids": self.prefix_ids,
+            "tree_input_ids": self.tree_input_ids,
+            "tree_position_ids": self.tree_position_ids,
+            "parent_indices": self.parent_indices,
+            "tree_attention_mask": self.tree_attention_mask,
+            "retrieve_attn_scores": self.retrieve_attn_scores,
+            "retrieval_chunk_size": self.retrieval_chunk_size,
+            "retrieve_top_k": self.retrieve_top_k,
+            "metadata": self.metadata or {},
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SpecExtendTreeRequest":
+        return cls(
+            request_id=data["request_id"],
+            prefix_ids=data["prefix_ids"],
+            tree_input_ids=data["tree_input_ids"],
+            tree_position_ids=data["tree_position_ids"],
+            parent_indices=data["parent_indices"],
+            tree_attention_mask=data["tree_attention_mask"],
+            retrieve_attn_scores=bool(data.get("retrieve_attn_scores", False)),
+            retrieval_chunk_size=int(data.get("retrieval_chunk_size", 32)),
+            retrieve_top_k=int(data.get("retrieve_top_k", 32)),
+            metadata=data.get("metadata") or {},
+        )
+
+
+@dataclass
+class SpecExtendTreeResponse:
+    """Cloud response for SpecExtend tree verification and retrieval feedback."""
+
+    request_id: str
+    accepted_len: int
+    correction_token_id: Optional[int]
+    accepted_tree_indices: List[int]
+    server_verify_time_ms: float
+    target_attn_scores: Optional[List[float]] = None
+    selected_chunk_ids: Optional[List[int]] = None
+    model_time_ms: Optional[float] = None
+    http_overhead_ms: Optional[float] = None
+    rtt_ms: Optional[float] = None
+
+    def to_dict(self):
+        return {
+            "request_id": self.request_id,
+            "accepted_len": self.accepted_len,
+            "correction_token_id": self.correction_token_id,
+            "accepted_tree_indices": self.accepted_tree_indices,
+            "server_verify_time_ms": self.server_verify_time_ms,
+            "target_attn_scores": self.target_attn_scores,
+            "selected_chunk_ids": self.selected_chunk_ids,
+            "model_time_ms": self.model_time_ms,
+            "http_overhead_ms": self.http_overhead_ms,
+            "rtt_ms": self.rtt_ms,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SpecExtendTreeResponse":
+        return cls(
+            request_id=data["request_id"],
+            accepted_len=data["accepted_len"],
+            correction_token_id=data.get("correction_token_id"),
+            accepted_tree_indices=data.get("accepted_tree_indices") or [],
+            server_verify_time_ms=data["server_verify_time_ms"],
+            target_attn_scores=data.get("target_attn_scores"),
+            selected_chunk_ids=data.get("selected_chunk_ids"),
+            model_time_ms=data.get("model_time_ms"),
+            http_overhead_ms=data.get("http_overhead_ms"),
+            rtt_ms=data.get("rtt_ms"),
         )
