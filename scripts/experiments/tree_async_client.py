@@ -7,11 +7,12 @@ without the complexity of the parent async pipeline.
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 import uuid
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Callable, Dict, List, Optional, Tuple
 
 from core.protocol import CloudResponse, DraftRequest, EdgeRequest
 
@@ -81,6 +82,7 @@ class TreeBranch:
     draft_ids: List[int]
     draft_logprobs: List[float]
     draft_time_ms: float
+    score: float = 0.0
 
 
 class TreeAsyncEdgeClient:
@@ -91,7 +93,7 @@ class TreeAsyncEdgeClient:
     """
 
     BRANCH_WIDTH: int = 3
-    PREDRAFT_ACCEPTANCE_RATIO: float = 0.60
+    PROACTIVE_DECAY: float = math.log(0.95)
 
     def __init__(
         self,
@@ -152,20 +154,77 @@ class TreeAsyncEdgeClient:
         )
         return metrics
 
-    def _tree_offsets(self, sent_draft_len: int) -> List[int]:
-        """Return the three simple pre-draft offsets for the current verify draft."""
-        if sent_draft_len <= 0:
+    def _proactive_seed_branches(
+        self,
+        committed_prefix: List[int],
+        base_draft: List[int],
+        base_logprobs: List[float],
+        branch_base_id: int,
+    ) -> List[TreeBranch]:
+        """Choose SpecEdge-style proactive branch roots from local logprobs.
+
+        SpecEdge picks the best bonus token by scoring leaf logprob plus the
+        next-token logprob and a decay. This local adaptation treats each
+        position along the sent linear draft as a possible verified leaf and
+        creates branches from the highest scoring bonus tokens.
+        """
+        if (
+            not base_draft
+            or self.branch_draft_length <= 0
+            or not hasattr(self.draft_generator, "generate_next_token_candidates_batch")
+        ):
             return []
 
-        predraft_center = int(round(self.PREDRAFT_ACCEPTANCE_RATIO * self.branch_draft_length))
-        candidates = [1, sent_draft_len, predraft_center]
+        prefixes: List[List[int]] = []
+        accumulated_scores: List[float] = []
+        running_score = 0.0
+        for idx, _ in enumerate(base_draft):
+            logprob = base_logprobs[idx] if idx < len(base_logprobs) else -float("inf")
+            if math.isfinite(logprob):
+                running_score += float(logprob)
+            prefixes.append(list(committed_prefix) + base_draft[:idx + 1])
+            accumulated_scores.append(running_score)
 
-        offsets: List[int] = []
-        for candidate in candidates:
-            clipped = max(1, min(sent_draft_len, int(candidate)))
-            if clipped not in offsets:
-                offsets.append(clipped)
-        return offsets[:self.branch_width]
+        candidate_lists = self.draft_generator.generate_next_token_candidates_batch(
+            prefixes=prefixes,
+            num_candidates=max(1, self.branch_width),
+            temperature=self.temperature,
+        )
+
+        ranked: List[Tuple[float, int, int, float]] = []
+        sent_tokens = set(base_draft)
+        for prefix_idx, candidates in enumerate(candidate_lists):
+            offset = prefix_idx + 1
+            for token_id, token_logprob in candidates:
+                if token_id in sent_tokens and offset < len(base_draft):
+                    continue
+                score = accumulated_scores[prefix_idx] + self.PROACTIVE_DECAY + token_logprob
+                ranked.append((score, offset, token_id, token_logprob))
+
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        branches: List[TreeBranch] = []
+        seen_roots = set()
+        for score, offset, token_id, token_logprob in ranked:
+            root_key = (offset, token_id)
+            if root_key in seen_roots:
+                continue
+            seen_roots.add(root_key)
+            branch_id = branch_base_id + len(branches) + 1
+            branches.append(
+                TreeBranch(
+                    branch_id=branch_id,
+                    offset=offset,
+                    prefix=list(committed_prefix) + base_draft[:offset],
+                    draft_ids=[token_id],
+                    draft_logprobs=[token_logprob],
+                    draft_time_ms=0.0,
+                    score=score,
+                )
+            )
+            if len(branches) >= self.branch_width:
+                break
+
+        return branches
 
     def _prefetch_from_branch(
         self,
@@ -289,33 +348,24 @@ class TreeAsyncEdgeClient:
             # Draft speculative branches in a separate background task. The
             # critical path never waits for this task; it only consumes branch
             # results that are already ready when base verification returns.
-            branch_offsets = self._tree_offsets(len(base_draft))
-            branch_prefixes = []
-            for offset in branch_offsets:
-                prefix = list(committed_prefix)
-                prefix.extend(base_draft[:offset])
-                branch_prefixes.append((offset, prefix))
-
             branch_base_id = tree_id * 100
+            branch_seed_t0 = time.perf_counter()
+            proactive_seeds = self._proactive_seed_branches(
+                committed_prefix=list(committed_prefix),
+                base_draft=base_draft,
+                base_logprobs=base_logprobs,
+                branch_base_id=branch_base_id,
+            )
+            branch_seed_ms = (time.perf_counter() - branch_seed_t0) * 1000
             branch_lock = threading.Lock()
             branch_stop = threading.Event()
             branch_done_at: List[float] = []
-            branch_batch_ms: List[float] = [0.0]
+            branch_batch_ms: List[float] = [branch_seed_ms if proactive_seeds else 0.0]
             branch_records: Dict[int, TreeBranch] = {
-                branch_base_id + branch_index: TreeBranch(
-                    branch_id=branch_base_id + branch_index,
-                    offset=offset,
-                    prefix=list(prefix),
-                    draft_ids=[],
-                    draft_logprobs=[],
-                    draft_time_ms=0.0,
-                )
-                for branch_index, (offset, prefix) in enumerate(branch_prefixes, start=1)
+                branch.branch_id: branch for branch in proactive_seeds
             }
 
             def _run_branch_draft(
-                prefixes=branch_prefixes,
-                branch_base_id=branch_base_id,
                 local_branch_records=branch_records,
                 local_branch_lock=branch_lock,
                 local_branch_stop=branch_stop,
@@ -331,14 +381,14 @@ class TreeAsyncEdgeClient:
                 try:
                     active = [
                         {
-                            "branch_id": branch_base_id + branch_index,
-                            "prefix": list(prefix),
-                            "draft_ids": [],
+                            "branch_id": branch.branch_id,
+                            "prefix": list(branch.prefix),
+                            "draft_ids": list(branch.draft_ids),
                         }
-                        for branch_index, (_, prefix) in enumerate(prefixes, start=1)
+                        for branch in local_branch_records.values()
                     ]
 
-                    for _ in range(self.branch_draft_length):
+                    for _ in range(max(0, self.branch_draft_length - 1)):
                         if local_branch_stop.is_set() or not active:
                             break
 
@@ -414,7 +464,7 @@ class TreeAsyncEdgeClient:
                     return streamed, branch_batch_ms[0], done_at
 
             branch_thread = threading.Thread(target=_run_branch_draft, daemon=True)
-            if branch_prefixes:
+            if proactive_seeds:
                 branch_thread.start()
 
             if not branches:

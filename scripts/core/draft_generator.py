@@ -133,6 +133,65 @@ class VLLMDraftGenerator:
 
         return responses
 
+    def generate_next_token_candidates_batch(
+        self,
+        prefixes: List[List[int]],
+        num_candidates: int,
+        temperature: float = 0.0,
+        top_p: float = 0.95,
+    ) -> List[List[Tuple[int, float]]]:
+        """Return top next-token candidates for each prefix.
+
+        This exposes the local draft model's next-token distribution so callers
+        can build proactive branches from likely correction/continuation tokens
+        instead of choosing branch offsets by a fixed heuristic.
+        """
+        if not prefixes:
+            return []
+        if self.llm is None or self.tokenizer is None:
+            raise RuntimeError("Model not loaded")
+
+        from vllm import SamplingParams, TokensPrompt
+
+        sampling_params = SamplingParams(
+            temperature=temperature if temperature > 0 else 0.0,
+            top_p=top_p,
+            max_tokens=1,
+            logprobs=max(1, num_candidates),
+        )
+        with self._generate_lock:
+            outputs = self.llm.generate(
+                prompts=[TokensPrompt(prompt_token_ids=list(prefix)) for prefix in prefixes],
+                sampling_params=sampling_params,
+                use_tqdm=False,
+            )
+
+        all_candidates: List[List[Tuple[int, float]]] = []
+        for output in outputs:
+            if not output.outputs:
+                all_candidates.append([])
+                continue
+
+            generated_ids = output.outputs[0].token_ids[:1]
+            out_logprobs = output.outputs[0].logprobs or []
+            logprobs_dict = out_logprobs[0] if out_logprobs else {}
+            candidates = []
+            for token_id, token_logprob_obj in logprobs_dict.items():
+                logprob = (
+                    token_logprob_obj.logprob
+                    if hasattr(token_logprob_obj, "logprob")
+                    else float(token_logprob_obj)
+                )
+                candidates.append((int(token_id), float(logprob)))
+
+            if generated_ids and all(token_id != generated_ids[0] for token_id, _ in candidates):
+                candidates.append((int(generated_ids[0]), -float("inf")))
+
+            candidates.sort(key=lambda item: item[1], reverse=True)
+            all_candidates.append(candidates[:num_candidates])
+
+        return all_candidates
+
     def stream_draft_tokens(
         self,
         request: DraftRequest,
