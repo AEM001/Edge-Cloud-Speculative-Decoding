@@ -22,6 +22,7 @@ VERIFY_GPU_ID="${VERIFY_GPU_ID:-0}"
 VERIFY_DEVICE="${VERIFY_DEVICE:-cuda:$VERIFY_GPU_ID}"
 VERIFY_MAX_LEN="${VERIFY_MAX_LEN:-32768}"
 VERIFY_DTYPE="${VERIFY_DTYPE:-fp16}"
+VERIFY_ATTN_IMPLEMENTATION="${VERIFY_ATTN_IMPLEMENTATION:-eager}"
 
 # Use .venv environment
 PYTHON="$REPO_DIR/.venv/bin/python3"
@@ -31,6 +32,7 @@ export VERIFY_MODEL_PATH
 export VERIFY_DEVICE
 export VERIFY_MAX_LEN
 export VERIFY_DTYPE
+export VERIFY_ATTN_IMPLEMENTATION
 
 # Parse optional --port arg
 while [[ $# -gt 0 ]]; do
@@ -48,6 +50,7 @@ echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
 echo "Verify device: $VERIFY_DEVICE"
 echo "Verify dtype: $VERIFY_DTYPE"
 echo "Verify max model length: $VERIFY_MAX_LEN"
+echo "Verify attention: $VERIFY_ATTN_IMPLEMENTATION"
 echo ""
 
 cd "$REPO_DIR"

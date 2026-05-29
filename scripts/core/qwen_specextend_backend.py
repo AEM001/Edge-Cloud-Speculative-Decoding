@@ -232,6 +232,27 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             appended_kv_tokens=appended,
         )
 
+    def build_draft_candidate(
+        self,
+        verified_prefix: List[int],
+        nodes: int,
+        max_depth: int,
+        retrieval_token_indices: Optional[List[int]] = None,
+    ) -> DraftTreeResult:
+        start = time.perf_counter()
+        draft_context = self._draft_context(verified_prefix, retrieval_token_indices)
+        tree = self._grow_tree(
+            draft_context,
+            nodes=max(1, nodes),
+            max_depth=max(1, max_depth),
+            position_start=len(verified_prefix),
+        )
+        return DraftTreeResult(
+            tree=tree,
+            draft_time_ms=(time.perf_counter() - start) * 1000,
+            appended_kv_tokens=0,
+        )
+
     @staticmethod
     def _draft_context(prefix: List[int], retrieval_token_indices: Optional[List[int]]) -> List[int]:
         recent_tokens = int(os.getenv("DRAFT_RECENT_TOKENS", "128"))

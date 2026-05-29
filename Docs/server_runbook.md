@@ -81,6 +81,7 @@ On GPU 0:
 VERIFY_GPU_ID=0 \
 VERIFY_MODEL_PATH=$PWD/models/Qwen3-8B \
 VERIFY_DTYPE=fp16 \
+VERIFY_ATTN_IMPLEMENTATION=eager \
 VERIFY_MAX_LEN=32768 \
 bash start_verify.sh --port 6007
 ```
@@ -96,6 +97,7 @@ Expected runtime fields:
 - `backend`: `custom_qwen3`
 - `specextend_tree_verify`: `true`
 - `attention_scores`: `true`
+- `attn_implementation`: `eager` when target-attention retrieval is required
 
 ## 5. Run A Small SpecExtend Smoke Test
 
@@ -137,10 +139,19 @@ If the smoke run works, increase:
 Recommended retrieval run for PG-19 2k-token inputs:
 
 ```bash
+# Start the verify server with target attentions enabled.
+VERIFY_GPU_ID=0 \
+VERIFY_MODEL_PATH=$PWD/models/Qwen3-8B \
+VERIFY_ATTN_IMPLEMENTATION=eager \
+bash start_verify.sh --port 6007
+
+# Run the edge side from another shell.
 DRAFT_GPU_ID=1 \
 DRAFT_MODEL_PATH=$PWD/models/Qwen3-1.7B \
 DRAFT_ATTN_IMPLEMENTATION=sdpa \
 DRAFT_RECENT_TOKENS=128 \
+SPECEXTEND_ASYNC_PIPELINE=1 \
+SPECEXTEND_PIPELINE_OFFSETS=full,half \
 VERIFY_SERVER_URL=http://localhost:6007 \
 MAX_TOKENS=256 \
 PROMPT_TYPES=pg19 \
@@ -151,6 +162,16 @@ RETRIEVE_EVERY_N_STEPS=8 \
 RETRIEVE_TOP_K=16 \
 ./quick.sh
 ```
+
+Pipeline notes:
+
+- Use `SPECEXTEND_PIPELINE_OFFSETS=full,half` to prebuild candidates for both
+  full acceptance and partial acceptance while cloud verification is in flight.
+- On a real edge/cloud split, this overlaps draft compute with network and
+  target verify latency. On a single GPU, it can be slower because both sides
+  contend for the same device.
+- Candidate reuse is reported per round as `pipeline_hit`, `pipeline_built`,
+  `pipeline_wait_ms`, and `pipeline_reuse`.
 
 ## 6. Inspect Results
 

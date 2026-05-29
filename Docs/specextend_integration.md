@@ -54,9 +54,15 @@ output text.
   performs many draft forwards.
 - The target and draft backends now maintain Transformers dynamic KV caches.
   Rejections rewind to the shared prefix instead of recomputing the whole prompt.
-- Retrieval is active through cached last-token target attention. The draft
-  backend builds its working context from selected retrieval chunks plus a recent
-  suffix controlled by `DRAFT_RECENT_TOKENS`.
+- Retrieval is active through cached last-token target attention. Start the
+  verify server with `VERIFY_ATTN_IMPLEMENTATION=eager`; SDPA is faster but does
+  not expose attention weights in Transformers. The draft backend builds its
+  working context from selected retrieval chunks plus a recent suffix controlled
+  by `DRAFT_RECENT_TOKENS`.
+- The edge client supports an asynchronous verification pipeline. While a draft
+  tree is in flight to the cloud, the edge builds candidate next drafts at
+  `SPECEXTEND_PIPELINE_OFFSETS` such as `full,half`. A candidate is reused only
+  when the returned accept length and correction token make it an exact match.
 - On a single V100 with Qwen3-8B target and Qwen3-1.7B draft, fully cached
   direct generation remains faster in current measurements. SpecExtend needs a
   cheaper draft, better acceptance, separate GPUs, or deeper tensor-level
