@@ -1,0 +1,72 @@
+{
+  "config": {
+    "network": "good",
+    "methods": [
+      "direct",
+      "specextend"
+    ],
+    "max_tokens": 256,
+    "prompt_count": 1,
+    "prompt_types": [
+      "pg19"
+    ],
+    "prompt_input_tokens": 2048,
+    "draft_recent_tokens": "256",
+    "async_pipeline": "1",
+    "pipeline_offsets": "full,half",
+    "nodes": 32,
+    "threshold": 0.7,
+    "max_depth": 8,
+    "retrieval_chunk_size": 64,
+    "retrieve_top_k": 16,
+    "retrieve_every_n_steps": 16
+  },
+  "results": [
+    {
+      "method": "direct",
+      "method_family": "direct",
+      "network": "good",
+      "prompt_type": "pg19",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 256,
+        "total_time_ms": 18571.130782902885,
+        "tokens_per_second": 13.784836421252331
+      },
+      "timing": {
+        "client_wall_ms": 18571.130782902885,
+        "local_draft_ms": 0.0,
+        "server_model_ms": 18551.916134543717,
+        "server_total_ms": 18551.916134543717,
+        "http_rpc_ms": 18554.949482902884,
+        "simulated_ul_ms": 8.6464,
+        "simulated_dl_ms": 7.5349,
+        "simulated_network_ms": 16.1813,
+        "avg_rtt_ms": 0.0
+      },
+      "speculative": {
+        "rounds": 0,
+        "nodes": 0,
+        "accepted_draft_tokens": 0,
+        "correction_tokens": 0,
+        "generated_per_round": 0.0,
+        "acceptance_length": 0.0
+      },
+      "verify_runtime": {
+        "backend": null,
+        "specextend_tree_verify": null,
+        "attention_scores": null
+      },
+      "raw": {
+        "direct_timing": {
+          "tokens": 256,
+          "total_ms": 18571.130782902885,
+          "server_ms": 18551.916134543717,
+          "http_ms": 18554.949482902884,
+          "ul_ms": 8.6464,
+          "dl_ms": 7.5349
+        }
+      }
+    }
+  ]
+}

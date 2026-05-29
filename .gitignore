@@ -65,13 +65,14 @@ htmlcov/
 /models/Qwen2.5-7B-Instruct-AWQ
 /models/Qwen2.5-3B-Instruct-AWQ
 /models/Qwen3-1.7B/
+/models/Qwen3-14B-AWQ/
 models/hf.txt
 /experiments/outputs*/
 
 # Local data artifacts
-data/
+
 *.parquet
 *.arrow
-
+data/pg19
 # macOS
 .DS_Store

@@ -1,106 +1,63 @@
 # Edge-Cloud SpecExtend
 
-Research system for real SpecExtend-style edge-cloud speculative decoding. A
-custom Qwen3 draft backend runs on the edge GPU and a custom Qwen3 target
-backend runs on the cloud GPU. The active path uses draft trees, target tree
-verification, last-layer target attention scores, and retrieval-driven draft
-cache bookkeeping.
-
-## Current Status
-
-- Runnable: direct cloud generation and real `specextend` tree verification on
-  the `good` network profile.
-- Backend: Hugging Face Qwen3 with eager attention, exposed through custom
-  backend classes in `scripts/core/qwen_specextend_backend.py`.
-- Protocol: `SpecExtendTreeRequest` and `SpecExtendTreeResponse` over HTTP.
-- Scope: batch size 1, correctness-first implementation. CUDA graph and custom
-  kernel optimization can be added after correctness/performance baselines are
-  stable.
+Edge-cloud speculative decoding: a Qwen3 draft model on the edge GPU builds
+draft trees; a Qwen3 target model on the cloud GPU verifies them. The draft
+backend uses a sparse KV cache (retrieved chunks + recent window) so that only
+newly appended tokens are forwarded each round rather than the full context.
 
 ## Hardware Defaults
 
 ```text
-GPU 0  -> cloud / verify server  models/Qwen3-8B
-GPU 1  -> edge  / draft backend  models/Qwen3-8B
+GPU 0  → cloud / verify server   models/Qwen3-14B-AWQ  (eager attention)
+GPU 1  → edge  / draft backend   models/Qwen3-1.7B     (SDPA)
 ```
 
-Override with `VERIFY_MODEL_PATH`, `VERIFY_DEVICE`, `DRAFT_MODEL_PATH`, and
-`DRAFT_DEVICE`.
-
-## Project Structure
-
-```text
-draft/
-├── scripts/
-│   ├── core/
-│   │   ├── protocol.py
-│   │   ├── qwen_specextend_backend.py
-│   │   ├── specextend_backend.py
-│   │   └── specextend_retrieval.py
-│   ├── client/
-│   │   ├── http_cloud_client.py
-│   │   └── specextend_edge_client.py
-│   ├── server/
-│   │   └── verify_server.py
-│   └── experiments/
-│       ├── network_conditions.py
-│       ├── prompt_loader.py
-│       ├── quick_test.py
-│       └── analyze_quick_run.py
-├── Docs/
-│   ├── specextend_integration.md
-│   └── metrics_system.md
-└── models/
-```
+Override with `VERIFY_MODEL_PATH`, `VERIFY_DEVICE`, `DRAFT_MODEL_PATH`, `DRAFT_DEVICE`.
 
 ## Quick Start
 
-Start the target verify server:
-
 ```bash
+# Terminal 1 — start verify server (stays running)
 bash start_verify.sh
+
+# Terminal 2 — run experiment
+bash run_quick.sh
 ```
 
-Run the quick experiment:
+Or launch both together:
 
 ```bash
-./quick.sh
+bash run_2x3090.sh
 ```
 
-Defaults:
+Results: `scripts/experiments/outputs_quick/quick_test_results_*.json`
 
-- prompt source: `prompts_2048`
-- prompt count: `1`
-- max generated tokens: `512`
-- draft tree nodes: `32`
-- max tree depth: `8`
-- retrieval chunk size: `32`
-- retrieval top-k chunks: `32`
+## Latest Results (2026-05-30, 2× RTX 3090)
 
-Results are written to:
+PG-19, 2048 input tokens, 256 output tokens, nodes=32, depth=8.
 
-```text
-scripts/experiments/outputs_quick/quick_test_results_*.json
-```
+| Method | Time | Tok/s | Acceptance length |
+|--------|------|-------|-------------------|
+| direct (14B-AWQ) | 18.6 s | 13.7 | — |
+| specextend (1.7B draft) | **10.6 s** | **24.4** | 6.03 |
 
-## SpecExtend Runtime
+SpecExtend is **1.78× faster** than direct generation.
 
-The edge client:
+## Key Environment Variables
 
-- encodes the prompt
-- builds a draft tree through `QwenSpecExtendDraftBackend`
-- keeps full draft-cache token bookkeeping and a retrieval-selected working view
-- sends `SpecExtendTreeRequest` to the cloud
-- commits accepted tree-path tokens plus the target correction token
-- updates retrieval state from target attention scores
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VERIFY_MODEL_PATH` | `models/Qwen3-14B-AWQ` | Target model path |
+| `VERIFY_GPU_ID` | `0` | Target GPU |
+| `DRAFT_MODEL_PATH` | `models/Qwen3-1.7B` | Draft model path |
+| `DRAFT_GPU_ID` | `1` | Draft GPU |
+| `DRAFT_RECENT_TOKENS` | `256` | Recent-window size in sparse context |
+| `RETRIEVE_EVERY_N_STEPS` | `16` | Retrieval update frequency |
+| `NODES` | `32` | Draft tree node budget |
+| `MAX_TOKENS` | `256` | Max output tokens |
 
-The cloud server:
+## Docs
 
-- loads the target Qwen3 model
-- verifies each request through `/specextend/verify`
-- returns accepted tree indices and a correction token
-- returns last-layer target attention scores when requested
-- keeps `/generate` for direct baseline generation
-
-The compatibility `/verify` endpoint maps a linear draft request to a degenerate
-SpecExtend tree and uses the same custom target backend.
+- `Docs/performance_change_log.md` — change history and measurements
+- `Docs/metrics_system.md` — output JSON schema
+- `Docs/server_runbook.md` — setup and troubleshooting

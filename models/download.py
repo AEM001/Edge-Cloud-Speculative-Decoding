@@ -4,28 +4,20 @@
 import argparse
 from pathlib import Path
 
-from huggingface_hub import snapshot_download
+from modelscope import snapshot_download
 
 
 MODEL_ALIASES = {
-    "qwen3-0.6b": ("Qwen/Qwen3-0.6B", "Qwen3-0.6B"),
-    "qwen3-1.7b": ("Qwen/Qwen3-1.7B", "Qwen3-1.7B"),
-    "qwen3-8b": ("Qwen/Qwen3-8B", "Qwen3-8B"),
+    "qwen3-1.7b": ("qwen/Qwen3-1.7B", "Qwen3-1.7B"),
+    "qwen3-14b-awq": ("qwen/Qwen3-14B-AWQ", "Qwen3-14B-AWQ"),
 }
 
 PRESETS = {
-    "edge-cloud": ["qwen3-8b"],
-    "fast-draft": ["qwen3-0.6b", "qwen3-8b"],
-    "separate": ["qwen3-1.7b", "qwen3-8b"],
+    "edge-cloud": ["qwen3-1.7b", "qwen3-14b-awq"],
 }
 
 
 def _load_token() -> str | None:
-    token_file = Path(__file__).resolve().parent / "hf.txt"
-    if token_file.exists():
-        token = token_file.read_text().strip()
-        if token:
-            return token
     return None
 
 
@@ -33,9 +25,8 @@ def download_model(repo_id: str, local_dir: Path, token: str | None = None) -> P
     local_dir.mkdir(parents=True, exist_ok=True)
     print(f"Downloading {repo_id} to {local_dir}...")
     downloaded_path = snapshot_download(
-        repo_id=repo_id,
+        model_id=repo_id,
         local_dir=str(local_dir),
-        token=token,
     )
     print(f"Completed: {repo_id}")
     return Path(downloaded_path)
@@ -62,8 +53,7 @@ def parse_args() -> argparse.Namespace:
         choices=sorted(PRESETS),
         default="edge-cloud",
         help=(
-            "Preset to download when --model is not provided: edge-cloud downloads Qwen3-8B, "
-            "separate downloads Qwen3-1.7B for draft and Qwen3-8B for verify."
+            "Preset to download when --model is not provided: edge-cloud downloads Qwen3-1.7B (draft) and Qwen3-14B-AWQ (target)."
         ),
     )
     return parser.parse_args()
@@ -84,7 +74,7 @@ def main() -> None:
     for model in selected_models:
         repo_id, folder_name = resolve_model(model)
         local_path = args.base_dir / folder_name
-        download_model(repo_id, local_path, token=token)
+        download_model(repo_id, local_path)
 
     print("All downloads completed!")
 

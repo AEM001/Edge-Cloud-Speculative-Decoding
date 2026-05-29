@@ -46,7 +46,7 @@ MAX_DEPTH="${MAX_DEPTH:-8}"
 THRESHOLD="${THRESHOLD:-0.7}"
 RETRIEVAL_CHUNK_SIZE="${RETRIEVAL_CHUNK_SIZE:-64}"
 RETRIEVE_TOP_K="${RETRIEVE_TOP_K:-16}"
-RETRIEVE_EVERY_N_STEPS="${RETRIEVE_EVERY_N_STEPS:-4}"
+RETRIEVE_EVERY_N_STEPS="${RETRIEVE_EVERY_N_STEPS:-16}"
 
 # ============================================
 # VERIFY SERVER SETTINGS
@@ -62,7 +62,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Use .venv environment
-PYTHON="$SCRIPT_DIR/.venv/bin/python3"
+PYTHON="python3"
 
 # ============================================
 # DRAFT MODEL SETTINGS (set after SCRIPT_DIR is defined)

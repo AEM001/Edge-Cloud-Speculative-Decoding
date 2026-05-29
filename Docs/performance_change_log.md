@@ -30,6 +30,40 @@
   exact only: accept length must match and the cloud correction token must equal
   the first prefetched token.
 
+## 2026-05-30 01:44
+
+- Switched runtime Python from `.venv` to system `miniconda3` base environment;
+  installed missing dependencies (`transformers`, `uvicorn`, `fastapi`,
+  `autoawq`, etc.) with network acceleration.
+- Changed verify server and quick-test scripts to use `python3` directly instead
+  of `.venv/bin/python3`.
+- Separated launch scripts: `start_verify.sh` starts the verify server,
+  `run_quick.sh` runs the experiment only (assumes server already up),
+  `run_2x3090.sh` orchestrates both. Default port changed to `6008` to avoid
+  conflicts.
+- Raised `RETRIEVE_EVERY_N_STEPS` default from `4` to `16`.
+- **Fixed sparse KV cache rebuild on every round** (`ensure_sparse_cache` +
+  `generate_token_ids_cached_sparse`): after each decode pass the draft tokens
+  appended to `_sparse_cache` are now cropped out, leaving only the context
+  prefill KV. On the next round only newly accepted recent-window tokens are
+  forwarded incrementally instead of the whole sparse sequence being re-prefilled
+  from scratch.
+- Added stale-tail crop in `ensure_sparse_cache`: when the retrieved-chunk set
+  changes, the common prefix of the sparse cache is preserved via `DynamicCache.crop`
+  instead of a full reset.
+
+## 2026-05-30 02:01 — Measurements (2× RTX 3090, Qwen3-14B-AWQ target @ GPU 0 / Qwen3-1.7B draft @ GPU 1)
+
+Environment: two RTX 3090, Qwen3-14B-AWQ target (GPU 0, eager attention),
+Qwen3-1.7B draft (GPU 1, SDPA), PG-19 prompt, 2048 input tokens, 256 output
+tokens, nodes=32, depth=8, retrieve_every_n_steps=16.
+
+- Direct (14B-AWQ): **18.6 s, 13.7 tok/s**
+- SpecExtend: **10.6 s, 24.4 tok/s** — **1.78× faster than direct**
+  - local draft time: 1.8 s (down from 18.9 s before sparse-cache fix, −90%)
+  - server verify time: 5.1 s
+  - rounds: 37, accepted draft tokens: 223/256, acceptance length: 6.03
+
 ## Measurements
 
 Environment: one Tesla V100-SXM2-32GB, Qwen3-8B target, PG-19 prompt,

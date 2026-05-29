@@ -24,7 +24,7 @@ def _env(name: str, default: str) -> str:
     return os.getenv(name, default)
 
 
-_DEFAULT_MODEL_PATH = os.getenv("VERIFY_MODEL_PATH", "/root/code/models/Qwen3-8B")
+_DEFAULT_MODEL_PATH = os.getenv("VERIFY_MODEL_PATH", "/root/code/models/Qwen3-14B-AWQ")
 
 
 class VerifyRequest(BaseModel):

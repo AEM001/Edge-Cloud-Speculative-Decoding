@@ -252,8 +252,16 @@ class QwenModelRuntime:
             common += 1
 
         if common < len(self._sparse_cache_token_ids):
-            self.reset_sparse_cache()
-            common = 0
+            # Cache has stale tail (retrieved chunks changed) — must rebuild.
+            # Reuse the common prefix by cropping the KV cache in-place.
+            if common > 0 and self._sparse_cache is not None:
+                self._sparse_cache.crop(common)
+                self._sparse_cache_token_ids = self._sparse_cache_token_ids[:common]
+                self._sparse_cache_position_ids = self._sparse_cache_position_ids[:common]
+                self._sparse_cache_next_logits = None
+            else:
+                self.reset_sparse_cache()
+                common = 0
 
         missing_tokens = token_ids[common:]
         missing_positions = position_ids[common:]
@@ -261,7 +269,17 @@ class QwenModelRuntime:
             self._forward_sparse_cache_tokens(missing_tokens, missing_positions)
 
         if self._sparse_cache_next_logits is None:
-            raise ValueError("Sparse prompt cache is empty; at least one token is required.")
+            # Cache is valid but next_logits was cleared (e.g. after draft-token crop).
+            # Re-forward the last cached token to restore logits.
+            if self._sparse_cache_token_ids:
+                last_token = self._sparse_cache_token_ids[-1]
+                last_pos = self._sparse_cache_position_ids[-1]
+                self._sparse_cache.crop(len(self._sparse_cache_token_ids) - 1)
+                self._sparse_cache_token_ids = self._sparse_cache_token_ids[:-1]
+                self._sparse_cache_position_ids = self._sparse_cache_position_ids[:-1]
+                self._forward_sparse_cache_tokens([last_token], [last_pos])
+            else:
+                raise ValueError("Sparse prompt cache is empty; at least one token is required.")
         return self._sparse_cache_next_logits
 
     @torch.inference_mode()
@@ -286,12 +304,23 @@ class QwenModelRuntime:
     ) -> List[int]:
         generated: List[int] = []
         self.ensure_sparse_cache(token_ids, position_ids)
+        # Record the context-only cache length so we can crop draft tokens
+        # appended during decoding before the next call to ensure_sparse_cache.
+        context_kv_len = len(self._sparse_cache_token_ids)
         for offset in range(max_new_tokens):
             next_token = int(torch.argmax(self._sparse_cache_next_logits, dim=-1).item())
             generated.append(next_token)
             self._forward_sparse_cache_tokens([next_token], [next_position_id + offset])
             if self.eos_token_id is not None and next_token == self.eos_token_id:
                 break
+        # Crop draft tokens out of the sparse cache, keeping only context KV.
+        # This ensures the next ensure_sparse_cache call can reuse the prefix
+        # and only forward the newly appended recent tokens incrementally.
+        if generated and self._sparse_cache is not None and context_kv_len > 0:
+            self._sparse_cache.crop(context_kv_len)
+            self._sparse_cache_token_ids = self._sparse_cache_token_ids[:context_kv_len]
+            self._sparse_cache_position_ids = self._sparse_cache_position_ids[:context_kv_len]
+            self._sparse_cache_next_logits = None
         return generated
 
     @torch.inference_mode()
@@ -737,10 +766,12 @@ class QwenSpecExtendTargetBackend:
         return [float(value) for value in scores.detach().float().cpu().tolist()]
 
 
-def dtype_from_env(value: str) -> torch.dtype:
+def dtype_from_env(value: str) -> torch.dtype | None:
     normalized = value.strip().lower()
     if normalized in {"bf16", "bfloat16"}:
         return torch.bfloat16
     if normalized in {"fp32", "float32"}:
         return torch.float32
+    if normalized in {"auto", "none"}:
+        return None
     return torch.float16

@@ -1,247 +1,95 @@
 # Server Runbook
 
-Use this on the CUDA server, not on the Mac. The Mac workspace can edit and run
-unit tests, but the real Qwen3 backend needs Linux, CUDA, PyTorch, and the model
-weights.
+Requires Linux + CUDA + Python 3.12 (miniconda3 base). Models must be present
+under `models/`.
 
-## 1. Sync The Branch
-
-```bash
-cd /root/code/research/Infra/draft
-git status --short
-git pull
-```
-
-Use the server path that matches where you clone the repo. The rest of this doc
-assumes the working directory is the `draft/` repo.
-
-## 2. Create The Python Environment
-
-The project requires Python 3.12.
+## 1. Install Dependencies
 
 ```bash
-uv python install 3.12
-uv sync
-```
-
-If you do not use `uv`, create a Python 3.12 venv and install:
-
-```bash
-python3.12 -m venv .venv
-. .venv/bin/activate
+source /etc/network_turbo   # optional: academic network acceleration
 pip install -r requirements.txt
 ```
 
-After dependency changes, refresh the lockfile on the server:
+## 2. Start The Verify Server
 
 ```bash
-uv lock
+# defaults: Qwen3-14B-AWQ @ GPU 0, port 6008, eager attention
+bash start_verify.sh
+
+# health check
+curl http://localhost:6008/health
 ```
 
-## 3. Download Models
-
-Default one-model setup, using Qwen3-8B for both edge draft and cloud verify:
+Override any default via env:
 
 ```bash
-.venv/bin/python models/download.py --preset edge-cloud
+VERIFY_GPU_ID=0 VERIFY_MODEL_PATH=$PWD/models/Qwen3-14B-AWQ \
+VERIFY_ATTN_IMPLEMENTATION=eager PORT=6008 bash start_verify.sh
 ```
 
-Smaller smoke-test setup:
+Expected health response fields: `backend: custom_qwen3`,
+`specextend_tree_verify: true`, `attention_scores: true`.
+
+## 3. Run The Experiment
 
 ```bash
-.venv/bin/python models/download.py --preset fast-draft
+# defaults: Qwen3-1.7B draft @ GPU 1, pg19, 2048 input, 256 output
+bash run_quick.sh
 ```
 
-Separate draft and verify setup:
+Common overrides:
 
 ```bash
-.venv/bin/python models/download.py --preset separate
+MAX_TOKENS=512 NODES=32 PROMPT_TYPES=pg19 bash run_quick.sh
 ```
 
-That downloads:
-
-- `models/Qwen3-0.6B`
-- `models/Qwen3-1.7B`
-- `models/Qwen3-8B`
-
-You can also download explicit aliases:
+Or launch server + experiment together (server killed on exit):
 
 ```bash
-.venv/bin/python models/download.py --model qwen3-1.7b --model qwen3-8b
+bash run_2x3090.sh
 ```
 
-If Hugging Face auth is required, either export `HF_TOKEN`/login with the HF CLI
-or put the token in `models/hf.txt`.
-
-## 4. Start The Verify Server
-
-On GPU 0:
-
-```bash
-VERIFY_GPU_ID=0 \
-VERIFY_MODEL_PATH=$PWD/models/Qwen3-8B \
-VERIFY_DTYPE=fp16 \
-VERIFY_ATTN_IMPLEMENTATION=eager \
-VERIFY_MAX_LEN=32768 \
-bash start_verify.sh --port 6007
-```
-
-Health check from another shell:
-
-```bash
-curl http://localhost:6007/health
-```
-
-Expected runtime fields:
-
-- `backend`: `custom_qwen3`
-- `specextend_tree_verify`: `true`
-- `attention_scores`: `true`
-- `attn_implementation`: `eager` when target-attention retrieval is required
-
-## 5. Run A Small SpecExtend Smoke Test
-
-On GPU 1, start small first:
-
-```bash
-DRAFT_GPU_ID=1 \
-DRAFT_MODEL_PATH=$PWD/models/Qwen3-8B \
-DRAFT_DTYPE=fp16 \
-VERIFY_SERVER_URL=http://localhost:6007 \
-MAX_TOKENS=32 \
-PROMPT_COUNT=1 \
-PROMPT_TYPES=prompts_2048 \
-NODES=8 \
-MAX_DEPTH=3 \
-RETRIEVE_EVERY_N_STEPS=2 \
-./quick.sh
-```
-
-For separate draft/verify models:
-
-```bash
-DRAFT_GPU_ID=1 \
-DRAFT_MODEL_PATH=$PWD/models/Qwen3-1.7B \
-VERIFY_SERVER_URL=http://localhost:6007 \
-MAX_TOKENS=32 \
-NODES=8 \
-MAX_DEPTH=3 \
-./quick.sh
-```
-
-If the smoke run works, increase:
-
-- `MAX_TOKENS=256` or `MAX_TOKENS=512`
-- `NODES=32`
-- `MAX_DEPTH=8`
-- longer prompt types
-
-Recommended retrieval run for PG-19 2k-token inputs:
-
-```bash
-# Start the verify server with target attentions enabled.
-VERIFY_GPU_ID=0 \
-VERIFY_MODEL_PATH=$PWD/models/Qwen3-8B \
-VERIFY_ATTN_IMPLEMENTATION=eager \
-bash start_verify.sh --port 6007
-
-# Run the edge side from another shell.
-DRAFT_GPU_ID=1 \
-DRAFT_MODEL_PATH=$PWD/models/Qwen3-1.7B \
-DRAFT_ATTN_IMPLEMENTATION=sdpa \
-DRAFT_RECENT_TOKENS=128 \
-SPECEXTEND_ASYNC_PIPELINE=1 \
-SPECEXTEND_PIPELINE_OFFSETS=full,half \
-VERIFY_SERVER_URL=http://localhost:6007 \
-MAX_TOKENS=256 \
-PROMPT_TYPES=pg19 \
-PROMPT_INPUT_TOKENS=2048 \
-NODES=32 \
-MAX_DEPTH=8 \
-RETRIEVE_EVERY_N_STEPS=8 \
-RETRIEVE_TOP_K=16 \
-./quick.sh
-```
-
-Pipeline notes:
-
-- Use `SPECEXTEND_PIPELINE_OFFSETS=full,half` to prebuild candidates for both
-  full acceptance and partial acceptance while cloud verification is in flight.
-- On a real edge/cloud split, this overlaps draft compute with network and
-  target verify latency. On a single GPU, it can be slower because both sides
-  contend for the same device.
-- Candidate reuse is reported per round as `pipeline_hit`, `pipeline_built`,
-  `pipeline_wait_ms`, and `pipeline_reuse`.
-
-## 6. Inspect Results
-
-Quick results are timestamped:
+## 4. Inspect Results
 
 ```bash
 ls -lh scripts/experiments/outputs_quick/
+python3 scripts/experiments/analyze_quick_run.py
 ```
 
-Summarize the newest result:
+Key fields: `speculative.acceptance_length`, `timing.local_draft_ms`,
+`timing.server_model_ms`, `raw.round_details`.
+
+## 5. Common Failures
+
+### Port already in use
 
 ```bash
-.venv/bin/python scripts/experiments/analyze_quick_run.py
+ss -tlnp | grep 6008
+kill <PID>
 ```
 
-Important fields:
-
-- `method_family`: should include `direct` and `specextend`
-- `speculative.rounds`
-- `speculative.acceptance_length`
-- `speculative.accepted_draft_tokens`
-- `raw.selected_chunk_ids`
-- `raw.round_details`
-
-## 7. Common Failures
+Or use a different port: `PORT=6009 bash start_verify.sh` and set
+`VERIFY_SERVER_URL=http://localhost:6009` for `run_quick.sh`.
 
 ### CUDA Out Of Memory
 
-Use smaller settings first:
-
 ```bash
-MAX_TOKENS=32 NODES=8 MAX_DEPTH=3 ./quick.sh
+MAX_TOKENS=32 NODES=8 MAX_DEPTH=3 bash run_quick.sh
 ```
 
-Or use smaller models:
+### Health Check Not Ready
 
-```bash
-.venv/bin/python models/download.py --preset separate
-VERIFY_MODEL_PATH=$PWD/models/Qwen3-8B
-DRAFT_MODEL_PATH=$PWD/models/Qwen3-1.7B
-```
-
-### Python Version Error
-
-The repo requires Python 3.12. Recreate `.venv` with Python 3.12 and rerun
-`uv sync`.
-
-### Health Check Says Not Ready
-
-The server is still loading the model or failed during startup. Check the
-`start_verify.sh` terminal for the model path, CUDA device, dtype, and traceback.
+Check the `start_verify.sh` terminal for traceback. Common cause: missing
+`autoawq` for AWQ models (`pip install autoawq`).
 
 ### No Retrieval Updates
 
-`SpecExtendEdgeClient` requests target attention scores after
-`RETRIEVE_EVERY_N_STEPS`. For a tiny run with too few rounds, set:
+Set `RETRIEVE_EVERY_N_STEPS=1` for short runs with few rounds.
+
+## 6. Minimal Validation Before Long Runs
 
 ```bash
-RETRIEVE_EVERY_N_STEPS=1
+python3 -m unittest discover -s tests
+curl http://localhost:6008/health
+MAX_TOKENS=32 NODES=8 MAX_DEPTH=3 bash run_quick.sh
 ```
-
-## 8. Minimal Validation Before Long Runs
-
-Run these first:
-
-```bash
-.venv/bin/python -m unittest discover -s tests
-.venv/bin/python -m compileall scripts tests
-curl http://localhost:6007/health
-MAX_TOKENS=32 NODES=8 MAX_DEPTH=3 ./quick.sh
-```
-
-Only start long-context experiments after those pass.
