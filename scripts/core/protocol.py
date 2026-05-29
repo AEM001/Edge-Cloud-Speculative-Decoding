@@ -65,7 +65,7 @@ class CloudResponse:
     end_to_end_ms: Optional[float] = None  # End-to-end latency (server + network)
     
     # Detailed timing breakdown
-    model_time_ms: Optional[float] = None  # Actual vLLM model processing time
+    model_time_ms: Optional[float] = None  # Actual model processing time
     http_overhead_ms: Optional[float] = None  # FastAPI + serialization overhead
     network_tx_ms: Optional[float] = None  # Time to send request (uplink transmission)
     network_rx_ms: Optional[float] = None  # Time to receive response (downlink transmission)
@@ -104,8 +104,8 @@ class CloudResponse:
 class SpecExtendTreeRequest:
     """Wire request for full SpecExtend tree verification.
 
-    This is intentionally separate from EdgeRequest. EdgeRequest is the current
-    linear vLLM verifier contract; SpecExtend needs the whole draft tree plus
+    This is intentionally separate from EdgeRequest. EdgeRequest is the linear
+    compatibility verifier contract; SpecExtend needs the whole draft tree plus
     enough structural metadata for the cloud target model to run tree attention.
     """
 

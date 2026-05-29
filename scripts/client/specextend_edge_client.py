@@ -2,8 +2,7 @@
 
 This client is backend-agnostic. It coordinates draft-tree construction,
 cloud tree verification, and target-attention driven retrieval selection. A
-real SpecExtend backend must implement ``SpecExtendDraftBackend``; the current
-vLLM draft generator does not expose enough cache control for this path.
+real SpecExtend backend must implement ``SpecExtendDraftBackend``.
 """
 
 from __future__ import annotations

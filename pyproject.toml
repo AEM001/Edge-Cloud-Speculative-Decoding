@@ -4,7 +4,6 @@ version = "1.0.0"
 description = "PicoSpec — synchronous and asynchronous speculative decoding toolkit"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "vllm==0.10.2",
     "torch==2.8.0",
     "torchaudio==2.8.0",
     "torchvision==0.23.0",
@@ -22,7 +21,6 @@ dependencies = [
     "pydantic-settings==2.14.0",
     "matplotlib==3.10.9",
     "huggingface-hub==0.34.4",
-    "sglang==0.5.2",
     "flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl",
 ]
 

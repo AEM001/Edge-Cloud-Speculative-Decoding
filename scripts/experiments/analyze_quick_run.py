@@ -14,7 +14,7 @@ OUTPUT_DIR = ROOT / "outputs_quick"
 DEFAULT_RESULTS_PATH = OUTPUT_DIR / "quick_test_results.json"
 DEFAULT_SUMMARY_PATH = OUTPUT_DIR / "quick_test_summary.json"
 DEFAULT_ROUNDS_PATH = OUTPUT_DIR / "quick_test_rounds.jsonl"
-SUPPORTED_METHOD_FAMILIES = {"direct", "tree_async"}
+SUPPORTED_METHOD_FAMILIES = {"direct", "specextend"}
 
 
 def avg(values: Iterable[float]) -> float:
@@ -68,10 +68,12 @@ def method_summary(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
                 {
                     "rounds": avg(row["speculative"]["rounds"] for row in method_rows),
                     "acceptance_length": avg(acceptance_length(row) for row in method_rows),
-                    "branch_reused": avg(float(row["async_detail"]["branch_reused"]) for row in method_rows),
-                    "reused_tokens": avg(row["async_detail"]["reused_tokens"] for row in method_rows),
-                    "predraft_window_ms": avg(row["async_detail"]["predraft_window_ms"] for row in method_rows),
-                    "reuse_prep_time_ms": avg(row["async_detail"]["reuse_prep_time_ms"] for row in method_rows),
+                    "accepted_draft_tokens": avg(
+                        row["speculative"]["accepted_draft_tokens"] for row in method_rows
+                    ),
+                    "correction_tokens": avg(
+                        row["speculative"]["correction_tokens"] for row in method_rows
+                    ),
                 }
             )
     return summary

@@ -17,32 +17,20 @@ PORT=${PORT:-6007}
 # ============================================
 
 # Verify Model Settings
-VERIFY_MODEL_PATH="${VERIFY_MODEL_PATH:-$REPO_DIR/models/Qwen2.5-14B-Instruct-AWQ}"
+VERIFY_MODEL_PATH="${VERIFY_MODEL_PATH:-$REPO_DIR/models/Qwen3-8B}"
 VERIFY_GPU_ID="${VERIFY_GPU_ID:-0}"
-VERIFY_GPU_MEM="${VERIFY_GPU_MEM:-0.60}"
-VERIFY_MAX_LEN="${VERIFY_MAX_LEN:-12000}"
-VERIFY_QUANTIZATION="${VERIFY_QUANTIZATION:-awq}"
-VERIFY_TENSOR_PARALLEL_SIZE="${VERIFY_TENSOR_PARALLEL_SIZE:-1}"
-
-# CUDA Graph Settings
-VERIFY_ENFORCE_EAGER="${VERIFY_ENFORCE_EAGER:-1}"  # 0 = enable CUDA graph, 1 = disable
-VERIFY_ENABLE_PREFIX_CACHING="${VERIFY_ENABLE_PREFIX_CACHING:-1}"
-
-# Attention Backend
-VLLM_ATTENTION_BACKEND="${VLLM_ATTENTION_BACKEND:-FLASH_ATTN}"
+VERIFY_DEVICE="${VERIFY_DEVICE:-cuda:$VERIFY_GPU_ID}"
+VERIFY_MAX_LEN="${VERIFY_MAX_LEN:-32768}"
+VERIFY_DTYPE="${VERIFY_DTYPE:-fp16}"
 
 # Use .venv environment
 PYTHON="$REPO_DIR/.venv/bin/python3"
 
 export CUDA_VISIBLE_DEVICES=$VERIFY_GPU_ID
 export VERIFY_MODEL_PATH
-export VERIFY_GPU_MEM
+export VERIFY_DEVICE
 export VERIFY_MAX_LEN
-export VERIFY_QUANTIZATION
-export VERIFY_TENSOR_PARALLEL_SIZE
-export VERIFY_ENFORCE_EAGER
-export VERIFY_ENABLE_PREFIX_CACHING
-export VLLM_ATTENTION_BACKEND
+export VERIFY_DTYPE
 
 # Parse optional --port arg
 while [[ $# -gt 0 ]]; do
@@ -55,10 +43,10 @@ done
 echo "=== Starting verify server on port $PORT ==="
 echo "Repo: $REPO_DIR"
 echo "Python: $PYTHON"
-echo "Attention backend: $VLLM_ATTENTION_BACKEND"
+echo "Backend: custom_qwen3"
 echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
-echo "Tensor parallel size: $VERIFY_TENSOR_PARALLEL_SIZE"
-echo "Verify GPU memory utilization: $VERIFY_GPU_MEM"
+echo "Verify device: $VERIFY_DEVICE"
+echo "Verify dtype: $VERIFY_DTYPE"
 echo "Verify max model length: $VERIFY_MAX_LEN"
 echo ""
 

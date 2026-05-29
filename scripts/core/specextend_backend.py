@@ -1,8 +1,8 @@
 """Backend interfaces for edge-cloud SpecExtend.
 
-The existing quick-test stack uses vLLM for linear draft/verify. Full
-SpecExtend needs backend-visible KV caches, tree masks, and target attention
-scores, so this module defines the contract expected by the edge-cloud glue.
+Full SpecExtend needs backend-visible KV caches, tree masks, and target
+attention scores, so this module defines the contract expected by the
+edge-cloud glue.
 """
 
 from __future__ import annotations

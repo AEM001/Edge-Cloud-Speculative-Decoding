@@ -1,7 +1,6 @@
 # Core ML/LLM dependencies
 # Matches the project configuration in pyproject.toml.
 --extra-index-url https://download.pytorch.org/whl/cu128
-vllm==0.10.2
 torch==2.8.0
 torchaudio==2.8.0
 torchvision==0.23.0
@@ -30,9 +29,6 @@ datasets
 
 # Visualization
 matplotlib==3.10.9
-
-# Alternative LLM framework
-sglang==0.5.2
 
 # Flash Attention: pinned to the same wheel used by the project config.
 flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl

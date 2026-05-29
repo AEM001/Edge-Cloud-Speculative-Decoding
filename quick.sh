@@ -33,15 +33,14 @@ PROMPT_TYPES="${PROMPT_TYPES:-prompts_2048}"
 # ============================================
 
 # ============================================
-# TREE BASE DRAFT SETTINGS
+# SPECEXTEND TREE SETTINGS
 # ============================================
-K="${K:-15}"  # Base draft length
-
-# ============================================
-# TREE ASYNC SETTINGS
-# ============================================
-TREE_BRANCH_WIDTH="${TREE_BRANCH_WIDTH:-4}"  # Number of tree branches
-TREE_BRANCH_DRAFT_LENGTH="${TREE_BRANCH_DRAFT_LENGTH:-12}"  # Pre-draft length for each tree branch
+NODES="${NODES:-32}"
+MAX_DEPTH="${MAX_DEPTH:-8}"
+THRESHOLD="${THRESHOLD:-0.7}"
+RETRIEVAL_CHUNK_SIZE="${RETRIEVAL_CHUNK_SIZE:-32}"
+RETRIEVE_TOP_K="${RETRIEVE_TOP_K:-32}"
+RETRIEVE_EVERY_N_STEPS="${RETRIEVE_EVERY_N_STEPS:-8}"
 
 # ============================================
 # VERIFY SERVER SETTINGS
@@ -62,17 +61,17 @@ PYTHON="$SCRIPT_DIR/.venv/bin/python3"
 # ============================================
 # DRAFT MODEL SETTINGS (set after SCRIPT_DIR is defined)
 # ============================================
-DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-$SCRIPT_DIR/models/Qwen2.5-3B-Instruct-AWQ}"
-DRAFT_MODEL_NAME="${DRAFT_MODEL_NAME:-Qwen/Qwen2.5-3B-Instruct}"
+DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-$SCRIPT_DIR/models/Qwen3-8B}"
 DRAFT_GPU_ID="${DRAFT_GPU_ID:-0}"  # GPU 0 for single GPU setup
-DRAFT_GPU_MEM="${DRAFT_GPU_MEM:-0.30}"
-DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-12000}"
+DRAFT_DEVICE="${DRAFT_DEVICE:-cuda:$DRAFT_GPU_ID}"
+DRAFT_DTYPE="${DRAFT_DTYPE:-fp16}"
+DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-32768}"
 
 # Export environment variables
 export DRAFT_MODEL_PATH
-export DRAFT_MODEL_NAME
 export DRAFT_GPU_ID
-export DRAFT_GPU_MEM
+export DRAFT_DEVICE
+export DRAFT_DTYPE
 export DRAFT_MAX_LEN
 export VERIFY_SERVER_URL
 
@@ -81,22 +80,26 @@ CMD="$PYTHON scripts/experiments/quick_test.py \
     --max-tokens ${MAX_TOKENS} \
     --prompt-count ${PROMPT_COUNT} \
     --prompt-types ${PROMPT_TYPES} \
-    --k ${K} \
-    --tree-branch-width ${TREE_BRANCH_WIDTH} \
-    --tree-branch-draft-length ${TREE_BRANCH_DRAFT_LENGTH}"
+    --nodes ${NODES} \
+    --max-depth ${MAX_DEPTH} \
+    --threshold ${THRESHOLD} \
+    --retrieval-chunk-size ${RETRIEVAL_CHUNK_SIZE} \
+    --retrieve-top-k ${RETRIEVE_TOP_K} \
+    --retrieve-every-n-steps ${RETRIEVE_EVERY_N_STEPS}"
 
 echo "=========================================="
 echo "Running Quick Test with Configuration:"
 echo "=========================================="
 echo "Network: good"
-echo "Methods: direct, tree_async"
+echo "Methods: direct, specextend"
 echo "Max Tokens: ${MAX_TOKENS}"
 echo "Prompt Count (per type): ${PROMPT_COUNT}"
 echo "Prompt Types: ${PROMPT_TYPES}"
-echo "K: ${K}"
-echo "Tree Branch Width: ${TREE_BRANCH_WIDTH}"
-echo "Tree Branch Draft Length: ${TREE_BRANCH_DRAFT_LENGTH}"
+echo "Nodes: ${NODES}"
+echo "Max Depth: ${MAX_DEPTH}"
+echo "Retrieval Chunk Size: ${RETRIEVAL_CHUNK_SIZE}"
 echo "Draft Model: ${DRAFT_MODEL_PATH}"
+echo "Draft Device: ${DRAFT_DEVICE}"
 echo "Verify Server URL: ${VERIFY_SERVER_URL}"
 echo "=========================================="
 echo ""

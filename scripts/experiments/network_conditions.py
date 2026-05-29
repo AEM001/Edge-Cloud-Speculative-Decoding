@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable, List, Tuple
 
-from core.protocol import EdgeRequest, CloudResponse
+from core.protocol import CloudResponse, EdgeRequest, SpecExtendTreeRequest, SpecExtendTreeResponse
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +138,9 @@ class ThrottledCloudClient:
         self._start_wall = time.perf_counter()  # reference for bursty cycle
 
     def __call__(self, request: EdgeRequest) -> CloudResponse:
+        return self.verify(request)
+
+    def verify(self, request: EdgeRequest) -> CloudResponse:
         cond = self.condition
         now = time.perf_counter() - self._start_wall
 
@@ -182,6 +185,38 @@ class ThrottledCloudClient:
             downlink_delay, downlink_bytes, dl_mbps,
             simulated_overhead, response.rtt_ms,
         )
+
+        return response
+
+    def verify_specextend_tree(self, request: SpecExtendTreeRequest) -> SpecExtendTreeResponse:
+        cond = self.condition
+        now = time.perf_counter() - self._start_wall
+
+        one_way_ms, dl_mbps, ul_mbps = cond.current_link_params(now)
+        uplink_payload = json.dumps(request.to_dict()).encode("utf-8")
+        uplink_bytes = len(uplink_payload)
+        uplink_delay = one_way_ms + NetworkCondition._payload_delay_ms(uplink_bytes, ul_mbps)
+        _sleep_ms(uplink_delay)
+
+        t0 = time.perf_counter()
+        response: SpecExtendTreeResponse = self.base_client.verify_specextend_tree(request)
+        actual_server_ms = (time.perf_counter() - t0) * 1000
+
+        downlink_payload = json.dumps(response.to_dict()).encode("utf-8")
+        downlink_bytes = len(downlink_payload)
+        downlink_delay = one_way_ms + NetworkCondition._payload_delay_ms(downlink_bytes, dl_mbps)
+        _sleep_ms(downlink_delay)
+
+        simulated_overhead = uplink_delay + downlink_delay
+        response.rtt_ms = actual_server_ms + simulated_overhead
+
+        s = self.stats
+        s.num_calls += 1
+        s.total_simulated_uplink_delay_ms += uplink_delay
+        s.total_simulated_downlink_delay_ms += downlink_delay
+        s.total_simulated_overhead_ms += simulated_overhead
+        s.total_uplink_bytes += uplink_bytes
+        s.total_downlink_bytes += downlink_bytes
 
         return response
 
