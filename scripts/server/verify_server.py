@@ -90,6 +90,7 @@ async def _lifespan(app: FastAPI):
     device = _env("VERIFY_DEVICE", f"cuda:{gpu_id}")
     dtype = dtype_from_env(_env("VERIFY_DTYPE", "fp16"))
     max_len = int(_env("VERIFY_MAX_LEN", "32768"))
+    attn_implementation = _env("VERIFY_ATTN_IMPLEMENTATION", "sdpa")
 
     logger.info("Loading custom Qwen SpecExtend target backend: %s", model_path)
     _verifier = QwenSpecExtendTargetBackend(
@@ -98,6 +99,7 @@ async def _lifespan(app: FastAPI):
             device=device,
             dtype=dtype,
             max_model_len=max_len,
+            attn_implementation=attn_implementation,
         )
     )
     logger.info("Custom Qwen target backend loaded")

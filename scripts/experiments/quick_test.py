@@ -33,6 +33,7 @@ DRAFT_GPU_ID = os.getenv("DRAFT_GPU_ID", "1")
 DRAFT_DEVICE = os.getenv("DRAFT_DEVICE", f"cuda:{DRAFT_GPU_ID}")
 DRAFT_DTYPE = dtype_from_env(os.getenv("DRAFT_DTYPE", "fp16"))
 DRAFT_MAX_LEN = int(os.getenv("DRAFT_MAX_LEN", "32768"))
+DRAFT_ATTN_IMPLEMENTATION = os.getenv("DRAFT_ATTN_IMPLEMENTATION", "sdpa")
 REQUEST_TIMEOUT_SEC = float(os.getenv("QUICK_TEST_TIMEOUT_SEC", "600"))
 
 OUTPUT_DIR = Path(__file__).parent / "outputs_quick"
@@ -316,6 +317,7 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
             device=DRAFT_DEVICE,
             dtype=DRAFT_DTYPE,
             max_model_len=DRAFT_MAX_LEN,
+            attn_implementation=DRAFT_ATTN_IMPLEMENTATION,
         )
     )
     prompts = truncate_prompts_to_tokens(prompts, draft_backend.tokenizer, config["prompt_input_tokens"])
@@ -328,7 +330,7 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
         max_depth=config["max_depth"],
         retrieval_chunk_size=config["retrieval_chunk_size"],
         retrieve_top_k=config["retrieve_top_k"],
-        retrieve_every_n_steps=config["retrieve_every_n_steps"],
+            retrieve_every_n_steps=config["retrieve_every_n_steps"],
     )
 
     warmup(draft_backend, base_client, prompts[0][0]["text"])
@@ -372,7 +374,7 @@ def parse_args():
     parser.add_argument("--max-depth", type=int, default=8)
     parser.add_argument("--retrieval-chunk-size", type=int, default=32)
     parser.add_argument("--retrieve-top-k", type=int, default=32)
-    parser.add_argument("--retrieve-every-n-steps", type=int, default=8)
+    parser.add_argument("--retrieve-every-n-steps", type=int, default=0)
     return parser.parse_args()
 
 

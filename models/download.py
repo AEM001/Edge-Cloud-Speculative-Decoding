@@ -8,12 +8,14 @@ from huggingface_hub import snapshot_download
 
 
 MODEL_ALIASES = {
+    "qwen3-0.6b": ("Qwen/Qwen3-0.6B", "Qwen3-0.6B"),
     "qwen3-1.7b": ("Qwen/Qwen3-1.7B", "Qwen3-1.7B"),
     "qwen3-8b": ("Qwen/Qwen3-8B", "Qwen3-8B"),
 }
 
 PRESETS = {
     "edge-cloud": ["qwen3-8b"],
+    "fast-draft": ["qwen3-0.6b", "qwen3-8b"],
     "separate": ["qwen3-1.7b", "qwen3-8b"],
 }
 

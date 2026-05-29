@@ -79,7 +79,8 @@ class SpecExtendEdgeClient:
                 break
 
             retrieve_this_round = (
-                metrics.total_rounds % self.retrieve_every_n_steps == 0
+                self.retrieve_every_n_steps > 0
+                and metrics.total_rounds % self.retrieve_every_n_steps == 0
                 and metrics.total_rounds > 0
             )
             retrieval_indices = self.retrieval.selected_token_indices()

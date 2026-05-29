@@ -31,6 +31,7 @@ class QwenBackendConfig:
     dtype: torch.dtype = torch.float16
     max_model_len: int = 32768
     trust_remote_code: bool = True
+    attn_implementation: str = "sdpa"
 
 
 class VisibleTokenCache:
@@ -90,9 +91,12 @@ class QwenModelRuntime:
             self.model_path,
             torch_dtype=config.dtype,
             trust_remote_code=config.trust_remote_code,
-            attn_implementation="eager",
+            attn_implementation=config.attn_implementation,
         ).to(self.device)
         self.model.eval()
+        self._cache_token_ids: List[int] = []
+        self._cache = None
+        self._cache_next_logits: Optional[torch.Tensor] = None
 
     @property
     def eos_token_id(self) -> Optional[int]:
@@ -103,6 +107,76 @@ class QwenModelRuntime:
         input_ids = torch.tensor([list(token_ids)], dtype=torch.long, device=self.device)
         outputs = self.model(input_ids=input_ids, use_cache=False)
         return outputs.logits[:, -1, :]
+
+    def reset_cache(self) -> None:
+        self._cache_token_ids = []
+        self._cache = None
+        self._cache_next_logits = None
+
+    def _rewind_cache_for_prefix(self, common_length: int) -> int:
+        if common_length <= 1 or self._cache is None:
+            self.reset_cache()
+            return 0
+
+        replay_from = common_length - 1
+        self._cache.crop(replay_from)
+        self._cache_token_ids = self._cache_token_ids[:replay_from]
+        self._cache_next_logits = None
+        return replay_from
+
+    @staticmethod
+    def _common_prefix_len(left: Sequence[int], right: Sequence[int]) -> int:
+        common = 0
+        limit = min(len(left), len(right))
+        while common < limit and left[common] == right[common]:
+            common += 1
+        return common
+
+    @torch.inference_mode()
+    def _forward_cache_tokens(self, token_ids: Sequence[int]) -> torch.Tensor:
+        if not token_ids:
+            if self._cache_next_logits is None:
+                raise ValueError("Cannot compute next logits for an empty cache.")
+            return self._cache_next_logits
+
+        input_ids = torch.tensor([list(token_ids)], dtype=torch.long, device=self.device)
+        outputs = self.model(
+            input_ids=input_ids,
+            past_key_values=self._cache,
+            use_cache=True,
+            return_dict=True,
+        )
+        self._cache = outputs.past_key_values
+        self._cache_token_ids.extend(int(token_id) for token_id in token_ids)
+        self._cache_next_logits = outputs.logits[:, -1, :]
+        return outputs.logits
+
+    @torch.inference_mode()
+    def ensure_cache(self, token_ids: Sequence[int]) -> torch.Tensor:
+        token_ids = list(token_ids)
+        common = self._common_prefix_len(self._cache_token_ids, token_ids)
+        if common < len(self._cache_token_ids):
+            common = self._rewind_cache_for_prefix(common)
+
+        missing = token_ids[common:]
+        if missing:
+            self._forward_cache_tokens(missing)
+
+        if self._cache_next_logits is None:
+            raise ValueError("Prompt cache is empty; at least one token is required.")
+        return self._cache_next_logits
+
+    @torch.inference_mode()
+    def generate_token_ids_cached(self, token_ids: Sequence[int], max_new_tokens: int) -> List[int]:
+        generated: List[int] = []
+        self.ensure_cache(token_ids)
+        for _ in range(max_new_tokens):
+            next_token = int(torch.argmax(self._cache_next_logits, dim=-1).item())
+            generated.append(next_token)
+            self._forward_cache_tokens([next_token])
+            if self.eos_token_id is not None and next_token == self.eos_token_id:
+                break
+        return generated
 
     @torch.inference_mode()
     def generate_token_ids(self, token_ids: Sequence[int], max_new_tokens: int) -> List[int]:
@@ -144,15 +218,42 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
 
         appended = self.cache.append_missing_prefix(verified_prefix)
         self.cache.select_working_tokens(retrieval_token_indices)
+        draft_context = self._draft_context(verified_prefix, retrieval_token_indices)
 
-        tree = self._grow_tree(verified_prefix, nodes=max(1, nodes), max_depth=max(1, max_depth))
+        tree = self._grow_tree(
+            draft_context,
+            nodes=max(1, nodes),
+            max_depth=max(1, max_depth),
+            position_start=len(verified_prefix),
+        )
         return DraftTreeResult(
             tree=tree,
             draft_time_ms=(time.perf_counter() - start) * 1000,
             appended_kv_tokens=appended,
         )
 
-    def _grow_tree(self, prefix: List[int], nodes: int, max_depth: int) -> DraftTree:
+    @staticmethod
+    def _draft_context(prefix: List[int], retrieval_token_indices: Optional[List[int]]) -> List[int]:
+        recent_tokens = int(os.getenv("DRAFT_RECENT_TOKENS", "128"))
+        if not retrieval_token_indices:
+            return list(prefix)
+
+        selected = {idx for idx in retrieval_token_indices if 0 <= idx < len(prefix)}
+        if recent_tokens > 0:
+            selected.update(range(max(0, len(prefix) - recent_tokens), len(prefix)))
+        if not selected:
+            return list(prefix)
+        return [prefix[idx] for idx in sorted(selected)]
+
+    def _grow_tree(self, prefix: List[int], nodes: int, max_depth: int, position_start: int) -> DraftTree:
+        if os.getenv("DRAFT_TREE_MODE", "linear").strip().lower() != "branching":
+            return self._grow_linear_tree(
+                prefix,
+                nodes=nodes,
+                max_depth=max_depth,
+                position_start=position_start,
+            )
+
         device = self.runtime.device
         frontier = [([], -1, 0.0)]
         records: List[Dict[str, object]] = []
@@ -180,7 +281,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
                 records.append(
                     {
                         "token_id": path[-1],
-                        "position_id": len(prefix) + len(path) - 1,
+                        "position_id": position_start + len(path) - 1,
                         "parent_idx": parent_idx,
                         "path": path,
                     }
@@ -197,7 +298,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             records.append(
                 {
                     "token_id": token_id,
-                    "position_id": len(prefix),
+                    "position_id": position_start,
                     "parent_idx": -1,
                     "path": [token_id],
                 }
@@ -209,6 +310,25 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         parent_indices = [int(record["parent_idx"]) for record in records]
         attention_mask = self._tree_attention_mask(parent_indices)
 
+        return DraftTree(
+            input_ids=input_ids,
+            position_ids=position_ids,
+            parent_indices=parent_indices,
+            attention_mask=attention_mask,
+        )
+
+    def _grow_linear_tree(
+        self,
+        prefix: List[int],
+        nodes: int,
+        max_depth: int,
+        position_start: int,
+    ) -> DraftTree:
+        length = max(1, min(nodes, max_depth))
+        input_ids = self.runtime.generate_token_ids_cached(prefix, length)
+        position_ids = list(range(position_start, position_start + len(input_ids)))
+        parent_indices = [idx - 1 for idx in range(len(input_ids))]
+        attention_mask = self._tree_attention_mask(parent_indices)
         return DraftTree(
             input_ids=input_ids,
             position_ids=position_ids,
@@ -248,7 +368,8 @@ class QwenSpecExtendTargetBackend:
             "specextend_tree_verify": True,
             "attention_scores": True,
             "tree_attention": True,
-            "kv_cache": "transformers_cache_plus_visible_token_cache",
+            "kv_cache": "transformers_dynamic_cache_plus_visible_token_cache",
+            "draft_tree_default": "linear",
         }
 
     def get_info(self) -> Dict[str, object]:
@@ -257,6 +378,7 @@ class QwenSpecExtendTargetBackend:
             "device": str(self.runtime.device),
             "dtype": str(self.runtime.config.dtype).replace("torch.", ""),
             "max_model_len": self.runtime.config.max_model_len,
+            "attn_implementation": self.runtime.config.attn_implementation,
         }
 
     @torch.inference_mode()
@@ -269,22 +391,28 @@ class QwenSpecExtendTargetBackend:
         best_accept_len = -1
         max_path_len = max((len(path) for path in paths), default=0)
 
-        if max_path_len > 0:
-            target_tokens = self.runtime.generate_token_ids(request.prefix_ids, max_path_len + 1)
+        if self._is_linear_tree(request.parent_indices):
+            accepted_len, correction_token_id = self._verify_linear_path(
+                request.prefix_ids,
+                list(request.tree_input_ids),
+            )
+            best_accept_len = accepted_len
+            accepted_indices = list(range(accepted_len))
+        elif max_path_len > 0:
+            target_tokens = self.runtime.generate_token_ids_cached(request.prefix_ids, max_path_len + 1)
+            for node_idx, path in enumerate(paths):
+                accepted_len, correction = self._verify_path_against_tokens(path, target_tokens)
+                if accepted_len > best_accept_len:
+                    best_accept_len = accepted_len
+                    accepted_indices = self._indices_for_path(node_idx, request.parent_indices)
+                    accepted_indices = accepted_indices[:accepted_len]
+                    correction_token_id = correction
         else:
-            target_tokens = self.runtime.generate_token_ids(request.prefix_ids, 1)
-
-        for node_idx, path in enumerate(paths):
-            accepted_len, correction = self._verify_path_against_tokens(path, target_tokens)
-            if accepted_len > best_accept_len:
-                best_accept_len = accepted_len
-                accepted_indices = self._indices_for_path(node_idx, request.parent_indices)
-                accepted_indices = accepted_indices[:accepted_len]
-                correction_token_id = correction
+            target_tokens = self.runtime.generate_token_ids_cached(request.prefix_ids, 1)
+            correction_token_id = target_tokens[0] if target_tokens else None
 
         if best_accept_len < 0:
             best_accept_len = 0
-            correction_token_id = target_tokens[0] if target_tokens else None
 
         target_attn_scores = None
         if request.retrieve_attn_scores:
@@ -296,7 +424,7 @@ class QwenSpecExtendTargetBackend:
             scoring_ids = list(request.prefix_ids) + accepted_tokens
             if correction_token_id is not None:
                 scoring_ids.append(correction_token_id)
-            target_attn_scores = self._last_query_attention_scores(scoring_ids)
+            target_attn_scores = self._last_query_attention_scores_cached(scoring_ids)
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         return SpecExtendTreeResponse(
@@ -335,6 +463,32 @@ class QwenSpecExtendTargetBackend:
             if self.runtime.eos_token_id is not None and next_token == self.runtime.eos_token_id:
                 break
         return generated
+
+    @staticmethod
+    def _is_linear_tree(parent_indices: Sequence[int]) -> bool:
+        return all(parent_idx == idx - 1 for idx, parent_idx in enumerate(parent_indices))
+
+    @torch.inference_mode()
+    def _verify_linear_path(self, prefix_ids: List[int], path: List[int]) -> tuple[int, Optional[int]]:
+        next_logits = self.runtime.ensure_cache(prefix_ids)
+        if not path:
+            correction = int(torch.argmax(next_logits, dim=-1).item())
+            return 0, correction
+
+        path_logits = self.runtime._forward_cache_tokens(path)
+        accepted = 0
+        correction = None
+        for idx, draft_token in enumerate(path):
+            logits = next_logits if idx == 0 else path_logits[:, idx - 1, :]
+            target_token = int(torch.argmax(logits, dim=-1).item())
+            if target_token != draft_token:
+                correction = target_token
+                break
+            accepted += 1
+
+        if accepted == len(path):
+            correction = int(torch.argmax(path_logits[:, -1, :], dim=-1).item())
+        return accepted, correction
 
     @staticmethod
     def _verify_path_against_tokens(path: List[int], target_tokens: List[int]) -> tuple[int, Optional[int]]:
@@ -378,16 +532,25 @@ class QwenSpecExtendTargetBackend:
         return list(reversed(indices))
 
     @torch.inference_mode()
-    def _last_query_attention_scores(self, token_ids: Sequence[int]) -> List[float]:
-        if not token_ids:
-            return []
-        input_ids = torch.tensor([list(token_ids)], dtype=torch.long, device=self.runtime.device)
+    def _last_query_attention_scores_cached(self, token_ids: Sequence[int]) -> List[float]:
+        if len(token_ids) < 2:
+            return [1.0 for _ in token_ids]
+
+        prefix_ids = list(token_ids[:-1])
+        query_id = int(token_ids[-1])
+        self.runtime.ensure_cache(prefix_ids)
+        input_ids = torch.tensor([[query_id]], dtype=torch.long, device=self.runtime.device)
         outputs = self.runtime.model(
             input_ids=input_ids,
-            use_cache=False,
+            past_key_values=self.runtime._cache,
+            use_cache=True,
             output_attentions=True,
             return_dict=True,
         )
+        self.runtime._cache = outputs.past_key_values
+        self.runtime._cache_token_ids.append(query_id)
+        self.runtime._cache_next_logits = outputs.logits[:, -1, :]
+
         attentions = outputs.attentions
         if not attentions:
             return [0.0 for _ in token_ids]

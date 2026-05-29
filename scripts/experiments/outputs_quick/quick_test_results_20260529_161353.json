@@ -1,0 +1,1465 @@
+{
+  "config": {
+    "network": "good",
+    "methods": [
+      "direct",
+      "specextend"
+    ],
+    "max_tokens": 256,
+    "prompt_count": 1,
+    "prompt_types": [
+      "pg19"
+    ],
+    "prompt_input_tokens": 2048,
+    "nodes": 64,
+    "threshold": 0.7,
+    "max_depth": 16,
+    "retrieval_chunk_size": 32,
+    "retrieve_top_k": 16,
+    "retrieve_every_n_steps": 8
+  },
+  "results": [
+    {
+      "method": "direct",
+      "method_family": "direct",
+      "network": "good",
+      "prompt_type": "pg19",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 256,
+        "total_time_ms": 12230.87339131737,
+        "tokens_per_second": 20.930639359061065
+      },
+      "timing": {
+        "client_wall_ms": 12230.87339131737,
+        "local_draft_ms": 0.0,
+        "server_model_ms": 12209.900997579098,
+        "server_total_ms": 12209.900997579098,
+        "http_rpc_ms": 12214.811891317368,
+        "simulated_ul_ms": 8.524933333333333,
+        "simulated_dl_ms": 7.536566666666666,
+        "simulated_network_ms": 16.0615,
+        "avg_rtt_ms": 0.0
+      },
+      "speculative": {
+        "rounds": 0,
+        "nodes": 0,
+        "accepted_draft_tokens": 0,
+        "correction_tokens": 0,
+        "generated_per_round": 0.0,
+        "acceptance_length": 0.0
+      },
+      "verify_runtime": {
+        "backend": null,
+        "specextend_tree_verify": null,
+        "attention_scores": null
+      },
+      "raw": {
+        "direct_timing": {
+          "tokens": 256,
+          "total_ms": 12230.87339131737,
+          "server_ms": 12209.900997579098,
+          "http_ms": 12214.811891317368,
+          "ul_ms": 8.524933333333333,
+          "dl_ms": 7.536566666666666
+        }
+      }
+    },
+    {
+      "method": "specextend_n64",
+      "method_family": "specextend",
+      "network": "good",
+      "prompt_type": "pg19",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 256,
+        "total_time_ms": 73302.7101829648,
+        "tokens_per_second": 3.492367463099518
+      },
+      "timing": {
+        "client_wall_ms": 73302.7101829648,
+        "local_draft_ms": 57958.6131349206,
+        "server_model_ms": 12779.36340868473,
+        "server_total_ms": 12779.36340868473,
+        "http_rpc_ms": 0.0,
+        "simulated_ul_ms": 1050.48,
+        "simulated_dl_ms": 853.8,
+        "simulated_network_ms": 1904.27,
+        "avg_rtt_ms": 22.533312637721544
+      },
+      "speculative": {
+        "rounds": 113,
+        "nodes": 64,
+        "accepted_draft_tokens": 143,
+        "correction_tokens": 113,
+        "generated_per_round": 2.265486725663717,
+        "acceptance_length": 1.2654867256637168
+      },
+      "verify_runtime": {
+        "backend": "custom_qwen3",
+        "specextend_tree_verify": true,
+        "attention_scores": true
+      },
+      "raw": {
+        "network": {
+          "condition": "good",
+          "num_calls": 113,
+          "total_simulated_uplink_delay_ms": 1050.48,
+          "total_simulated_downlink_delay_ms": 853.8,
+          "total_simulated_overhead_ms": 1904.27,
+          "total_uplink_bytes": 1522315,
+          "total_downlink_bytes": 188983,
+          "avg_overhead_per_call_ms": 16.85
+        },
+        "selected_chunk_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "round_details": [
+          {
+            "round": 0,
+            "tree_nodes": 16,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 1,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 2,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 3,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 4,
+            "tree_nodes": 16,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 5,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 6,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 7,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 8,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 9,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 10,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 11,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 12,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 13,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 14,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 15,
+            "tree_nodes": 16,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 16,
+            "tree_nodes": 16,
+            "accepted_len": 3,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 17,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 18,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 19,
+            "tree_nodes": 16,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 20,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 21,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 22,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 23,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0
+            ]
+          },
+          {
+            "round": 24,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 25,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 26,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 27,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 28,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 29,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 30,
+            "tree_nodes": 16,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 31,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 32,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 33,
+            "tree_nodes": 16,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 34,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 35,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 36,
+            "tree_nodes": 16,
+            "accepted_len": 7,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 37,
+            "tree_nodes": 16,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 38,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 39,
+            "tree_nodes": 16,
+            "accepted_len": 4,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1
+            ]
+          },
+          {
+            "round": 40,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2
+            ]
+          },
+          {
+            "round": 41,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2
+            ]
+          },
+          {
+            "round": 42,
+            "tree_nodes": 16,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2
+            ]
+          },
+          {
+            "round": 43,
+            "tree_nodes": 16,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2
+            ]
+          },
+          {
+            "round": 44,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2
+            ]
+          },
+          {
+            "round": 45,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2
+            ]
+          },
+          {
+            "round": 46,
+            "tree_nodes": 16,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2
+            ]
+          },
+          {
+            "round": 47,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2
+            ]
+          },
+          {
+            "round": 48,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 49,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 50,
+            "tree_nodes": 16,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 51,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 52,
+            "tree_nodes": 16,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 53,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 54,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 55,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 56,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 57,
+            "tree_nodes": 16,
+            "accepted_len": 4,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 58,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 59,
+            "tree_nodes": 16,
+            "accepted_len": 4,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 60,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 61,
+            "tree_nodes": 16,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 62,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 63,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "round": 64,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 65,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 66,
+            "tree_nodes": 16,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 67,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 68,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 69,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 70,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 71,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 72,
+            "tree_nodes": 16,
+            "accepted_len": 3,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 73,
+            "tree_nodes": 16,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 74,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 75,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 76,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 77,
+            "tree_nodes": 16,
+            "accepted_len": 4,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 78,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 79,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "round": 80,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 81,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 82,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 83,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 84,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 85,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 86,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 87,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 88,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 89,
+            "tree_nodes": 16,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 90,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 91,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 92,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 93,
+            "tree_nodes": 16,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 94,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 95,
+            "tree_nodes": 16,
+            "accepted_len": 4,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "round": 96,
+            "tree_nodes": 16,
+            "accepted_len": 9,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          {
+            "round": 97,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          {
+            "round": 98,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          {
+            "round": 99,
+            "tree_nodes": 16,
+            "accepted_len": 5,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          {
+            "round": 100,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          {
+            "round": 101,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          {
+            "round": 102,
+            "tree_nodes": 16,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          {
+            "round": 103,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          {
+            "round": 104,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "round": 105,
+            "tree_nodes": 16,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "round": 106,
+            "tree_nodes": 16,
+            "accepted_len": 6,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "round": 107,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "round": 108,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "round": 109,
+            "tree_nodes": 16,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "round": 110,
+            "tree_nodes": 16,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "round": 111,
+            "tree_nodes": 16,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "round": 112,
+            "tree_nodes": 16,
+            "accepted_len": 1,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

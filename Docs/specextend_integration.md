@@ -49,8 +49,15 @@ output text.
 ## Current Limitations
 
 - Batch size is 1.
-- The custom backend prioritizes correctness and backend visibility over CUDA
-  graph replay or specialized attention kernels.
-- Tensor cache compaction is represented by backend-visible token bookkeeping in
-  this first pass; deeper Qwen-specific tensor KV gathering is the next
-  performance optimization layer.
+- The fast path uses linear draft chains by default. Set
+  `DRAFT_TREE_MODE=branching` only for correctness experiments; branching still
+  performs many draft forwards.
+- The target and draft backends now maintain Transformers dynamic KV caches.
+  Rejections rewind to the shared prefix instead of recomputing the whole prompt.
+- Retrieval is active through cached last-token target attention. The draft
+  backend builds its working context from selected retrieval chunks plus a recent
+  suffix controlled by `DRAFT_RECENT_TOKENS`.
+- On a single V100 with Qwen3-8B target and Qwen3-1.7B draft, fully cached
+  direct generation remains faster in current measurements. SpecExtend needs a
+  cheaper draft, better acceptance, separate GPUs, or deeper tensor-level
+  retrieval/KV compaction to beat the optimized direct baseline.

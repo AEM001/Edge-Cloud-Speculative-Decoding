@@ -1,0 +1,176 @@
+{
+  "config": {
+    "network": "good",
+    "methods": [
+      "direct",
+      "specextend"
+    ],
+    "max_tokens": 64,
+    "prompt_count": 1,
+    "prompt_types": [
+      "pg19"
+    ],
+    "prompt_input_tokens": 2048,
+    "nodes": 32,
+    "threshold": 0.7,
+    "max_depth": 8,
+    "retrieval_chunk_size": 32,
+    "retrieve_top_k": 32,
+    "retrieve_every_n_steps": 8
+  },
+  "results": [
+    {
+      "method": "direct",
+      "method_family": "direct",
+      "network": "good",
+      "prompt_type": "pg19",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 64,
+        "total_time_ms": 2390.997646162128,
+        "tokens_per_second": 26.767069429252086
+      },
+      "timing": {
+        "client_wall_ms": 2390.997646162128,
+        "local_draft_ms": 0.0,
+        "server_model_ms": 2369.2936077713966,
+        "server_total_ms": 2369.2936077713966,
+        "http_rpc_ms": 2374.8705461621284,
+        "simulated_ul_ms": 8.617466666666667,
+        "simulated_dl_ms": 7.509633333333333,
+        "simulated_network_ms": 16.1271,
+        "avg_rtt_ms": 0.0
+      },
+      "speculative": {
+        "rounds": 0,
+        "nodes": 0,
+        "accepted_draft_tokens": 0,
+        "correction_tokens": 0,
+        "generated_per_round": 0.0,
+        "acceptance_length": 0.0
+      },
+      "verify_runtime": {
+        "backend": null,
+        "specextend_tree_verify": null,
+        "attention_scores": null
+      },
+      "raw": {
+        "direct_timing": {
+          "tokens": 64,
+          "total_ms": 2390.997646162128,
+          "server_ms": 2369.2936077713966,
+          "http_ms": 2374.8705461621284,
+          "ul_ms": 8.617466666666667,
+          "dl_ms": 7.509633333333333
+        }
+      }
+    },
+    {
+      "method": "specextend_n32",
+      "method_family": "specextend",
+      "network": "good",
+      "prompt_type": "pg19",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 72,
+        "total_time_ms": 3359.6948236227036,
+        "tokens_per_second": 21.430517883277144
+      },
+      "timing": {
+        "client_wall_ms": 3359.6948236227036,
+        "local_draft_ms": 2373.826026916504,
+        "server_model_ms": 801.3892993330956,
+        "server_total_ms": 801.3892993330956,
+        "http_rpc_ms": 0.0,
+        "simulated_ul_ms": 73.04,
+        "simulated_dl_ms": 60.09,
+        "simulated_network_ms": 133.13,
+        "avg_rtt_ms": 22.886598482728004
+      },
+      "speculative": {
+        "rounds": 8,
+        "nodes": 32,
+        "accepted_draft_tokens": 64,
+        "correction_tokens": 8,
+        "generated_per_round": 9.0,
+        "acceptance_length": 8.0
+      },
+      "verify_runtime": {
+        "backend": "custom_qwen3",
+        "specextend_tree_verify": true,
+        "attention_scores": false
+      },
+      "raw": {
+        "network": {
+          "condition": "good",
+          "num_calls": 8,
+          "total_simulated_uplink_delay_ms": 73.04,
+          "total_simulated_downlink_delay_ms": 60.09,
+          "total_simulated_overhead_ms": 133.13,
+          "total_uplink_bytes": 97798,
+          "total_downlink_bytes": 2739,
+          "avg_overhead_per_call_ms": 16.64
+        },
+        "selected_chunk_ids": [],
+        "round_details": [
+          {
+            "round": 0,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 1,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 2,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 3,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 4,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 5,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 6,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          },
+          {
+            "round": 7,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": []
+          }
+        ]
+      }
+    }
+  ]
+}

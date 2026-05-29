@@ -49,7 +49,7 @@ Default one-model setup, using Qwen3-8B for both edge draft and cloud verify:
 Smaller smoke-test setup:
 
 ```bash
-.venv/bin/python models/download.py --preset smoke
+.venv/bin/python models/download.py --preset fast-draft
 ```
 
 Separate draft and verify setup:
@@ -60,6 +60,7 @@ Separate draft and verify setup:
 
 That downloads:
 
+- `models/Qwen3-0.6B`
 - `models/Qwen3-1.7B`
 - `models/Qwen3-8B`
 
@@ -128,10 +129,28 @@ MAX_DEPTH=3 \
 
 If the smoke run works, increase:
 
-- `MAX_TOKENS=512`
+- `MAX_TOKENS=256` or `MAX_TOKENS=512`
 - `NODES=32`
 - `MAX_DEPTH=8`
 - longer prompt types
+
+Recommended retrieval run for PG-19 2k-token inputs:
+
+```bash
+DRAFT_GPU_ID=1 \
+DRAFT_MODEL_PATH=$PWD/models/Qwen3-1.7B \
+DRAFT_ATTN_IMPLEMENTATION=sdpa \
+DRAFT_RECENT_TOKENS=128 \
+VERIFY_SERVER_URL=http://localhost:6007 \
+MAX_TOKENS=256 \
+PROMPT_TYPES=pg19 \
+PROMPT_INPUT_TOKENS=2048 \
+NODES=32 \
+MAX_DEPTH=8 \
+RETRIEVE_EVERY_N_STEPS=8 \
+RETRIEVE_TOP_K=16 \
+./quick.sh
+```
 
 ## 6. Inspect Results
 
