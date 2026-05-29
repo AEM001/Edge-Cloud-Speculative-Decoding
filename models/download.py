@@ -8,15 +8,11 @@ from huggingface_hub import snapshot_download
 
 
 MODEL_ALIASES = {
-    "qwen3-0.6b": ("Qwen/Qwen3-0.6B", "Qwen3-0.6B"),
     "qwen3-1.7b": ("Qwen/Qwen3-1.7B", "Qwen3-1.7B"),
-    "qwen3-4b": ("Qwen/Qwen3-4B", "Qwen3-4B"),
     "qwen3-8b": ("Qwen/Qwen3-8B", "Qwen3-8B"),
-    "qwen3-14b": ("Qwen/Qwen3-14B", "Qwen3-14B"),
 }
 
 PRESETS = {
-    "smoke": ["qwen3-0.6b"],
     "edge-cloud": ["qwen3-8b"],
     "separate": ["qwen3-1.7b", "qwen3-8b"],
 }
@@ -64,9 +60,8 @@ def parse_args() -> argparse.Namespace:
         choices=sorted(PRESETS),
         default="edge-cloud",
         help=(
-            "Preset to download when --model is not provided: smoke downloads a tiny "
-            "Qwen3, edge-cloud downloads Qwen3-8B, separate downloads Qwen3-1.7B "
-            "for draft and Qwen3-8B for verify."
+            "Preset to download when --model is not provided: edge-cloud downloads Qwen3-8B, "
+            "separate downloads Qwen3-1.7B for draft and Qwen3-8B for verify."
         ),
     )
     return parser.parse_args()

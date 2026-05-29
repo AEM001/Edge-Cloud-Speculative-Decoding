@@ -142,6 +142,50 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def download_pg19(repo_id: str = "emozilla/pg19", split: str = "test") -> None:
+    """Download PG-19 books dataset and normalize into local jsonl files."""
+    print(f"Downloading PG-19 dataset from {repo_id}...")
+    try:
+        from datasets import load_dataset
+    except ImportError as exc:
+        raise ImportError("`datasets` library is required. Install it: pip install datasets") from exc
+
+    output_dir = _DATA_DIR / "pg19"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    ds = load_dataset(repo_id, split=split)
+    rows = []
+    for idx, item in enumerate(ds, start=1):
+        text = item.get("text", "")
+        row = {
+            "id": idx,
+            "original_id": item.get("short_book_title", idx),
+            "source": "pg19",
+            "text": text,
+            "text_chars": len(text),
+            "text_words": len(text.split()),
+            "publication_date": item.get("publication_date"),
+            "book_title": item.get("short_book_title"),
+        }
+        rows.append(row)
+
+    all_path = output_dir / f"{split}.jsonl"
+    _write_jsonl(all_path, rows)
+    print(f"Saved {len(rows)} examples to {all_path}")
+
+    manifest = {
+        "dataset": repo_id,
+        "split": split,
+        "num_examples": len(rows),
+        "path": str(all_path.relative_to(_DATA_DIR.parent)),
+    }
+    manifest_path = output_dir / "manifest.json"
+    with open(manifest_path, "w") as f:
+        json.dump(manifest, f, indent=2)
+    print(f"Saved manifest to {manifest_path}")
+    print("PG-19 download complete!")
+
+
 if __name__ == "__main__":
     args = parse_args()
     download_longbench_v2(args.repo, args.split)

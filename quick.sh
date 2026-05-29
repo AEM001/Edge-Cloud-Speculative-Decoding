@@ -17,15 +17,21 @@ MAX_TOKENS="${MAX_TOKENS:-512}"
 PROMPT_COUNT="${PROMPT_COUNT:-1}"
 
 # ============================================
+# PROMPT INPUT TOKENS
+# Set to 2048 for a fixed 2k-token input prompt.
+# ============================================
+PROMPT_INPUT_TOKENS="${PROMPT_INPUT_TOKENS:-2048}"
+
+# ============================================
 # PROMPT TYPES
 # Options: gsm8k, humaneval, longwriter,
 #          longwriter_single_turn:input_4k, longwriter_single_turn:input_6k,
 #          longwriter_single_turn:input_8k, longwriter_single_turn:input_10k,
 #          longbench_v2:short, longbench_v2:medium, longbench_v2:long,
-#          longbench_v2:train, prompts_2048
+#          longbench_v2:train, pg19, prompts_2048
 # You can specify multiple (space-separated)
 # ============================================
-PROMPT_TYPES="${PROMPT_TYPES:-prompts_2048}"
+PROMPT_TYPES="${PROMPT_TYPES:-pg19}"
 
 # ============================================
 # DRAFT MODEL SETTINGS
@@ -80,6 +86,7 @@ CMD="$PYTHON scripts/experiments/quick_test.py \
     --max-tokens ${MAX_TOKENS} \
     --prompt-count ${PROMPT_COUNT} \
     --prompt-types ${PROMPT_TYPES} \
+    --prompt-input-tokens ${PROMPT_INPUT_TOKENS} \
     --nodes ${NODES} \
     --max-depth ${MAX_DEPTH} \
     --threshold ${THRESHOLD} \
@@ -95,6 +102,7 @@ echo "Methods: direct, specextend"
 echo "Max Tokens: ${MAX_TOKENS}"
 echo "Prompt Count (per type): ${PROMPT_COUNT}"
 echo "Prompt Types: ${PROMPT_TYPES}"
+echo "Prompt Input Tokens: ${PROMPT_INPUT_TOKENS}"
 echo "Nodes: ${NODES}"
 echo "Max Depth: ${MAX_DEPTH}"
 echo "Retrieval Chunk Size: ${RETRIEVAL_CHUNK_SIZE}"

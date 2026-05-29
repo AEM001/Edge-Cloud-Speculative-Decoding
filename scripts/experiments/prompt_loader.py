@@ -1,4 +1,4 @@
-"""Prompt loader supporting GSM8K, HumanEval, LongWriter, and LongBench v2."""
+"""Prompt loader supporting GSM8K, HumanEval, LongWriter, LongBench v2, and PG-19."""
 import json
 import random
 from pathlib import Path
@@ -21,7 +21,7 @@ def load_prompts(
     Args:
         source: Dataset name — "gsm8k", "humaneval", "longwriter",
             "longwriter_single_turn:<partition>", "longbench_v2:<partition>",
-            or "prompts_2048".
+            "pg19", or "prompts_2048".
         count: Number of prompts to return.
         split: Dataset split ("train" or "test", gsm8k only).
         min_length: Minimum prompt text length in characters.
@@ -48,12 +48,14 @@ def load_prompts(
         prompts = _load_longwriter_single_turn(partition)
     elif base_source == "longbench_v2":
         prompts = _load_longbench_v2(partition)
+    elif base_source == "pg19":
+        prompts = _load_pg19(split)
     elif base_source == "prompts_2048":
         prompts = _load_prompts_2048()
     else:
         raise ValueError(
             f"Unknown source: {source}. Use: gsm8k, humaneval, longwriter, "
-            "longwriter_single_turn:<partition>, longbench_v2:<partition>, or prompts_2048"
+            "longwriter_single_turn:<partition>, longbench_v2:<partition>, pg19, or prompts_2048"
         )
 
     filtered = [p for p in prompts if min_length <= len(p["text"]) <= max_length]
@@ -233,4 +235,34 @@ def _load_prompts_2048() -> List[Dict]:
         for line in f:
             row = json.loads(line)
             prompts.append({"text": row["prompt"]})
+    return prompts
+
+
+_PG19_PROMPT_CHARS = 16384
+
+
+def _load_pg19(split: str = "test") -> List[Dict]:
+    path = _DATA_DIR / "pg19" / f"{split}.jsonl"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"PG-19 data not found at {path}. Run "
+            "`python scripts/download_data.py` first."
+        )
+    prompts = []
+    with open(path) as f:
+        for line in f:
+            row = json.loads(line)
+            text = row.get("text", "")
+            if len(text) > _PG19_PROMPT_CHARS:
+                text = text[:_PG19_PROMPT_CHARS]
+            prompts.append(
+                {
+                    "text": text,
+                    "original_id": row.get("original_id"),
+                    "book_title": row.get("book_title"),
+                    "publication_date": row.get("publication_date"),
+                    "text_chars": len(text),
+                    "text_words": len(text.split()),
+                }
+            )
     return prompts

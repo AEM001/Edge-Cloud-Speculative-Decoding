@@ -106,13 +106,16 @@ class QwenModelRuntime:
 
     @torch.inference_mode()
     def generate_token_ids(self, token_ids: Sequence[int], max_new_tokens: int) -> List[int]:
-        generated = list(token_ids)
-        for _ in range(max_new_tokens):
-            next_token = int(torch.argmax(self.next_logits(generated), dim=-1).item())
-            generated.append(next_token)
-            if self.eos_token_id is not None and next_token == self.eos_token_id:
-                break
-        return generated[len(token_ids) :]
+        input_ids = torch.tensor([list(token_ids)], dtype=torch.long, device=self.device)
+        output_ids = self.model.generate(
+            input_ids=input_ids,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+            use_cache=True,
+            pad_token_id=self.tokenizer.pad_token_id,
+            eos_token_id=self.eos_token_id,
+        )
+        return output_ids[0, input_ids.shape[1] :].tolist()
 
     def decode(self, token_ids: Sequence[int]) -> str:
         return self.tokenizer.decode(list(token_ids), skip_special_tokens=True)
@@ -264,9 +267,15 @@ class QwenSpecExtendTargetBackend:
         accepted_indices: List[int] = []
         correction_token_id: Optional[int] = None
         best_accept_len = -1
+        max_path_len = max((len(path) for path in paths), default=0)
+
+        if max_path_len > 0:
+            target_tokens = self.runtime.generate_token_ids(request.prefix_ids, max_path_len + 1)
+        else:
+            target_tokens = self.runtime.generate_token_ids(request.prefix_ids, 1)
 
         for node_idx, path in enumerate(paths):
-            accepted_len, correction = self._verify_path(request.prefix_ids, path)
+            accepted_len, correction = self._verify_path_against_tokens(path, target_tokens)
             if accepted_len > best_accept_len:
                 best_accept_len = accepted_len
                 accepted_indices = self._indices_for_path(node_idx, request.parent_indices)
@@ -275,7 +284,7 @@ class QwenSpecExtendTargetBackend:
 
         if best_accept_len < 0:
             best_accept_len = 0
-            correction_token_id = int(torch.argmax(self.runtime.next_logits(request.prefix_ids), dim=-1).item())
+            correction_token_id = target_tokens[0] if target_tokens else None
 
         target_attn_scores = None
         if request.retrieve_attn_scores:
@@ -327,19 +336,20 @@ class QwenSpecExtendTargetBackend:
                 break
         return generated
 
-    def _verify_path(self, prefix_ids: List[int], path: List[int]) -> tuple[int, Optional[int]]:
-        current = list(prefix_ids)
+    @staticmethod
+    def _verify_path_against_tokens(path: List[int], target_tokens: List[int]) -> tuple[int, Optional[int]]:
         accepted = 0
         correction = None
-        for draft_token in path:
-            next_token = int(torch.argmax(self.runtime.next_logits(current), dim=-1).item())
-            if next_token != draft_token:
-                correction = next_token
+        for idx, draft_token in enumerate(path):
+            if idx >= len(target_tokens):
                 break
-            current.append(draft_token)
+            target_token = int(target_tokens[idx])
+            if target_token != draft_token:
+                correction = target_token
+                break
             accepted += 1
-        if accepted == len(path):
-            correction = int(torch.argmax(self.runtime.next_logits(current), dim=-1).item())
+        if accepted == len(path) and accepted < len(target_tokens):
+            correction = int(target_tokens[accepted])
         return accepted, correction
 
     @staticmethod

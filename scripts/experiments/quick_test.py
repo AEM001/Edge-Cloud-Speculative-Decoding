@@ -28,7 +28,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 SERVER_URL = os.getenv("VERIFY_SERVER_URL", "http://localhost:6007")
-DRAFT_MODEL_PATH = Path(os.getenv("DRAFT_MODEL_PATH", "/root/code/draft/models/Qwen3-8B"))
+DRAFT_MODEL_PATH = Path(os.getenv("DRAFT_MODEL_PATH", "/root/code/models/Qwen3-1.7B"))
 DRAFT_GPU_ID = os.getenv("DRAFT_GPU_ID", "1")
 DRAFT_DEVICE = os.getenv("DRAFT_DEVICE", f"cuda:{DRAFT_GPU_ID}")
 DRAFT_DTYPE = dtype_from_env(os.getenv("DRAFT_DTYPE", "fp16"))
@@ -112,6 +112,29 @@ def load_prompt_set(prompt_types: List[str], prompt_count: int):
         prompts.extend((prompt, source) for prompt in loaded)
     logger.info("Loaded %d prompts", len(prompts))
     return prompts
+
+
+def truncate_prompts_to_tokens(prompts, tokenizer, max_input_tokens: int):
+    if max_input_tokens <= 0:
+        return prompts
+
+    truncated = []
+    for prompt_data, prompt_type in prompts:
+        input_ids = tokenizer.encode(prompt_data["text"])
+        token_count = len(input_ids)
+        if token_count > max_input_tokens:
+            prompt_data = dict(prompt_data)
+            prompt_data["text"] = tokenizer.decode(input_ids[:max_input_tokens])
+            prompt_data["prompt_input_tokens"] = max_input_tokens
+            prompt_data["original_prompt_input_tokens"] = token_count
+        else:
+            prompt_data = dict(prompt_data)
+            prompt_data["prompt_input_tokens"] = token_count
+            prompt_data["original_prompt_input_tokens"] = token_count
+        truncated.append((prompt_data, prompt_type))
+
+    logger.info("Using fixed input length up to %d tokens", max_input_tokens)
+    return truncated
 
 
 def direct_generate_with_throttle(prompt: str, throttled: ThrottledCloudClient, max_tokens: int) -> DirectTiming:
@@ -295,6 +318,7 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
             max_model_len=DRAFT_MAX_LEN,
         )
     )
+    prompts = truncate_prompts_to_tokens(prompts, draft_backend.tokenizer, config["prompt_input_tokens"])
     specextend_client = SpecExtendEdgeClient(
         draft_backend=draft_backend,
         cloud_verify_tree=base_client.verify_specextend_tree,
@@ -341,7 +365,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run direct and real SpecExtend quick tests.")
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--prompt-count", type=int, default=1)
-    parser.add_argument("--prompt-types", type=str, nargs="+", default=["prompts_2048"])
+    parser.add_argument("--prompt-types", type=str, nargs="+", default=["pg19"])
+    parser.add_argument("--prompt-input-tokens", type=int, default=0, help="Truncate prompts to this many input tokens.")
     parser.add_argument("--nodes", type=int, default=32, help="Maximum draft-tree nodes.")
     parser.add_argument("--threshold", type=float, default=0.7)
     parser.add_argument("--max-depth", type=int, default=8)
@@ -360,6 +385,7 @@ if __name__ == "__main__":
             "max_tokens": args.max_tokens,
             "prompt_count": args.prompt_count,
             "prompt_types": args.prompt_types,
+            "prompt_input_tokens": args.prompt_input_tokens,
             "nodes": args.nodes,
             "threshold": args.threshold,
             "max_depth": args.max_depth,

@@ -24,7 +24,7 @@ def _env(name: str, default: str) -> str:
     return os.getenv(name, default)
 
 
-_DEFAULT_MODEL_PATH = os.getenv("VERIFY_MODEL_PATH", "/root/code/draft/models/Qwen3-8B")
+_DEFAULT_MODEL_PATH = os.getenv("VERIFY_MODEL_PATH", "/root/code/models/Qwen3-8B")
 
 
 class VerifyRequest(BaseModel):
@@ -104,7 +104,7 @@ async def _lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="PicoSpec Custom Qwen Verify Server", version="2.0.0", lifespan=_lifespan)
+app = FastAPI(title="ECSD Custom Qwen Verify Server", version="2.0.0", lifespan=_lifespan)
 
 
 @app.get("/health")
@@ -189,7 +189,7 @@ def main():
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
 
-    parser = argparse.ArgumentParser(description="PicoSpec Custom Qwen Verify Server")
+    parser = argparse.ArgumentParser(description="ECSD Custom Qwen Verify Server")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=6006)
     args = parser.parse_args()

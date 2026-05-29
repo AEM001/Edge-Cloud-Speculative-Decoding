@@ -64,6 +64,7 @@ htmlcov/
 /models/Qwen2.5-1.5B-Instruct-AWQ
 /models/Qwen2.5-7B-Instruct-AWQ
 /models/Qwen2.5-3B-Instruct-AWQ
+/models/Qwen3-1.7B/
 models/hf.txt
 /experiments/outputs*/
 
