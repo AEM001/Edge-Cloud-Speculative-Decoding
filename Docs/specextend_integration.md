@@ -56,9 +56,12 @@ output text.
   Rejections rewind to the shared prefix instead of recomputing the whole prompt.
 - Retrieval is active through cached last-token target attention. Start the
   verify server with `VERIFY_ATTN_IMPLEMENTATION=eager`; SDPA is faster but does
-  not expose attention weights in Transformers. The draft backend builds its
-  working context from selected retrieval chunks plus a recent suffix controlled
-  by `DRAFT_RECENT_TOKENS`.
+  not expose attention weights in Transformers. The cloud selects top-k chunk
+  IDs from those scores by default and returns only the compact ID list; set
+  request metadata `return_attention_scores=true` for full score vectors. The
+  draft backend builds its sparse working context from selected retrieval chunks
+  plus a recent suffix controlled by `DRAFT_RECENT_TOKENS`, preserving original
+  token positions for RoPE.
 - The edge client supports an asynchronous verification pipeline. While a draft
   tree is in flight to the cloud, the edge builds candidate next drafts at
   `SPECEXTEND_PIPELINE_OFFSETS` such as `full,half`. A candidate is reused only

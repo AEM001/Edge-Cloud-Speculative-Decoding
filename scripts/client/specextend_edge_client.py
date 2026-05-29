@@ -156,6 +156,11 @@ class SpecExtendEdgeClient:
                 if correction_token_id is not None:
                     verified_prefix.append(correction_token_id)
 
+                new_prefix_tokens = len(verified_prefix) - retrieval_recorded_len
+                if new_prefix_tokens > 0:
+                    self.retrieval.append_tokens(new_prefix_tokens)
+                    retrieval_recorded_len = len(verified_prefix)
+
                 prefetched = self._select_pipeline_candidate(
                     candidates=candidates,
                     previous_prefix=previous_prefix,
@@ -170,7 +175,7 @@ class SpecExtendEdgeClient:
                     metrics.selected_chunk_ids = [chunk.chunk_id for chunk in selected]
                 elif response.selected_chunk_ids is not None:
                     self.retrieval.set_selected_chunk_ids(response.selected_chunk_ids)
-                    metrics.selected_chunk_ids = list(response.selected_chunk_ids)
+                    metrics.selected_chunk_ids = self.retrieval.selected_chunk_ids()
 
                 metrics.total_rounds += 1
                 metrics.total_edge_draft_time_ms += draft_result.draft_time_ms

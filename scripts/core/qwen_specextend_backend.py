@@ -20,6 +20,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from core.protocol import SpecExtendTreeRequest, SpecExtendTreeResponse
 from core.specextend_backend import DraftTree, DraftTreeResult, SpecExtendDraftBackend
+from core.specextend_retrieval import build_chunks, select_chunks_by_attention
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,19 @@ class QwenBackendConfig:
     max_model_len: int = 32768
     trust_remote_code: bool = True
     attn_implementation: str = "sdpa"
+
+
+@dataclass(frozen=True)
+class SparseDraftContext:
+    token_ids: List[int]
+    position_ids: List[int]
+
+    def with_path(self, path: Sequence[int], position_start: int) -> "SparseDraftContext":
+        path = list(path)
+        return SparseDraftContext(
+            token_ids=self.token_ids + path,
+            position_ids=self.position_ids + list(range(position_start, position_start + len(path))),
+        )
 
 
 class VisibleTokenCache:
@@ -97,6 +111,10 @@ class QwenModelRuntime:
         self._cache_token_ids: List[int] = []
         self._cache = None
         self._cache_next_logits: Optional[torch.Tensor] = None
+        self._sparse_cache_token_ids: List[int] = []
+        self._sparse_cache_position_ids: List[int] = []
+        self._sparse_cache = None
+        self._sparse_cache_next_logits: Optional[torch.Tensor] = None
 
     @property
     def eos_token_id(self) -> Optional[int]:
@@ -108,10 +126,29 @@ class QwenModelRuntime:
         outputs = self.model(input_ids=input_ids, use_cache=False)
         return outputs.logits[:, -1, :]
 
+    @torch.inference_mode()
+    def next_logits_positioned(
+        self,
+        token_ids: Sequence[int],
+        position_ids: Sequence[int],
+    ) -> torch.Tensor:
+        if len(token_ids) != len(position_ids):
+            raise ValueError("token_ids and position_ids must have the same length")
+        input_ids = torch.tensor([list(token_ids)], dtype=torch.long, device=self.device)
+        pos_ids = torch.tensor([list(position_ids)], dtype=torch.long, device=self.device)
+        outputs = self.model(input_ids=input_ids, position_ids=pos_ids, use_cache=False)
+        return outputs.logits[:, -1, :]
+
     def reset_cache(self) -> None:
         self._cache_token_ids = []
         self._cache = None
         self._cache_next_logits = None
+
+    def reset_sparse_cache(self) -> None:
+        self._sparse_cache_token_ids = []
+        self._sparse_cache_position_ids = []
+        self._sparse_cache = None
+        self._sparse_cache_next_logits = None
 
     def _rewind_cache_for_prefix(self, common_length: int) -> int:
         if common_length <= 1 or self._cache is None:
@@ -152,6 +189,34 @@ class QwenModelRuntime:
         return outputs.logits
 
     @torch.inference_mode()
+    def _forward_sparse_cache_tokens(
+        self,
+        token_ids: Sequence[int],
+        position_ids: Sequence[int],
+    ) -> torch.Tensor:
+        if len(token_ids) != len(position_ids):
+            raise ValueError("token_ids and position_ids must have the same length")
+        if not token_ids:
+            if self._sparse_cache_next_logits is None:
+                raise ValueError("Cannot compute next logits for an empty sparse cache.")
+            return self._sparse_cache_next_logits
+
+        input_ids = torch.tensor([list(token_ids)], dtype=torch.long, device=self.device)
+        pos_ids = torch.tensor([list(position_ids)], dtype=torch.long, device=self.device)
+        outputs = self.model(
+            input_ids=input_ids,
+            position_ids=pos_ids,
+            past_key_values=self._sparse_cache,
+            use_cache=True,
+            return_dict=True,
+        )
+        self._sparse_cache = outputs.past_key_values
+        self._sparse_cache_token_ids.extend(int(token_id) for token_id in token_ids)
+        self._sparse_cache_position_ids.extend(int(position_id) for position_id in position_ids)
+        self._sparse_cache_next_logits = outputs.logits[:, -1, :]
+        return outputs.logits
+
+    @torch.inference_mode()
     def ensure_cache(self, token_ids: Sequence[int]) -> torch.Tensor:
         token_ids = list(token_ids)
         common = self._common_prefix_len(self._cache_token_ids, token_ids)
@@ -167,6 +232,39 @@ class QwenModelRuntime:
         return self._cache_next_logits
 
     @torch.inference_mode()
+    def ensure_sparse_cache(
+        self,
+        token_ids: Sequence[int],
+        position_ids: Sequence[int],
+    ) -> torch.Tensor:
+        token_ids = list(token_ids)
+        position_ids = list(position_ids)
+        if len(token_ids) != len(position_ids):
+            raise ValueError("token_ids and position_ids must have the same length")
+
+        common = 0
+        limit = min(len(self._sparse_cache_token_ids), len(token_ids))
+        while (
+            common < limit
+            and self._sparse_cache_token_ids[common] == token_ids[common]
+            and self._sparse_cache_position_ids[common] == position_ids[common]
+        ):
+            common += 1
+
+        if common < len(self._sparse_cache_token_ids):
+            self.reset_sparse_cache()
+            common = 0
+
+        missing_tokens = token_ids[common:]
+        missing_positions = position_ids[common:]
+        if missing_tokens:
+            self._forward_sparse_cache_tokens(missing_tokens, missing_positions)
+
+        if self._sparse_cache_next_logits is None:
+            raise ValueError("Sparse prompt cache is empty; at least one token is required.")
+        return self._sparse_cache_next_logits
+
+    @torch.inference_mode()
     def generate_token_ids_cached(self, token_ids: Sequence[int], max_new_tokens: int) -> List[int]:
         generated: List[int] = []
         self.ensure_cache(token_ids)
@@ -174,6 +272,24 @@ class QwenModelRuntime:
             next_token = int(torch.argmax(self._cache_next_logits, dim=-1).item())
             generated.append(next_token)
             self._forward_cache_tokens([next_token])
+            if self.eos_token_id is not None and next_token == self.eos_token_id:
+                break
+        return generated
+
+    @torch.inference_mode()
+    def generate_token_ids_cached_sparse(
+        self,
+        token_ids: Sequence[int],
+        position_ids: Sequence[int],
+        next_position_id: int,
+        max_new_tokens: int,
+    ) -> List[int]:
+        generated: List[int] = []
+        self.ensure_sparse_cache(token_ids, position_ids)
+        for offset in range(max_new_tokens):
+            next_token = int(torch.argmax(self._sparse_cache_next_logits, dim=-1).item())
+            generated.append(next_token)
+            self._forward_sparse_cache_tokens([next_token], [next_position_id + offset])
             if self.eos_token_id is not None and next_token == self.eos_token_id:
                 break
         return generated
@@ -254,19 +370,38 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         )
 
     @staticmethod
-    def _draft_context(prefix: List[int], retrieval_token_indices: Optional[List[int]]) -> List[int]:
+    def _draft_context(
+        prefix: List[int],
+        retrieval_token_indices: Optional[List[int]],
+    ) -> SparseDraftContext:
         recent_tokens = int(os.getenv("DRAFT_RECENT_TOKENS", "128"))
         if not retrieval_token_indices:
-            return list(prefix)
+            return SparseDraftContext(
+                token_ids=list(prefix),
+                position_ids=list(range(len(prefix))),
+            )
 
         selected = {idx for idx in retrieval_token_indices if 0 <= idx < len(prefix)}
         if recent_tokens > 0:
             selected.update(range(max(0, len(prefix) - recent_tokens), len(prefix)))
         if not selected:
-            return list(prefix)
-        return [prefix[idx] for idx in sorted(selected)]
+            return SparseDraftContext(
+                token_ids=list(prefix),
+                position_ids=list(range(len(prefix))),
+            )
+        ordered = sorted(selected)
+        return SparseDraftContext(
+            token_ids=[prefix[idx] for idx in ordered],
+            position_ids=ordered,
+        )
 
-    def _grow_tree(self, prefix: List[int], nodes: int, max_depth: int, position_start: int) -> DraftTree:
+    def _grow_tree(
+        self,
+        prefix: SparseDraftContext,
+        nodes: int,
+        max_depth: int,
+        position_start: int,
+    ) -> DraftTree:
         if os.getenv("DRAFT_TREE_MODE", "linear").strip().lower() != "branching":
             return self._grow_linear_tree(
                 prefix,
@@ -283,7 +418,8 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         for depth in range(max_depth):
             candidates = []
             for path, parent_idx, score in frontier:
-                logits = self.runtime.next_logits(prefix + path)
+                context = prefix.with_path(path, position_start)
+                logits = self.runtime.next_logits_positioned(context.token_ids, context.position_ids)
                 logprobs = F.log_softmax(logits[0], dim=-1)
                 width = min(branch_width, nodes - len(records), logprobs.numel())
                 values, token_ids = torch.topk(logprobs, k=width)
@@ -314,7 +450,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
                 break
 
         if not records:
-            logits = self.runtime.next_logits(prefix)
+            logits = self.runtime.next_logits_positioned(prefix.token_ids, prefix.position_ids)
             token_id = int(torch.argmax(logits, dim=-1).item())
             records.append(
                 {
@@ -340,13 +476,18 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
 
     def _grow_linear_tree(
         self,
-        prefix: List[int],
+        prefix: SparseDraftContext,
         nodes: int,
         max_depth: int,
         position_start: int,
     ) -> DraftTree:
         length = max(1, min(nodes, max_depth))
-        input_ids = self.runtime.generate_token_ids_cached(prefix, length)
+        input_ids = self.runtime.generate_token_ids_cached_sparse(
+            prefix.token_ids,
+            prefix.position_ids,
+            next_position_id=position_start,
+            max_new_tokens=length,
+        )
         position_ids = list(range(position_start, position_start + len(input_ids)))
         parent_indices = [idx - 1 for idx in range(len(input_ids))]
         attention_mask = self._tree_attention_mask(parent_indices)
@@ -436,6 +577,7 @@ class QwenSpecExtendTargetBackend:
             best_accept_len = 0
 
         target_attn_scores = None
+        selected_chunk_ids = None
         if request.retrieve_attn_scores:
             accepted_tokens = [
                 request.tree_input_ids[idx]
@@ -445,7 +587,21 @@ class QwenSpecExtendTargetBackend:
             scoring_ids = list(request.prefix_ids) + accepted_tokens
             if correction_token_id is not None:
                 scoring_ids.append(correction_token_id)
-            target_attn_scores = self._last_query_attention_scores_cached(scoring_ids)
+            scores = self._last_query_attention_scores_cached(scoring_ids)
+            return_full_scores = bool((request.metadata or {}).get("return_attention_scores", False))
+            if return_full_scores:
+                target_attn_scores = scores
+            else:
+                chunks = build_chunks(
+                    total_seq_len=max(0, len(scores)),
+                    chunk_size=request.retrieval_chunk_size,
+                )
+                selected = select_chunks_by_attention(
+                    chunks,
+                    scores,
+                    top_k_chunks=request.retrieve_top_k,
+                )
+                selected_chunk_ids = [chunk.chunk_id for chunk in selected]
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         return SpecExtendTreeResponse(
@@ -455,6 +611,7 @@ class QwenSpecExtendTargetBackend:
             accepted_tree_indices=accepted_indices,
             server_verify_time_ms=elapsed_ms,
             target_attn_scores=target_attn_scores,
+            selected_chunk_ids=selected_chunk_ids,
             model_time_ms=elapsed_ms,
             http_overhead_ms=0.0,
         )
