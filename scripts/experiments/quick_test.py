@@ -27,11 +27,11 @@ from experiments.prompt_loader import load_prompts
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-SERVER_URL = os.getenv("VERIFY_SERVER_URL", "http://localhost:6007")
-DRAFT_MODEL_PATH = Path(os.getenv("DRAFT_MODEL_PATH", "/root/code/draft/models/Qwen3-8B"))
+SERVER_URL = os.getenv("VERIFY_SERVER_URL", "http://127.0.0.1:6007")
+DRAFT_MODEL_PATH = Path(os.getenv("DRAFT_MODEL_PATH", "/root/code/draft/models/Qwen3-0_6B_int4_awq"))
 DRAFT_GPU_ID = os.getenv("DRAFT_GPU_ID", "1")
 DRAFT_DEVICE = os.getenv("DRAFT_DEVICE", f"cuda:{DRAFT_GPU_ID}")
-DRAFT_DTYPE = dtype_from_env(os.getenv("DRAFT_DTYPE", "fp16"))
+DRAFT_DTYPE = dtype_from_env(os.getenv("DRAFT_DTYPE", "fp8"))
 DRAFT_MAX_LEN = int(os.getenv("DRAFT_MAX_LEN", "32768"))
 REQUEST_TIMEOUT_SEC = float(os.getenv("QUICK_TEST_TIMEOUT_SEC", "600"))
 

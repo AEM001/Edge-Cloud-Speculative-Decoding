@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
@@ -94,14 +95,80 @@ class QwenModelRuntime:
         ).to(self.device)
         self.model.eval()
 
+        # KV cache for efficient autoregressive generation
+        # Maps request_id -> (past_key_values, cached_seq)
+        self._kv_cache: Optional[tuple] = None
+        self._kv_cache_seq: List[int] = []
+        self._request_kv_cache: dict = {}
+        self._request_kv_seq: dict = {}
+
     @property
     def eos_token_id(self) -> Optional[int]:
         return self.tokenizer.eos_token_id
 
     @torch.inference_mode()
     def next_logits(self, token_ids: Sequence[int]) -> torch.Tensor:
-        input_ids = torch.tensor([list(token_ids)], dtype=torch.long, device=self.device)
-        outputs = self.model(input_ids=input_ids, use_cache=False)
+        token_ids = list(token_ids)
+
+        # Fast path: new tokens extend cached sequence
+        if (
+            self._kv_cache is not None
+            and len(token_ids) > len(self._kv_cache_seq)
+            and token_ids[: len(self._kv_cache_seq)] == self._kv_cache_seq
+        ):
+            new_ids = token_ids[len(self._kv_cache_seq) :]
+            input_ids = torch.tensor([new_ids], dtype=torch.long, device=self.device)
+            outputs = self.model(
+                input_ids=input_ids,
+                past_key_values=self._kv_cache,
+                use_cache=True,
+            )
+            self._kv_cache = outputs.past_key_values
+            self._kv_cache_seq = token_ids
+            return outputs.logits[:, -1, :]
+
+        # Slow path: prefix changed, recompute from scratch
+        input_ids = torch.tensor([token_ids], dtype=torch.long, device=self.device)
+        outputs = self.model(input_ids=input_ids, use_cache=True)
+        self._kv_cache = outputs.past_key_values
+        self._kv_cache_seq = token_ids
+        return outputs.logits[:, -1, :]
+
+    def clear_kv_cache(self) -> None:
+        self._kv_cache = None
+        self._kv_cache_seq = []
+
+    def clear_request_kv_cache(self, request_id: str) -> None:
+        self._request_kv_cache.pop(request_id, None)
+        self._request_kv_seq.pop(request_id, None)
+
+    @torch.inference_mode()
+    def next_logits_for_request(
+        self, request_id: str, token_ids: Sequence[int]
+    ) -> torch.Tensor:
+        """next_logits with per-request KV cache reuse."""
+        token_ids = list(token_ids)
+        cached_seq = self._request_kv_seq.get(request_id, [])
+        cached_kv = self._request_kv_cache.get(request_id)
+
+        if (
+            cached_kv is not None
+            and len(token_ids) > len(cached_seq)
+            and token_ids[: len(cached_seq)] == cached_seq
+        ):
+            new_ids = token_ids[len(cached_seq) :]
+            input_ids = torch.tensor([new_ids], dtype=torch.long, device=self.device)
+            outputs = self.model(
+                input_ids=input_ids,
+                past_key_values=cached_kv,
+                use_cache=True,
+            )
+        else:
+            input_ids = torch.tensor([token_ids], dtype=torch.long, device=self.device)
+            outputs = self.model(input_ids=input_ids, use_cache=True)
+
+        self._request_kv_cache[request_id] = outputs.past_key_values
+        self._request_kv_seq[request_id] = token_ids
         return outputs.logits[:, -1, :]
 
     @torch.inference_mode()
@@ -112,7 +179,7 @@ class QwenModelRuntime:
             generated.append(next_token)
             if self.eos_token_id is not None and next_token == self.eos_token_id:
                 break
-        return generated[len(token_ids) :]
+        return generated[len(token_ids):]
 
     def decode(self, token_ids: Sequence[int]) -> str:
         return self.tokenizer.decode(list(token_ids), skip_special_tokens=True)
@@ -143,6 +210,11 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         self.cache.select_working_tokens(retrieval_token_indices)
 
         tree = self._grow_tree(verified_prefix, nodes=max(1, nodes), max_depth=max(1, max_depth))
+        # Purge per-path KV cache entries from this build to free GPU memory
+        stale = [k for k in self.runtime._request_kv_cache if k not in self.runtime._request_kv_seq]
+        for k in list(self.runtime._request_kv_cache):
+            del self.runtime._request_kv_cache[k]
+            self.runtime._request_kv_seq.pop(k, None)
         return DraftTreeResult(
             tree=tree,
             draft_time_ms=(time.perf_counter() - start) * 1000,
@@ -151,6 +223,9 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
 
     def _grow_tree(self, prefix: List[int], nodes: int, max_depth: int) -> DraftTree:
         device = self.runtime.device
+        # Use a unique tree-build session id so per-path caches don't collide
+        # across calls but DO reuse within a single tree build.
+        session = uuid.uuid4().hex
         frontier = [([], -1, 0.0)]
         records: List[Dict[str, object]] = []
         branch_width = max(1, min(nodes, int(nodes**0.5) or 1))
@@ -158,7 +233,9 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         for depth in range(max_depth):
             candidates = []
             for path, parent_idx, score in frontier:
-                logits = self.runtime.next_logits(prefix + path)
+                # Cache key per path so the prefix+path KV cache is reused
+                path_key = f"{session}:{'_'.join(map(str, path))}"
+                logits = self.runtime.next_logits_for_request(path_key, prefix + path)
                 logprobs = F.log_softmax(logits[0], dim=-1)
                 width = min(branch_width, nodes - len(records), logprobs.numel())
                 values, token_ids = torch.topk(logprobs, k=width)
@@ -189,7 +266,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
                 break
 
         if not records:
-            logits = self.runtime.next_logits(prefix)
+            logits = self.runtime.next_logits_for_request(f"{session}:", prefix)
             token_id = int(torch.argmax(logits, dim=-1).item())
             records.append(
                 {
@@ -259,14 +336,17 @@ class QwenSpecExtendTargetBackend:
     @torch.inference_mode()
     def verify_tree(self, request: SpecExtendTreeRequest) -> SpecExtendTreeResponse:
         start = time.perf_counter()
+        rid = request.request_id
+        leaf_indices = self._leaf_indices(request.parent_indices)
         paths = self._paths_from_tree(request.tree_input_ids, request.parent_indices)
 
         accepted_indices: List[int] = []
         correction_token_id: Optional[int] = None
         best_accept_len = -1
 
-        for node_idx, path in enumerate(paths):
-            accepted_len, correction = self._verify_path(request.prefix_ids, path)
+        for node_idx in leaf_indices:
+            path = paths[node_idx]
+            accepted_len, correction = self._verify_path(rid, request.prefix_ids, path)
             if accepted_len > best_accept_len:
                 best_accept_len = accepted_len
                 accepted_indices = self._indices_for_path(node_idx, request.parent_indices)
@@ -275,7 +355,11 @@ class QwenSpecExtendTargetBackend:
 
         if best_accept_len < 0:
             best_accept_len = 0
-            correction_token_id = int(torch.argmax(self.runtime.next_logits(request.prefix_ids), dim=-1).item())
+            correction_token_id = int(
+                torch.argmax(
+                    self.runtime.next_logits_for_request(rid, request.prefix_ids), dim=-1
+                ).item()
+            )
 
         target_attn_scores = None
         if request.retrieve_attn_scores:
@@ -327,20 +411,36 @@ class QwenSpecExtendTargetBackend:
                 break
         return generated
 
-    def _verify_path(self, prefix_ids: List[int], path: List[int]) -> tuple[int, Optional[int]]:
+    def _verify_path(
+        self, request_id: str, prefix_ids: List[int], path: List[int]
+    ) -> tuple[int, Optional[int]]:
         current = list(prefix_ids)
         accepted = 0
         correction = None
         for draft_token in path:
-            next_token = int(torch.argmax(self.runtime.next_logits(current), dim=-1).item())
+            next_token = int(
+                torch.argmax(
+                    self.runtime.next_logits_for_request(request_id, current), dim=-1
+                ).item()
+            )
             if next_token != draft_token:
                 correction = next_token
                 break
             current.append(draft_token)
             accepted += 1
         if accepted == len(path):
-            correction = int(torch.argmax(self.runtime.next_logits(current), dim=-1).item())
+            correction = int(
+                torch.argmax(
+                    self.runtime.next_logits_for_request(request_id, current), dim=-1
+                ).item()
+            )
         return accepted, correction
+
+    @staticmethod
+    def _leaf_indices(parent_indices: Sequence[int]) -> List[int]:
+        """Return indices of nodes that are not a parent of any other node (leaves)."""
+        parents = set(parent_indices)
+        return [i for i in range(len(parent_indices)) if i not in parents]
 
     @staticmethod
     def _paths_from_tree(tree_input_ids: Sequence[int], parent_indices: Sequence[int]) -> List[List[int]]:

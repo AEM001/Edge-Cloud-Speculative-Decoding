@@ -19,10 +19,7 @@ cache bookkeeping.
 
 ## Hardware Defaults
 
-```text
-GPU 0  -> cloud / verify server  models/Qwen3-8B
-GPU 1  -> edge  / draft backend  models/Qwen3-8B
-```
+Single GPU setup running both draft and target models.
 
 Override with `VERIFY_MODEL_PATH`, `VERIFY_DEVICE`, `DRAFT_MODEL_PATH`, and
 `DRAFT_DEVICE`.

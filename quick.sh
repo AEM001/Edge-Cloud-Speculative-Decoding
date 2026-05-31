@@ -7,7 +7,7 @@
 # MAX TOKENS TO GENERATE
 # LongWriter prompts are intended for long-form generation.
 # ============================================
-MAX_TOKENS="${MAX_TOKENS:-512}"
+MAX_TOKENS="${MAX_TOKENS:-128}"
 
 # ============================================
 # PROMPT COUNT PER TYPE
@@ -18,14 +18,9 @@ PROMPT_COUNT="${PROMPT_COUNT:-1}"
 
 # ============================================
 # PROMPT TYPES
-# Options: gsm8k, humaneval, longwriter,
-#          longwriter_single_turn:input_4k, longwriter_single_turn:input_6k,
-#          longwriter_single_turn:input_8k, longwriter_single_turn:input_10k,
-#          longbench_v2:short, longbench_v2:medium, longbench_v2:long,
-#          longbench_v2:train, prompts_2048
-# You can specify multiple (space-separated)
+# Options: govreport
 # ============================================
-PROMPT_TYPES="${PROMPT_TYPES:-prompts_2048}"
+PROMPT_TYPES="${PROMPT_TYPES:-govreport}"
 
 # ============================================
 # DRAFT MODEL SETTINGS
@@ -35,8 +30,8 @@ PROMPT_TYPES="${PROMPT_TYPES:-prompts_2048}"
 # ============================================
 # SPECEXTEND TREE SETTINGS
 # ============================================
-NODES="${NODES:-32}"
-MAX_DEPTH="${MAX_DEPTH:-8}"
+NODES="${NODES:-8}"
+MAX_DEPTH="${MAX_DEPTH:-4}"
 THRESHOLD="${THRESHOLD:-0.7}"
 RETRIEVAL_CHUNK_SIZE="${RETRIEVAL_CHUNK_SIZE:-32}"
 RETRIEVE_TOP_K="${RETRIEVE_TOP_K:-32}"
@@ -45,7 +40,7 @@ RETRIEVE_EVERY_N_STEPS="${RETRIEVE_EVERY_N_STEPS:-8}"
 # ============================================
 # VERIFY SERVER SETTINGS
 # ============================================
-VERIFY_SERVER_URL="${VERIFY_SERVER_URL:-http://localhost:6007}"
+VERIFY_SERVER_URL="${VERIFY_SERVER_URL:-http://127.0.0.1:6007}"
 
 # ============================================
 # END OF CONFIGURATION
@@ -61,10 +56,10 @@ PYTHON="$SCRIPT_DIR/.venv/bin/python3"
 # ============================================
 # DRAFT MODEL SETTINGS (set after SCRIPT_DIR is defined)
 # ============================================
-DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-$SCRIPT_DIR/models/Qwen3-8B}"
+DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-$SCRIPT_DIR/models/Qwen3-0_6B_int4_awq}"
 DRAFT_GPU_ID="${DRAFT_GPU_ID:-0}"  # GPU 0 for single GPU setup
 DRAFT_DEVICE="${DRAFT_DEVICE:-cuda:$DRAFT_GPU_ID}"
-DRAFT_DTYPE="${DRAFT_DTYPE:-fp16}"
+DRAFT_DTYPE="${DRAFT_DTYPE:-fp8}"
 DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-32768}"
 
 # Export environment variables

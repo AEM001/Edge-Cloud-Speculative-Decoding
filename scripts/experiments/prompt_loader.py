@@ -21,7 +21,7 @@ def load_prompts(
     Args:
         source: Dataset name — "gsm8k", "humaneval", "longwriter",
             "longwriter_single_turn:<partition>", "longbench_v2:<partition>",
-            or "prompts_2048".
+            "govreport", "pg19", or "prompts_2048".
         count: Number of prompts to return.
         split: Dataset split ("train" or "test", gsm8k only).
         min_length: Minimum prompt text length in characters.
@@ -48,12 +48,17 @@ def load_prompts(
         prompts = _load_longwriter_single_turn(partition)
     elif base_source == "longbench_v2":
         prompts = _load_longbench_v2(partition)
+    elif base_source == "govreport":
+        prompts = _load_govreport(split)
+    elif base_source == "pg19":
+        prompts = _load_pg19(split)
     elif base_source == "prompts_2048":
         prompts = _load_prompts_2048()
     else:
         raise ValueError(
             f"Unknown source: {source}. Use: gsm8k, humaneval, longwriter, "
-            "longwriter_single_turn:<partition>, longbench_v2:<partition>, or prompts_2048"
+            "longwriter_single_turn:<partition>, longbench_v2:<partition>, "
+            "govreport, pg19, or prompts_2048"
         )
 
     filtered = [p for p in prompts if min_length <= len(p["text"]) <= max_length]
@@ -222,6 +227,38 @@ def _available_longbench_v2_partitions() -> List[str]:
     if not data_dir.exists():
         return []
     return sorted(path.stem for path in data_dir.glob("*.jsonl"))
+
+
+def _load_govreport(split: str = "test") -> List[Dict]:
+    path = _DATA_DIR / "govreport" / f"{split}.jsonl"
+    if not path.exists():
+        raise FileNotFoundError(f"GovReport data not found at {path}. Run "
+            "`python scripts/download_govreport_pg19.py --dataset govreport` first.")
+    prompts = []
+    with open(path) as f:
+        for line in f:
+            row = json.loads(line)
+            text = row["text"]
+            # ~8000 chars ≈ 2048 tokens for English text
+            text = text[:8000]
+            prompts.append({"text": text, "summary": row.get("summary", "")})
+    return prompts
+
+
+def _load_pg19(split: str = "test") -> List[Dict]:
+    path = _DATA_DIR / "pg19" / f"{split}.jsonl"
+    if not path.exists():
+        raise FileNotFoundError(f"PG-19 data not found at {path}. Run "
+            "`python scripts/download_govreport_pg19.py --dataset pg19` first.")
+    prompts = []
+    with open(path) as f:
+        for line in f:
+            row = json.loads(line)
+            text = row["text"]
+            # ~8000 chars ≈ 2048 tokens for English text
+            text = text[:8000]
+            prompts.append({"text": text, "title": row.get("title", "")})
+    return prompts
 
 
 def _load_prompts_2048() -> List[Dict]:

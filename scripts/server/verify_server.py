@@ -24,7 +24,7 @@ def _env(name: str, default: str) -> str:
     return os.getenv(name, default)
 
 
-_DEFAULT_MODEL_PATH = os.getenv("VERIFY_MODEL_PATH", "/root/code/draft/models/Qwen3-8B")
+_DEFAULT_MODEL_PATH = os.getenv("VERIFY_MODEL_PATH", "/root/code/draft/models/Qwen3-8B-AWQ")
 
 
 class VerifyRequest(BaseModel):
@@ -88,7 +88,7 @@ async def _lifespan(app: FastAPI):
     model_path = Path(_env("VERIFY_MODEL_PATH", _DEFAULT_MODEL_PATH))
     gpu_id = _env("VERIFY_GPU_ID", "0")
     device = _env("VERIFY_DEVICE", f"cuda:{gpu_id}")
-    dtype = dtype_from_env(_env("VERIFY_DTYPE", "fp16"))
+    dtype = dtype_from_env(_env("VERIFY_DTYPE", "fp8"))
     max_len = int(_env("VERIFY_MAX_LEN", "32768"))
 
     logger.info("Loading custom Qwen SpecExtend target backend: %s", model_path)
@@ -104,7 +104,7 @@ async def _lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="PicoSpec Custom Qwen Verify Server", version="2.0.0", lifespan=_lifespan)
+app = FastAPI(title="ECSD Custom Qwen Verify Server", version="2.0.0", lifespan=_lifespan)
 
 
 @app.get("/health")
@@ -145,6 +145,7 @@ async def verify_draft(req: VerifyRequest):
         response = _verifier.verify_tree(tree_request)
     except Exception as exc:
         logger.error("VERIFY ERROR: id=%s, error=%s", req.request_id, exc, exc_info=True)
+        _verifier.runtime.clear_request_kv_cache(req.request_id)
         raise HTTPException(status_code=500, detail=f"Verification failed: {exc}") from exc
 
     total_ms = (time.perf_counter() - start) * 1000
@@ -167,6 +168,7 @@ async def verify_specextend_tree(req: SpecExtendVerifyRequest):
         response = _verifier.verify_tree(SpecExtendTreeRequest.from_dict(req.model_dump()))
     except Exception as exc:
         logger.error("SPECEXTEND VERIFY ERROR: id=%s, error=%s", req.request_id, exc, exc_info=True)
+        _verifier.runtime.clear_request_kv_cache(req.request_id)
         raise HTTPException(status_code=500, detail=f"SpecExtend verification failed: {exc}") from exc
 
     return SpecExtendVerifyResponse(**response.to_dict())
@@ -189,7 +191,7 @@ def main():
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
 
-    parser = argparse.ArgumentParser(description="PicoSpec Custom Qwen Verify Server")
+    parser = argparse.ArgumentParser(description="ECSD Custom Qwen Verify Server")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=6006)
     args = parser.parse_args()

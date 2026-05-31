@@ -79,7 +79,7 @@ On GPU 0:
 ```bash
 VERIFY_GPU_ID=0 \
 VERIFY_MODEL_PATH=$PWD/models/Qwen3-8B \
-VERIFY_DTYPE=fp16 \
+VERIFY_DTYPE=fp8 \
 VERIFY_MAX_LEN=32768 \
 bash start_verify.sh --port 6007
 ```
@@ -103,7 +103,7 @@ On GPU 1, start small first:
 ```bash
 DRAFT_GPU_ID=1 \
 DRAFT_MODEL_PATH=$PWD/models/Qwen3-8B \
-DRAFT_DTYPE=fp16 \
+DRAFT_DTYPE=fp8 \
 VERIFY_SERVER_URL=http://localhost:6007 \
 MAX_TOKENS=32 \
 PROMPT_COUNT=1 \

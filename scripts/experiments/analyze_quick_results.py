@@ -11,8 +11,8 @@ import json
 import os
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/private/tmp/picospec_mpl")
-os.environ.setdefault("XDG_CACHE_HOME", "/private/tmp/picospec_cache")
+os.environ.setdefault("MPLCONFIGDIR", "/private/tmp/ecsd_mpl")
+os.environ.setdefault("XDG_CACHE_HOME", "/private/tmp/ecsd_cache")
 
 import matplotlib.pyplot as plt
 import pandas as pd

@@ -17,11 +17,11 @@ PORT=${PORT:-6007}
 # ============================================
 
 # Verify Model Settings
-VERIFY_MODEL_PATH="${VERIFY_MODEL_PATH:-$REPO_DIR/models/Qwen3-8B}"
+VERIFY_MODEL_PATH="${VERIFY_MODEL_PATH:-$REPO_DIR/models/Qwen3-8B-AWQ}"
 VERIFY_GPU_ID="${VERIFY_GPU_ID:-0}"
 VERIFY_DEVICE="${VERIFY_DEVICE:-cuda:$VERIFY_GPU_ID}"
 VERIFY_MAX_LEN="${VERIFY_MAX_LEN:-32768}"
-VERIFY_DTYPE="${VERIFY_DTYPE:-fp16}"
+VERIFY_DTYPE="${VERIFY_DTYPE:-fp8}"
 
 # Use .venv environment
 PYTHON="$REPO_DIR/.venv/bin/python3"
