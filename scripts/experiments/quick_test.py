@@ -32,7 +32,9 @@ DRAFT_MODEL_PATH = Path(os.getenv("DRAFT_MODEL_PATH", "/root/code/draft/models/Q
 DRAFT_GPU_ID = os.getenv("DRAFT_GPU_ID", "1")
 DRAFT_DEVICE = os.getenv("DRAFT_DEVICE", f"cuda:{DRAFT_GPU_ID}")
 DRAFT_DTYPE = dtype_from_env(os.getenv("DRAFT_DTYPE", "fp8"))
-DRAFT_MAX_LEN = int(os.getenv("DRAFT_MAX_LEN", "32768"))
+DRAFT_MAX_LEN = int(os.getenv("DRAFT_MAX_LEN", "6000"))
+DRAFT_GPU_MEMORY_FRACTION = os.getenv("DRAFT_GPU_MEMORY_FRACTION", None)
+DRAFT_GPU_MEMORY_FRACTION = float(DRAFT_GPU_MEMORY_FRACTION) if DRAFT_GPU_MEMORY_FRACTION is not None else None
 REQUEST_TIMEOUT_SEC = float(os.getenv("QUICK_TEST_TIMEOUT_SEC", "600"))
 
 OUTPUT_DIR = Path(__file__).parent / "outputs_quick"
@@ -293,6 +295,7 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
             device=DRAFT_DEVICE,
             dtype=DRAFT_DTYPE,
             max_model_len=DRAFT_MAX_LEN,
+            gpu_memory_fraction=DRAFT_GPU_MEMORY_FRACTION,
         )
     )
     specextend_client = SpecExtendEdgeClient(

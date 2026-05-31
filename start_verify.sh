@@ -17,11 +17,13 @@ PORT=${PORT:-6007}
 # ============================================
 
 # Verify Model Settings
-VERIFY_MODEL_PATH="${VERIFY_MODEL_PATH:-$REPO_DIR/models/Qwen3-8B-AWQ}"
+VERIFY_MODEL_PATH="${VERIFY_MODEL_PATH:-$REPO_DIR/models/Qwen3-4B-AWQ}"
 VERIFY_GPU_ID="${VERIFY_GPU_ID:-0}"
 VERIFY_DEVICE="${VERIFY_DEVICE:-cuda:$VERIFY_GPU_ID}"
-VERIFY_MAX_LEN="${VERIFY_MAX_LEN:-32768}"
+VERIFY_MAX_LEN="${VERIFY_MAX_LEN:-6000}"
 VERIFY_DTYPE="${VERIFY_DTYPE:-fp8}"
+# Target model (4B) is larger — reserve more memory by default
+VERIFY_GPU_MEMORY_FRACTION="${VERIFY_GPU_MEMORY_FRACTION:-0.6}"
 
 # Use .venv environment
 PYTHON="$REPO_DIR/.venv/bin/python3"
@@ -31,6 +33,7 @@ export VERIFY_MODEL_PATH
 export VERIFY_DEVICE
 export VERIFY_MAX_LEN
 export VERIFY_DTYPE
+export VERIFY_GPU_MEMORY_FRACTION
 
 # Parse optional --port arg
 while [[ $# -gt 0 ]]; do

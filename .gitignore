@@ -67,7 +67,7 @@ htmlcov/
 /models/Qwen2.5-3B-Instruct-AWQ
 models/hf.txt
 /experiments/outputs*/
-
+models/Qwen3-4B-AWQ
 # Local data artifacts
 data/
 *.parquet

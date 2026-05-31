@@ -40,7 +40,7 @@ uv lock
 
 ## 3. Download Models
 
-Default one-model setup, using Qwen3-8B for both edge draft and cloud verify:
+Default one-model setup, using Qwen3-4B for both edge draft and cloud verify:
 
 ```bash
 .venv/bin/python models/download.py --preset edge-cloud
@@ -61,12 +61,12 @@ Separate draft and verify setup:
 That downloads:
 
 - `models/Qwen3-1.7B`
-- `models/Qwen3-8B`
+- `models/Qwen3-4B`
 
 You can also download explicit aliases:
 
 ```bash
-.venv/bin/python models/download.py --model qwen3-1.7b --model qwen3-8b
+.venv/bin/python models/download.py --model qwen3-1.7b --model qwen3-4b
 ```
 
 If Hugging Face auth is required, either export `HF_TOKEN`/login with the HF CLI
@@ -78,9 +78,9 @@ On GPU 0:
 
 ```bash
 VERIFY_GPU_ID=0 \
-VERIFY_MODEL_PATH=$PWD/models/Qwen3-8B \
+VERIFY_MODEL_PATH=$PWD/models/Qwen3-4B \
 VERIFY_DTYPE=fp8 \
-VERIFY_MAX_LEN=32768 \
+VERIFY_MAX_LEN=6000 \
 bash start_verify.sh --port 6007
 ```
 
@@ -102,7 +102,7 @@ On GPU 1, start small first:
 
 ```bash
 DRAFT_GPU_ID=1 \
-DRAFT_MODEL_PATH=$PWD/models/Qwen3-8B \
+DRAFT_MODEL_PATH=$PWD/models/Qwen3-4B \
 DRAFT_DTYPE=fp8 \
 VERIFY_SERVER_URL=http://localhost:6007 \
 MAX_TOKENS=32 \
@@ -170,7 +170,7 @@ Or use smaller models:
 
 ```bash
 .venv/bin/python models/download.py --preset separate
-VERIFY_MODEL_PATH=$PWD/models/Qwen3-8B
+VERIFY_MODEL_PATH=$PWD/models/Qwen3-4B
 DRAFT_MODEL_PATH=$PWD/models/Qwen3-1.7B
 ```
 

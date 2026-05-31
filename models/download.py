@@ -6,19 +6,19 @@ from pathlib import Path
 
 from huggingface_hub import snapshot_download
 
-
 MODEL_ALIASES = {
     "qwen3-0.6b": ("Qwen/Qwen3-0.6B", "Qwen3-0.6B"),
     "qwen3-1.7b": ("Qwen/Qwen3-1.7B", "Qwen3-1.7B"),
     "qwen3-4b": ("Qwen/Qwen3-4B", "Qwen3-4B"),
     "qwen3-8b": ("Qwen/Qwen3-8B", "Qwen3-8B"),
     "qwen3-14b": ("Qwen/Qwen3-14B", "Qwen3-14B"),
+    "qwen3-4b-awq": ("Qwen/Qwen3-4B-AWQ", "Qwen3-4B-AWQ"),
 }
 
 PRESETS = {
     "smoke": ["qwen3-0.6b"],
-    "edge-cloud": ["qwen3-8b"],
-    "separate": ["qwen3-1.7b", "qwen3-8b"],
+    "edge-cloud": ["qwen3-4b"],
+    "separate": ["qwen3-1.7b", "qwen3-4b"],
 }
 
 
@@ -31,14 +31,21 @@ def _load_token() -> str | None:
     return None
 
 
-def download_model(repo_id: str, local_dir: Path, token: str | None = None) -> Path:
+def download_model(repo_id: str, local_dir: Path, token: str | None = None, source: str = "huggingface") -> Path:
     local_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Downloading {repo_id} to {local_dir}...")
-    downloaded_path = snapshot_download(
-        repo_id=repo_id,
-        local_dir=str(local_dir),
-        token=token,
-    )
+    print(f"Downloading {repo_id} from {source} to {local_dir}...")
+    if source == "modelscope":
+        from modelscope.hub.snapshot_download import snapshot_download as ms_snapshot_download
+        downloaded_path = ms_snapshot_download(
+            model_id=repo_id,
+            local_dir=str(local_dir),
+        )
+    else:
+        downloaded_path = snapshot_download(
+            repo_id=repo_id,
+            local_dir=str(local_dir),
+            token=token,
+        )
     print(f"Completed: {repo_id}")
     return Path(downloaded_path)
 
@@ -65,9 +72,15 @@ def parse_args() -> argparse.Namespace:
         default="edge-cloud",
         help=(
             "Preset to download when --model is not provided: smoke downloads a tiny "
-            "Qwen3, edge-cloud downloads Qwen3-8B, separate downloads Qwen3-1.7B "
-            "for draft and Qwen3-8B for verify."
+            "Qwen3, edge-cloud downloads Qwen3-4B, separate downloads Qwen3-1.7B "
+            "for draft and Qwen3-4B for verify."
         ),
+    )
+    parser.add_argument(
+        "--source",
+        choices=["huggingface", "modelscope"],
+        default="huggingface",
+        help="Download source: huggingface or modelscope.",
     )
     return parser.parse_args()
 
@@ -87,7 +100,7 @@ def main() -> None:
     for model in selected_models:
         repo_id, folder_name = resolve_model(model)
         local_path = args.base_dir / folder_name
-        download_model(repo_id, local_path, token=token)
+        download_model(repo_id, local_path, token=token, source=args.source)
 
     print("All downloads completed!")
 

@@ -30,8 +30,9 @@ class QwenBackendConfig:
     model_path: Path
     device: str = "cuda:0"
     dtype: torch.dtype = torch.float16
-    max_model_len: int = 32768
+    max_model_len: int = 6000
     trust_remote_code: bool = True
+    gpu_memory_fraction: Optional[float] = None
 
 
 class VisibleTokenCache:
@@ -80,6 +81,15 @@ class QwenModelRuntime:
         self.config = config
         self.model_path = str(path)
         self.device = torch.device(config.device)
+        if config.gpu_memory_fraction is not None and self.device.type == "cuda":
+            torch.cuda.set_per_process_memory_fraction(
+                config.gpu_memory_fraction, self.device.index
+            )
+            logger.info(
+                "Set GPU memory fraction to %.2f on %s",
+                config.gpu_memory_fraction,
+                self.device,
+            )
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_path,
             trust_remote_code=config.trust_remote_code,

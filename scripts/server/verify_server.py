@@ -24,7 +24,7 @@ def _env(name: str, default: str) -> str:
     return os.getenv(name, default)
 
 
-_DEFAULT_MODEL_PATH = os.getenv("VERIFY_MODEL_PATH", "/root/code/draft/models/Qwen3-8B-AWQ")
+_DEFAULT_MODEL_PATH = os.getenv("VERIFY_MODEL_PATH", "/root/code/draft/models/Qwen3-4B-AWQ")
 
 
 class VerifyRequest(BaseModel):
@@ -89,7 +89,9 @@ async def _lifespan(app: FastAPI):
     gpu_id = _env("VERIFY_GPU_ID", "0")
     device = _env("VERIFY_DEVICE", f"cuda:{gpu_id}")
     dtype = dtype_from_env(_env("VERIFY_DTYPE", "fp8"))
-    max_len = int(_env("VERIFY_MAX_LEN", "32768"))
+    max_len = int(_env("VERIFY_MAX_LEN", "6000"))
+    gpu_mem_frac = _env("VERIFY_GPU_MEMORY_FRACTION", None)
+    gpu_mem_frac = float(gpu_mem_frac) if gpu_mem_frac is not None else None
 
     logger.info("Loading custom Qwen SpecExtend target backend: %s", model_path)
     _verifier = QwenSpecExtendTargetBackend(
@@ -98,6 +100,7 @@ async def _lifespan(app: FastAPI):
             device=device,
             dtype=dtype,
             max_model_len=max_len,
+            gpu_memory_fraction=gpu_mem_frac,
         )
     )
     logger.info("Custom Qwen target backend loaded")
