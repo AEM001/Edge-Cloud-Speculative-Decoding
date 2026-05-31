@@ -2,7 +2,7 @@
 
 This branch is organized for two machines on the same phone hotspot:
 
-- **Ubuntu/cloud**: repo root, runs the target verifier with `Qwen3-14B-AWQ`.
+- **Ubuntu/cloud**: repo root, runs the target verifier with `Qwen3-8B-AWQ`.
 - **Mac/edge**: `draft-edge/`, runs the draft model with MLX and calls the
   Ubuntu verifier over HTTP.
 
@@ -19,12 +19,12 @@ This branch is organized for two machines on the same phone hotspot:
 
 ## Model
 
-Default target: `Qwen3-14B-AWQ` (AWQ-int4)
+Default target: `Qwen3-8B-AWQ` (AWQ-int4)
 
 Download it first:
 
 ```bash
-python models/download.py --model qwen3-14b-awq
+python models/download.py --model qwen3-8b-awq
 ```
 
 ## Ubuntu: Start The Server
@@ -36,7 +36,7 @@ bash start_verify.sh
 Optional overrides:
 
 ```bash
-VERIFY_MODEL_PATH=/path/to/Qwen3-14B-AWQ VERIFY_GPU_ID=0 bash start_verify.sh
+VERIFY_MODEL_PATH=/path/to/Qwen3-8B-AWQ VERIFY_GPU_ID=0 bash start_verify.sh
 ```
 
 The server exposes:

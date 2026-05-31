@@ -71,7 +71,7 @@ models/Qwen3-4B-AWQ
 /draft-edge/models/
 
 # Local data artifacts
-models/Qwen3-14B-AWQ
+models/Qwen3-8B-AWQ
 *.parquet
 *.arrow
 

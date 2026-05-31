@@ -13,6 +13,7 @@ MODEL_ALIASES = {
     "qwen3-8b": ("Qwen/Qwen3-8B", "Qwen3-8B"),
     "qwen3-14b": ("Qwen/Qwen3-14B", "Qwen3-14B"),
     "qwen3-4b-awq": ("Qwen/Qwen3-4B-AWQ", "Qwen3-4B-AWQ"),
+    "qwen3-8b-awq": ("Qwen/Qwen3-8B-AWQ", "Qwen3-8B-AWQ"),
     "qwen3-14b-awq": ("Qwen/Qwen3-14B-AWQ", "Qwen3-14B-AWQ"),
 }
 

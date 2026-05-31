@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start the cloud verify server on this machine.
-# Serves Qwen3-14B-AWQ on GPU 0, binds 0.0.0.0 for local network access.
+# Serves Qwen3-8B-AWQ on GPU 0, binds 0.0.0.0 for local network access.
 #
 # Usage:
 #   bash start_verify.sh [--port 6007]
@@ -17,7 +17,7 @@ PORT=${PORT:-6007}
 # ============================================
 
 # Verify Model Settings
-VERIFY_MODEL_PATH="${VERIFY_MODEL_PATH:-$REPO_DIR/models/Qwen3-14B-AWQ}"
+VERIFY_MODEL_PATH="${VERIFY_MODEL_PATH:-$REPO_DIR/models/Qwen3-8B-AWQ}"
 VERIFY_GPU_ID="${VERIFY_GPU_ID:-0}"
 VERIFY_DEVICE="${VERIFY_DEVICE:-cuda:$VERIFY_GPU_ID}"
 VERIFY_MAX_LEN="${VERIFY_MAX_LEN:-4096}"
