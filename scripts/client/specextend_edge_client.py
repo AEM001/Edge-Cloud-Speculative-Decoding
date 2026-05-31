@@ -80,7 +80,12 @@ class SpecExtendEdgeClient:
         retrieval_recorded_len = 0
         wall_start = time.perf_counter()
 
-        with ThreadPoolExecutor(max_workers=1) as executor:
+        use_pipeline = (
+            self.pipeline_enabled
+            and getattr(self.draft_backend, "supports_pipeline_candidates", False)
+            and hasattr(self.draft_backend, "build_draft_candidate")
+        )
+        with ThreadPoolExecutor(max_workers=1) as verify_executor:
             while len(verified_prefix) - len(prompt_ids) < self.max_new_tokens:
                 if self.eos_token_id and self.eos_token_id in verified_prefix[len(prompt_ids) :]:
                     break
@@ -129,16 +134,16 @@ class SpecExtendEdgeClient:
                 )
 
                 verify_start = time.perf_counter()
-                if self.pipeline_enabled:
-                    future = executor.submit(self.cloud_verify_tree, request)
+                if use_pipeline:
+                    verify_future = verify_executor.submit(self.cloud_verify_tree, request)
                     candidates, pipeline_built = self._build_pipeline_candidates(
-                        future=future,
+                        verify_future=verify_future,
                         base_prefix=verified_prefix,
                         draft_result=draft_result,
                         retrieval_indices=retrieval_indices,
                     )
                     wait_start = time.perf_counter()
-                    response = future.result()
+                    response = verify_future.result()
                     pipeline_wait_ms = (time.perf_counter() - wait_start) * 1000
                 else:
                     candidates = []
@@ -232,34 +237,32 @@ class SpecExtendEdgeClient:
 
     def _build_pipeline_candidates(
         self,
-        future,
+        verify_future,
         base_prefix: List[int],
         draft_result: DraftTreeResult,
         retrieval_indices: List[int],
     ):
-        if not getattr(self.draft_backend, "supports_pipeline_candidates", True):
-            return [], 0
-        if not hasattr(self.draft_backend, "build_draft_candidate"):
-            return [], 0
+        """Build pipeline candidates synchronously while verify is in-flight.
 
+        Verify travels over the network; the draft GPU is idle during that RTT.
+        Candidates run here on the main thread and get full GPU bandwidth.
+        """
         candidates = []
         for offset in self._candidate_offsets(len(draft_result.tree.input_ids)):
-            if future.done():
+            if verify_future.done():
                 break
             candidate_prefix = list(base_prefix) + draft_result.tree.input_ids[:offset]
-            candidate = self.draft_backend.build_draft_candidate(
-                verified_prefix=candidate_prefix,
-                nodes=self.nodes,
-                max_depth=self.max_depth,
-                retrieval_token_indices=retrieval_indices,
-            )
-            candidates.append(
-                {
-                    "offset": offset,
-                    "prefix": candidate_prefix,
-                    "draft": candidate,
-                }
-            )
+            try:
+                candidate = self.draft_backend.build_draft_candidate(
+                    verified_prefix=candidate_prefix,
+                    nodes=self.nodes,
+                    max_depth=self.max_depth,
+                    retrieval_token_indices=retrieval_indices,
+                )
+            except Exception:
+                candidate = None
+            if candidate is not None:
+                candidates.append({"offset": offset, "prefix": candidate_prefix, "draft": candidate})
         return candidates, len(candidates)
 
     def _select_pipeline_candidate(

@@ -1,0 +1,2156 @@
+{
+  "config": {
+    "network": "good",
+    "methods": [
+      "direct",
+      "specextend"
+    ],
+    "max_tokens": 256,
+    "prompt_count": 1,
+    "prompt_types": [
+      "pg19"
+    ],
+    "dataset_split": "pg19_512",
+    "prompt_input_tokens": 2048,
+    "async_pipeline": "1",
+    "pipeline_offsets": "full,half",
+    "nodes": 32,
+    "threshold": 0.7,
+    "max_depth": 8,
+    "retrieval_chunk_size": 64,
+    "retrieve_top_k": 16,
+    "retrieve_every_n_steps": 16
+  },
+  "results": [
+    {
+      "method": "direct",
+      "method_family": "direct",
+      "network": "good",
+      "prompt_type": "pg19",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 256,
+        "total_time_ms": 17439.642072732044,
+        "tokens_per_second": 14.679200348972286
+      },
+      "timing": {
+        "client_wall_ms": 17439.642072732044,
+        "local_draft_ms": 0.0,
+        "server_model_ms": 17421.67410440743,
+        "server_total_ms": 17421.67410440743,
+        "http_rpc_ms": 17424.409372732043,
+        "simulated_ul_ms": 7.691466666666667,
+        "simulated_dl_ms": 7.5412333333333335,
+        "simulated_network_ms": 15.232700000000001,
+        "avg_rtt_ms": 0.0
+      },
+      "speculative": {
+        "rounds": 0,
+        "nodes": 0,
+        "accepted_draft_tokens": 0,
+        "correction_tokens": 0,
+        "generated_per_round": 0.0,
+        "acceptance_length": 0.0
+      },
+      "verify_runtime": {
+        "backend": null,
+        "specextend_tree_verify": null,
+        "attention_scores": null
+      },
+      "raw": {
+        "direct_timing": {
+          "tokens": 256,
+          "total_ms": 17439.642072732044,
+          "server_ms": 17421.67410440743,
+          "http_ms": 17424.409372732043,
+          "ul_ms": 7.691466666666667,
+          "dl_ms": 7.5412333333333335
+        }
+      }
+    },
+    {
+      "method": "specextend_n32",
+      "method_family": "specextend",
+      "network": "good",
+      "prompt_type": "pg19",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 256,
+        "total_time_ms": 41630.327828228474,
+        "tokens_per_second": 6.149363057055075
+      },
+      "timing": {
+        "client_wall_ms": 41630.327828228474,
+        "local_draft_ms": 23838.952960446477,
+        "server_model_ms": 15906.680537387729,
+        "server_total_ms": 15906.680537387729,
+        "http_rpc_ms": 0.0,
+        "simulated_ul_ms": 836.39,
+        "simulated_dl_ms": 788.64,
+        "simulated_network_ms": 1625.03,
+        "avg_rtt_ms": 17.832619572679203
+      },
+      "speculative": {
+        "rounds": 105,
+        "nodes": 32,
+        "accepted_draft_tokens": 151,
+        "correction_tokens": 105,
+        "generated_per_round": 2.4380952380952383,
+        "acceptance_length": 1.438095238095238
+      },
+      "verify_runtime": {
+        "backend": "custom_qwen3",
+        "specextend_tree_verify": true,
+        "attention_scores": false
+      },
+      "raw": {
+        "network": {
+          "condition": "good",
+          "num_calls": 105,
+          "total_simulated_uplink_delay_ms": 836.39,
+          "total_simulated_downlink_delay_ms": 788.64,
+          "total_simulated_overhead_ms": 1625.03,
+          "total_uplink_bytes": 366639,
+          "total_downlink_bytes": 34338,
+          "avg_overhead_per_call_ms": 15.48
+        },
+        "selected_chunk_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "round_details": [
+          {
+            "round": 0,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 1,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 2,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 3,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 4,
+            "tree_nodes": 8,
+            "accepted_len": 5,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 5,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 6,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 7,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 8,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 9,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 10,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 11,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 12,
+            "tree_nodes": 8,
+            "accepted_len": 4,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 13,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 14,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 15,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 16,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 17,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 18,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 19,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 20,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 21,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 22,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 23,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 24,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 25,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 26,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 27,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 28,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 29,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 30,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 31,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 32,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 33,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 34,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 35,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 36,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 37,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 38,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 39,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 40,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 41,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 42,
+            "tree_nodes": 8,
+            "accepted_len": 6,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 43,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 44,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 45,
+            "tree_nodes": 8,
+            "accepted_len": 4,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 46,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 47,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 48,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 49,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 50,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 51,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 52,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 53,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 54,
+            "tree_nodes": 8,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 55,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 56,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 57,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 58,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 59,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 60,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 61,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 62,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 63,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 64,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 65,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 66,
+            "tree_nodes": 8,
+            "accepted_len": 6,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 67,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 68,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 69,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 70,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 71,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 72,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 73,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 74,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 75,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 76,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 77,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 78,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 79,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 80,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 81,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 82,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 83,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 84,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 85,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 86,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 87,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 88,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 89,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 90,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 91,
+            "tree_nodes": 8,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 92,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 93,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 94,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 95,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 96,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 97,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 98,
+            "tree_nodes": 8,
+            "accepted_len": 5,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 99,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 100,
+            "tree_nodes": 8,
+            "accepted_len": 7,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 101,
+            "tree_nodes": 8,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 102,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 103,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 104,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 0.0,
+            "pipeline_reuse": false
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,1870 @@
+{
+  "config": {
+    "network": "good",
+    "methods": [
+      "direct",
+      "specextend"
+    ],
+    "max_tokens": 256,
+    "prompt_count": 1,
+    "prompt_types": [
+      "pg19"
+    ],
+    "dataset_split": "pg19_512",
+    "prompt_input_tokens": 2048,
+    "async_pipeline": "1",
+    "pipeline_offsets": "full,half",
+    "nodes": 32,
+    "threshold": 0.7,
+    "max_depth": 8,
+    "retrieval_chunk_size": 64,
+    "retrieve_top_k": 16,
+    "retrieve_every_n_steps": 16
+  },
+  "results": [
+    {
+      "method": "direct",
+      "method_family": "direct",
+      "network": "good",
+      "prompt_type": "pg19",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 256,
+        "total_time_ms": 17395.59039912186,
+        "tokens_per_second": 14.716373180005611
+      },
+      "timing": {
+        "client_wall_ms": 17395.59039912186,
+        "local_draft_ms": 0.0,
+        "server_model_ms": 17377.812968567014,
+        "server_total_ms": 17377.812968567014,
+        "http_rpc_ms": 17380.373299121857,
+        "simulated_ul_ms": 7.675066666666667,
+        "simulated_dl_ms": 7.542033333333333,
+        "simulated_network_ms": 15.2171,
+        "avg_rtt_ms": 0.0
+      },
+      "speculative": {
+        "rounds": 0,
+        "nodes": 0,
+        "accepted_draft_tokens": 0,
+        "correction_tokens": 0,
+        "generated_per_round": 0.0,
+        "acceptance_length": 0.0
+      },
+      "verify_runtime": {
+        "backend": null,
+        "specextend_tree_verify": null,
+        "attention_scores": null
+      },
+      "raw": {
+        "direct_timing": {
+          "tokens": 256,
+          "total_ms": 17395.59039912186,
+          "server_ms": 17377.812968567014,
+          "http_ms": 17380.373299121857,
+          "ul_ms": 7.675066666666667,
+          "dl_ms": 7.542033333333333
+        }
+      }
+    },
+    {
+      "method": "specextend_n32",
+      "method_family": "specextend",
+      "network": "good",
+      "prompt_type": "pg19",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 257,
+        "total_time_ms": 59282.047379761934,
+        "tokens_per_second": 4.335207897825341
+      },
+      "timing": {
+        "client_wall_ms": 59282.047379761934,
+        "local_draft_ms": 21104.268170893192,
+        "server_model_ms": 16223.583407700062,
+        "server_total_ms": 16223.583407700062,
+        "http_rpc_ms": 0.0,
+        "simulated_ul_ms": 731.71,
+        "simulated_dl_ms": 691.0,
+        "simulated_network_ms": 1422.72,
+        "avg_rtt_ms": 238.4886245202759
+      },
+      "speculative": {
+        "rounds": 92,
+        "nodes": 32,
+        "accepted_draft_tokens": 165,
+        "correction_tokens": 92,
+        "generated_per_round": 2.7934782608695654,
+        "acceptance_length": 1.7934782608695652
+      },
+      "verify_runtime": {
+        "backend": "custom_qwen3",
+        "specextend_tree_verify": true,
+        "attention_scores": false
+      },
+      "raw": {
+        "network": {
+          "condition": "good",
+          "num_calls": 92,
+          "total_simulated_uplink_delay_ms": 731.71,
+          "total_simulated_downlink_delay_ms": 691.0,
+          "total_simulated_overhead_ms": 1422.72,
+          "total_uplink_bytes": 312859,
+          "total_downlink_bytes": 30147,
+          "avg_overhead_per_call_ms": 15.46
+        },
+        "selected_chunk_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "round_details": [
+          {
+            "round": 0,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.004861503839492798,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 1,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0054854899644851685,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 2,
+            "tree_nodes": 8,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0034570693969726562,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 3,
+            "tree_nodes": 8,
+            "accepted_len": 4,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003200024366378784,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 4,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0037811696529388428,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 5,
+            "tree_nodes": 8,
+            "accepted_len": 4,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0035297125577926636,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 6,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0041835010051727295,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 7,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0029616057872772217,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 8,
+            "tree_nodes": 8,
+            "accepted_len": 5,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003345310688018799,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 9,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.00332854688167572,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 10,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0032819807529449463,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 11,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003851950168609619,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 12,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003214925527572632,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 13,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003855675458908081,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 14,
+            "tree_nodes": 8,
+            "accepted_len": 6,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0031907111406326294,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 15,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0032745301723480225,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 16,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0032689422369003296,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 17,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0035446137189865112,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 18,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0031404197216033936,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 19,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.00342540442943573,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 20,
+            "tree_nodes": 8,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0023655593395233154,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 21,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0030919909477233887,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 22,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0034030526876449585,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 23,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.002987682819366455,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 24,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003682449460029602,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 25,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003259629011154175,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 26,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.00325031578540802,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 27,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003039836883544922,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 28,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003216788172721863,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 29,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0035762786865234375,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 30,
+            "tree_nodes": 8,
+            "accepted_len": 7,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0028870999813079834,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 31,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003207474946975708,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 32,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0033173710107803345,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 33,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0038798898458480835,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 34,
+            "tree_nodes": 8,
+            "accepted_len": 5,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0032745301723480225,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 35,
+            "tree_nodes": 8,
+            "accepted_len": 7,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003252178430557251,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 36,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0032614916563034058,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 37,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0031962990760803223,
+            "pipeline_reuse": true
+          },
+          {
+            "round": 38,
+            "tree_nodes": 7,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": true,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0033993273973464966,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 39,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.002739951014518738,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 40,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0031385570764541626,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 41,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0031087547540664673,
+            "pipeline_reuse": true
+          },
+          {
+            "round": 42,
+            "tree_nodes": 7,
+            "accepted_len": 6,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": true,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003550201654434204,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 43,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.002952292561531067,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 44,
+            "tree_nodes": 8,
+            "accepted_len": 7,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003119930624961853,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 45,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.004015862941741943,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 46,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0035241246223449707,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 47,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003287568688392639,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 48,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0030677765607833862,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 49,
+            "tree_nodes": 8,
+            "accepted_len": 7,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.002903863787651062,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 50,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003458932042121887,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 51,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003244727849960327,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 52,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003166496753692627,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 53,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0032316893339157104,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 54,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0034086406230926514,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 55,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003591179847717285,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 56,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003779307007789612,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 57,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003334134817123413,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 58,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.00299699604511261,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 59,
+            "tree_nodes": 8,
+            "accepted_len": 4,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0034421682357788086,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 60,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0031739473342895508,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 61,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003337860107421875,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 62,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003635883331298828,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 63,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0028070062398910522,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 64,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0031329691410064697,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 65,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0032801181077957153,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 66,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0030472874641418457,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 67,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0029802322387695312,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 68,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.002903863787651062,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 69,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003507360816001892,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 70,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003162771463394165,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 71,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.00303611159324646,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 72,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.002948567271232605,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 73,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0032354146242141724,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 74,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0027921050786972046,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 75,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003129243850708008,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 76,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0033266842365264893,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 77,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0035259872674942017,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 78,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0033713877201080322,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 79,
+            "tree_nodes": 8,
+            "accepted_len": 5,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0033155083656311035,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 80,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0035241246223449707,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 81,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0033508986234664917,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 82,
+            "tree_nodes": 8,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0033546239137649536,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 83,
+            "tree_nodes": 8,
+            "accepted_len": 4,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0035800039768218994,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 84,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003159046173095703,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 85,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0038277357816696167,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 86,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0031888484954833984,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 87,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0033713877201080322,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 88,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0028870999813079834,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 89,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0034011900424957275,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 90,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.0029671937227249146,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 91,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 1,
+            "pipeline_wait_ms": 0.003375113010406494,
+            "pipeline_reuse": false
+          }
+        ]
+      }
+    }
+  ]
+}

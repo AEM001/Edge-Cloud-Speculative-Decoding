@@ -233,6 +233,12 @@ class SpecExtendDraftKVCache:
             past_key_values=self.working_cache,
         )
 
+    def _working_cache_seq_len(self) -> int:
+        """Current sequence length of working_cache (KVCache)."""
+        if not self.working_cache:
+            return 0
+        return self.working_cache[0][0].current_length.item()
+
     @torch.inference_mode()
     def next_logits(self, runtime: "QwenModelRuntime") -> torch.Tensor:
         if self.last_prefix_logits is None:
@@ -535,54 +541,44 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
     ) -> "DraftTreeResult":
         """Build a pipeline-prefetch draft without committing to the main cache.
 
-        Appends candidate prefix tokens onto the working cache temporarily,
-        generates the draft, then rolls back current_length.
-        Does NOT update full_draft_kv or full_token_ids.
+        Runs under _cache_lock so it cannot race with build_draft_tree.
+        Works on the fixed-size chunk-only working cache: forward any candidate
+        tokens beyond full_token_ids temporarily, generate the draft, then
+        restore current_length.  Does NOT write to full_draft_kv or
+        full_token_ids.
         """
         start = time.perf_counter()
         full_ids = list(self.cache.full_token_ids)
-        working_indices = list(self.cache.working_token_indices)
         last_prefix_logits = self.cache.last_prefix_logits
+        if last_prefix_logits is None:
+            return None
 
         candidate_tokens = verified_prefix[len(full_ids):]
-        if not candidate_tokens:
-            logits = self.cache.last_prefix_logits
-            if logits is None:
-                return None
-        else:
-            length_snap = self._snapshot_working_lengths()
-            try:
-                for i, tok in enumerate(candidate_tokens):
-                    pos = len(full_ids) + i
-                    input_ids_t = torch.tensor([[tok]], dtype=torch.long, device=self.runtime.device)
-                    pos_ids_t = torch.tensor([[pos]], dtype=torch.long, device=self.runtime.device)
-                    out = self.runtime.model(
-                        input_ids=input_ids_t,
-                        position_ids=pos_ids_t,
-                        past_key_values=self.cache.working_cache,
-                        use_cache=True,
-                        return_dict=True,
-                    )
-                    self.cache.last_prefix_logits = out.logits[:, -1, :]
-            except Exception:
-                self._restore_working_lengths(length_snap)
-                self.cache.full_token_ids = full_ids
-                self.cache.working_token_indices = working_indices
-                self.cache.last_prefix_logits = last_prefix_logits
-                return None
-
-        position_start = len(verified_prefix)
-        length = max(1, min(nodes, max_depth))
+        length_snap = self._snapshot_working_lengths()
         try:
+            logits = last_prefix_logits
+            for i, tok in enumerate(candidate_tokens):
+                pos = len(full_ids) + i
+                input_ids_t = torch.tensor([[tok]], dtype=torch.long, device=self.runtime.device)
+                pos_ids_t = torch.tensor([[pos]], dtype=torch.long, device=self.runtime.device)
+                out = self.runtime.model(
+                    input_ids=input_ids_t,
+                    position_ids=pos_ids_t,
+                    past_key_values=self.cache.working_cache,
+                    use_cache=True,
+                    return_dict=True,
+                )
+                logits = out.logits[:, -1, :]
+            self.cache.last_prefix_logits = logits
+
+            position_start = len(verified_prefix)
+            length = max(1, min(nodes, max_depth))
             input_ids = self._generate_linear_from_working_cache(
                 next_position_id=position_start,
                 max_new_tokens=length,
             )
         finally:
-            if candidate_tokens:
-                self._restore_working_lengths(length_snap)
-            self.cache.full_token_ids = full_ids
-            self.cache.working_token_indices = working_indices
+            self._restore_working_lengths(length_snap)
             self.cache.last_prefix_logits = last_prefix_logits
 
         position_ids = list(range(position_start, position_start + len(input_ids)))

@@ -215,6 +215,77 @@ sparse replay cache which only maintained a small recent-token DynamicCache.
 That trade-off is inherent to the full-draft-kv + retrieval working-cache design
 and matches the sparse-kv reference architecture's cost model.
 
+## 2026-06-01 00:40 — Async Pipeline + DynamicCache Investigation (Reverted)
+
+### Attempts and findings
+
+**Attempt 1: Async pipeline with two-executor parallel execution.**
+Submitted verify to one `ThreadPoolExecutor` and candidate drafts to a second executor
+simultaneously. Result: 4.34 tps (worse than 12.84 tps baseline). Root cause: both
+executors mapped onto the same GPU (cuda:1). Python's GIL and CUDA stream serialization
+mean two threads issuing CUDA kernels on the same device do not run in parallel — the
+candidate forward runs after the main draft, adding latency instead of hiding it. The
+`threading.RLock` added to protect the shared working_cache also caused contention.
+Reverted to single-executor design where candidate runs synchronously on main thread
+while verify awaits network response.
+
+**Attempt 2: Fixed-size working cache (trim verified-token tail after append_prefix).**
+After each `append_prefix`, reset `working_cache.current_length` back to `chunk_size`,
+keeping working cache at a constant ~1024-token size across rounds. Result: 6.15 tps,
+acceptance 1.44/8 (much worse). Root cause: standard causal attention requires continuous
+context. Trimming drops the recently-verified-token KV from the working cache, so the
+draft model cannot attend to the last few accepted tokens. In sparse-kv this works because
+their custom CUDA kernel supports non-contiguous position IDs (sparse attention); the
+standard `scaled_dot_product_attention` does not. Reverted.
+
+**Attempt 3: Replace KVCache with DynamicCache as working_cache.**
+Hypothesis: custom `KVCache` attention path in `modeling_qwen3_kv.py` is slower than
+the native SDPA path used with `DynamicCache`. Investigation showed:
+- `Qwen3SdpaAttention` already supports `DynamicCache` via `isinstance(past_key_value, Cache)` branch (line 245).
+- Both paths use `scaled_dot_product_attention`.
+- `DynamicCache.update()` does not re-apply RoPE; KV is stored post-RoPE in both cases.
+- Switching to `DynamicCache` required truncating the cache in `select_working_tokens`
+  early-return path (dropping verified-token tail), which reproduced the same context
+  loss as Attempt 2. Result: 8.96 tps, acceptance 2.50/8. Reverted to KVCache.
+
+### Root cause of the remaining gap vs 05-30 best
+
+The 05-30 best (24.42 tps, 49 ms/round) used a sparse **replay** cache
+(`_sparse_cache`, `DynamicCache`): only accepted tokens were forwarded each round,
+so past_kv grew by ~5 tokens per round (accepted length). Working cache was tiny and
+grew linearly — still fast at 256 output tokens.
+
+Current architecture: working_cache = chunk_tokens (~1024) + verified_tokens (growing).
+Each draft forward does attention over ~1024+ tokens. At 234 ms/round this is unavoidable
+given that:
+- Qwen3-1.7B with 1024-token past_kv does ~200–250 ms/forward on one RTX 3090.
+- Verify server (14B AWQ) takes ~350 ms/round server-side.
+- Total latency per round ≈ draft_ms + verify_ms ≈ 234 + 350 = 584 ms (serialized).
+- Effective tps = (accepted_len * 1000) / round_ms ≈ (4.29 * 1000) / 584 ≈ 7.3 tok/s
+  ... but actual is 12.84 because pipeline partially hides verify latency.
+
+### What would actually close the gap
+
+1. **Flash attention / sliding window on the draft model**: reduce per-token attention
+   cost in the 1024-token working cache. `flash_attn` is not installed in this env.
+2. **Batched draft forward (multiple candidate tokens at once)**: instead of token-by-token
+   draft generation, forward all 32 draft positions in one batched call (tree mask).
+   This amortizes the 1024-token attention over 32 tokens instead of 32 separate calls.
+3. **Reduce working cache size without hurting acceptance**: requires non-contiguous
+   position ID support (sparse attention kernel), which is what sparse-kv provides.
+   Not feasible with standard transformers without custom CUDA.
+4. **Async pipeline across requests**: only beneficial if verify RTT >> draft time.
+   Currently draft ≈ verify so pipeline provides minimal gain.
+
+### Current code state
+
+- `supports_pipeline_candidates = False` (pipeline implemented but disabled: overhead
+  exceeds benefit at current draft/verify latency ratio).
+- `build_draft_candidate` is implemented and correct; can be enabled when draft time
+  drops significantly (e.g. after flash attention or batched drafting).
+- Working cache remains KVCache (custom pre-allocated buffer, in-place index_select).
+- Best measured throughput: **12.84 tok/s** (06-01 00:19 run).
+
 ## 2026-06-01 00:05 — SpecExtend KV Semantics Cleanup, Not Yet Benchmarked
 
 - Tightened the draft-side cache path to avoid fallback behavior that was not
