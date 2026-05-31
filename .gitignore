@@ -69,7 +69,7 @@ models/hf.txt
 /experiments/outputs*/
 models/Qwen3-4B-AWQ
 # Local data artifacts
-
+models/Qwen3-14B-AWQ
 *.parquet
 *.arrow
 
