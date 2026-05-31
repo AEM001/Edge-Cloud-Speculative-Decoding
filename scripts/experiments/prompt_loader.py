@@ -242,7 +242,7 @@ _PG19_PROMPT_CHARS = 16384
 
 
 def _load_pg19(split: str = "test") -> List[Dict]:
-    path = _DATA_DIR / "pg19" / f"{split}.jsonl"
+    path = _DATA_DIR / "pg-19" / f"{split}.jsonl"
     if not path.exists():
         raise FileNotFoundError(
             f"PG-19 data not found at {path}. Run "

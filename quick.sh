@@ -1,84 +1,58 @@
 #!/bin/bash
 
 # Quick Test Configuration Script
-# Edit the variables below to customize your test run
+# ============================================
+# 所有可调参数都集中在下面，直接修改即可
+# ============================================
 
-# ============================================
-# MAX TOKENS TO GENERATE
-# LongWriter prompts are intended for long-form generation.
-# ============================================
-MAX_TOKENS="${MAX_TOKENS:-256}"
+# ---------- 数据集配置（目前固定 pg19） ----------
+# 可选文件: pg19_512, pg19_1K, pg19_2K, pg19_4K, pg19_8K, pg19_16K
+DATASET_SPLIT="${DATASET_SPLIT:-pg19_512}"
 
-# ============================================
-# PROMPT COUNT PER TYPE
-# Number of prompts to load for each prompt type
-# Default: 1
-# ============================================
+# ---------- 生成配置 ----------
+# 每次生成多少 token
+MAX_TOKENS="${MAX_TOKENS:-512}"
+# 加载多少条 prompt
 PROMPT_COUNT="${PROMPT_COUNT:-1}"
+# 输入 prompt 截断到多少 token（0 = 不截断）
+PROMPT_INPUT_TOKENS="${PROMPT_INPUT_TOKENS:-0}"
 
-# ============================================
-# PROMPT INPUT TOKENS
-# Set to 2048 for a fixed 2k-token input prompt.
-# ============================================
-PROMPT_INPUT_TOKENS="${PROMPT_INPUT_TOKENS:-2048}"
-
-# ============================================
-# PROMPT TYPES
-# Options: gsm8k, humaneval, longwriter,
-#          longwriter_single_turn:input_4k, longwriter_single_turn:input_6k,
-#          longwriter_single_turn:input_8k, longwriter_single_turn:input_10k,
-#          longbench_v2:short, longbench_v2:medium, longbench_v2:long,
-#          longbench_v2:train, pg19, prompts_2048
-# You can specify multiple (space-separated)
-# ============================================
-PROMPT_TYPES="${PROMPT_TYPES:-pg19}"
-
-# ============================================
-# DRAFT MODEL SETTINGS
-# Defaults are set after SCRIPT_DIR is defined.
-# ============================================
-
-# ============================================
-# SPECEXTEND TREE SETTINGS
-# ============================================
+# ---------- SpecExtend 树配置 ----------
 NODES="${NODES:-32}"
 MAX_DEPTH="${MAX_DEPTH:-8}"
 THRESHOLD="${THRESHOLD:-0.7}"
-RETRIEVAL_CHUNK_SIZE="${RETRIEVAL_CHUNK_SIZE:-64}"
-RETRIEVE_TOP_K="${RETRIEVE_TOP_K:-16}"
-RETRIEVE_EVERY_N_STEPS="${RETRIEVE_EVERY_N_STEPS:-16}"
+RETRIEVAL_CHUNK_SIZE="${RETRIEVAL_CHUNK_SIZE:-32}"
+RETRIEVE_TOP_K="${RETRIEVE_TOP_K:-32}"
+RETRIEVE_EVERY_N_STEPS="${RETRIEVE_EVERY_N_STEPS:-0}"
 
-# ============================================
-# VERIFY SERVER SETTINGS
-# ============================================
+# ---------- Draft 模型配置 ----------
+DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-/root/code/models/Qwen3-1.7B}"
+DRAFT_GPU_ID="${DRAFT_GPU_ID:-1}"
+DRAFT_DEVICE="${DRAFT_DEVICE:-cuda:${DRAFT_GPU_ID}}"
+DRAFT_DTYPE="${DRAFT_DTYPE:-fp16}"
+DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-32768}"
+DRAFT_ATTN_IMPLEMENTATION="${DRAFT_ATTN_IMPLEMENTATION:-sdpa}"
+DRAFT_RECENT_TOKENS="${DRAFT_RECENT_TOKENS:-128}"
+
+# ---------- 服务端 & 超时配置 ----------
 VERIFY_SERVER_URL="${VERIFY_SERVER_URL:-http://localhost:6007}"
+QUICK_TEST_TIMEOUT_SEC="${QUICK_TEST_TIMEOUT_SEC:-600}"
+
+# ---------- 其他环境变量 ----------
+SPECEXTEND_ASYNC_PIPELINE="${SPECEXTEND_ASYNC_PIPELINE:-1}"
+SPECEXTEND_PIPELINE_OFFSETS="${SPECEXTEND_PIPELINE_OFFSETS:-full,half}"
+TRANSFORMERS_OFFLINE="${TRANSFORMERS_OFFLINE:-1}"
 
 # ============================================
 # END OF CONFIGURATION
 # ============================================
 
-# Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Use .venv environment
 PYTHON="python3"
 
-# ============================================
-# DRAFT MODEL SETTINGS (set after SCRIPT_DIR is defined)
-# ============================================
-DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-$SCRIPT_DIR/models/Qwen3-1.7B}"
-DRAFT_GPU_ID="${DRAFT_GPU_ID:-1}"  # GPU 1 by default for two-3090 runs; verify server uses GPU 0.
-DRAFT_DEVICE="${DRAFT_DEVICE:-cuda:$DRAFT_GPU_ID}"
-DRAFT_DTYPE="${DRAFT_DTYPE:-fp16}"
-DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-32768}"
-DRAFT_ATTN_IMPLEMENTATION="${DRAFT_ATTN_IMPLEMENTATION:-sdpa}"
-DRAFT_RECENT_TOKENS="${DRAFT_RECENT_TOKENS:-256}"
-SPECEXTEND_ASYNC_PIPELINE="${SPECEXTEND_ASYNC_PIPELINE:-1}"
-SPECEXTEND_PIPELINE_OFFSETS="${SPECEXTEND_PIPELINE_OFFSETS:-full,half}"
-TRANSFORMERS_OFFLINE="${TRANSFORMERS_OFFLINE:-1}"
-
-# Export environment variables
+# Export all env variables
 export DRAFT_MODEL_PATH
 export DRAFT_GPU_ID
 export DRAFT_DEVICE
@@ -90,12 +64,14 @@ export SPECEXTEND_ASYNC_PIPELINE
 export SPECEXTEND_PIPELINE_OFFSETS
 export TRANSFORMERS_OFFLINE
 export VERIFY_SERVER_URL
+export QUICK_TEST_TIMEOUT_SEC
 
 # Build command
 CMD="$PYTHON scripts/experiments/quick_test.py \
     --max-tokens ${MAX_TOKENS} \
     --prompt-count ${PROMPT_COUNT} \
-    --prompt-types ${PROMPT_TYPES} \
+    --prompt-types pg19 \
+    --dataset-split ${DATASET_SPLIT} \
     --prompt-input-tokens ${PROMPT_INPUT_TOKENS} \
     --nodes ${NODES} \
     --max-depth ${MAX_DEPTH} \
@@ -107,15 +83,16 @@ CMD="$PYTHON scripts/experiments/quick_test.py \
 echo "=========================================="
 echo "Running Quick Test with Configuration:"
 echo "=========================================="
-echo "Network: good"
-echo "Methods: direct, specextend"
+echo "Dataset: pg19 | File: ${DATASET_SPLIT}"
 echo "Max Tokens: ${MAX_TOKENS}"
-echo "Prompt Count (per type): ${PROMPT_COUNT}"
-echo "Prompt Types: ${PROMPT_TYPES}"
+echo "Prompt Count: ${PROMPT_COUNT}"
 echo "Prompt Input Tokens: ${PROMPT_INPUT_TOKENS}"
 echo "Nodes: ${NODES}"
 echo "Max Depth: ${MAX_DEPTH}"
+echo "Threshold: ${THRESHOLD}"
 echo "Retrieval Chunk Size: ${RETRIEVAL_CHUNK_SIZE}"
+echo "Retrieve Top K: ${RETRIEVE_TOP_K}"
+echo "Retrieve Every N Steps: ${RETRIEVE_EVERY_N_STEPS}"
 echo "Draft Model: ${DRAFT_MODEL_PATH}"
 echo "Draft Device: ${DRAFT_DEVICE}"
 echo "Draft Attention: ${DRAFT_ATTN_IMPLEMENTATION}"
@@ -123,6 +100,7 @@ echo "Draft Recent Tokens: ${DRAFT_RECENT_TOKENS}"
 echo "Async Pipeline: ${SPECEXTEND_ASYNC_PIPELINE}"
 echo "Pipeline Offsets: ${SPECEXTEND_PIPELINE_OFFSETS}"
 echo "Verify Server URL: ${VERIFY_SERVER_URL}"
+echo "Timeout: ${QUICK_TEST_TIMEOUT_SEC}s"
 echo "Transformers Offline: ${TRANSFORMERS_OFFLINE}"
 echo "=========================================="
 echo ""

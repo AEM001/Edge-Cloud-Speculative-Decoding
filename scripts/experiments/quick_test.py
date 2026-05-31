@@ -106,10 +106,10 @@ def get_results_path() -> Path:
     return OUTPUT_DIR / f"quick_test_results_{time.strftime('%Y%m%d_%H%M%S')}.json"
 
 
-def load_prompt_set(prompt_types: List[str], prompt_count: int):
+def load_prompt_set(prompt_types: List[str], prompt_count: int, split: str = "test"):
     prompts = []
     for source in prompt_types:
-        loaded = load_prompts(source=source, count=prompt_count)
+        loaded = load_prompts(source=source, count=prompt_count, split=split)
         prompts.extend((prompt, source) for prompt in loaded)
     logger.info("Loaded %d prompts", len(prompts))
     return prompts
@@ -308,7 +308,7 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
     logger.info("Draft model: %s on %s", DRAFT_MODEL_PATH, DRAFT_DEVICE)
     logger.info("=" * 70)
 
-    prompts = load_prompt_set(config["prompt_types"], config["prompt_count"])
+    prompts = load_prompt_set(config["prompt_types"], config["prompt_count"], config.get("dataset_split", "test"))
     base_client = create_http_cloud_client(SERVER_URL, timeout=REQUEST_TIMEOUT_SEC)
 
     draft_backend = QwenSpecExtendDraftBackend(
@@ -368,6 +368,7 @@ def parse_args():
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--prompt-count", type=int, default=1)
     parser.add_argument("--prompt-types", type=str, nargs="+", default=["pg19"])
+    parser.add_argument("--dataset-split", type=str, default="pg19_512", help="Dataset file to use for pg19 (e.g. pg19_512, pg19_1K, pg19_2K, pg19_4K, pg19_8K, pg19_16K).")
     parser.add_argument("--prompt-input-tokens", type=int, default=0, help="Truncate prompts to this many input tokens.")
     parser.add_argument("--nodes", type=int, default=32, help="Maximum draft-tree nodes.")
     parser.add_argument("--threshold", type=float, default=0.7)
@@ -387,6 +388,7 @@ if __name__ == "__main__":
             "max_tokens": args.max_tokens,
             "prompt_count": args.prompt_count,
             "prompt_types": args.prompt_types,
+            "dataset_split": args.dataset_split,
             "prompt_input_tokens": args.prompt_input_tokens,
             "draft_recent_tokens": os.getenv("DRAFT_RECENT_TOKENS", "128"),
             "async_pipeline": os.getenv("SPECEXTEND_ASYNC_PIPELINE", "1"),
