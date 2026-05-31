@@ -15,6 +15,7 @@ MAX_TOKENS="${MAX_TOKENS:-512}"
 # Default: 1
 # ============================================
 PROMPT_COUNT="${PROMPT_COUNT:-1}"
+PROMPT_INPUT_TOKENS="${PROMPT_INPUT_TOKENS:-2048}"
 
 # ============================================
 # PROMPT TYPES
@@ -76,6 +77,7 @@ CMD="$PYTHON scripts/experiments/quick_test.py \
     --max-tokens ${MAX_TOKENS} \
     --prompt-count ${PROMPT_COUNT} \
     --prompt-types ${PROMPT_TYPES} \
+    --prompt-input-tokens ${PROMPT_INPUT_TOKENS} \
     --nodes ${NODES} \
     --max-depth ${MAX_DEPTH} \
     --threshold ${THRESHOLD} \
@@ -89,6 +91,7 @@ echo "=========================================="
 echo "Network: good"
 echo "Methods: direct, specextend"
 echo "Max Tokens: ${MAX_TOKENS}"
+echo "Prompt Input Tokens: ${PROMPT_INPUT_TOKENS}"
 echo "Prompt Count (per type): ${PROMPT_COUNT}"
 echo "Prompt Types: ${PROMPT_TYPES}"
 echo "Nodes: ${NODES}"

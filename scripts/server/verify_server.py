@@ -89,7 +89,7 @@ async def _lifespan(app: FastAPI):
     gpu_id = _env("VERIFY_GPU_ID", "0")
     device = _env("VERIFY_DEVICE", f"cuda:{gpu_id}")
     dtype = dtype_from_env(_env("VERIFY_DTYPE", "auto"))
-    max_len = int(_env("VERIFY_MAX_LEN", "32768"))
+    max_len = int(_env("VERIFY_MAX_LEN", "4096"))
     gpu_mem_frac = _env("VERIFY_GPU_MEMORY_FRACTION", None)
     gpu_mem_frac = float(gpu_mem_frac) if gpu_mem_frac is not None else None
     attn_impl = _env("VERIFY_ATTN_IMPLEMENTATION", "sdpa")
