@@ -48,10 +48,17 @@ VERIFY_SERVER_URL="${VERIFY_SERVER_URL:-http://127.0.0.1:6007}"
 
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$SCRIPT_DIR"
 
-# Use .venv environment
-PYTHON="$SCRIPT_DIR/.venv/bin/python3"
+# Use draft-edge/.venv when present, otherwise fall back to the repo root venv.
+if [[ -x "$SCRIPT_DIR/.venv/bin/python3" ]]; then
+    PYTHON="$SCRIPT_DIR/.venv/bin/python3"
+elif [[ -x "$REPO_DIR/.venv/bin/python" ]]; then
+    PYTHON="$REPO_DIR/.venv/bin/python"
+else
+    PYTHON="python3"
+fi
 
 # ============================================
 # DRAFT MODEL SETTINGS (set after SCRIPT_DIR is defined)
