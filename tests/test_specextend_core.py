@@ -43,6 +43,16 @@ class SpecExtendCoreTests(unittest.TestCase):
         self.assertEqual([chunk.chunk_id for chunk in selected], [1, 2])
         self.assertEqual(state.selected_token_indices(), [2, 3, 4, 5])
 
+    def test_retrieval_appends_new_chunks_to_selected_working_set(self):
+        state = SpecExtendRetrievalState(chunk_size=2, top_k_chunks=1)
+        state.append_tokens(4)
+        state.set_selected_chunk_ids([0])
+
+        state.append_tokens(1)
+
+        self.assertEqual(state.selected_chunk_ids(), [0, 2])
+        self.assertEqual(state.selected_token_indices(), [0, 1, 4])
+
     def test_target_side_chunk_selection_matches_edge_retrieval(self):
         scores = [0.1, 0.2, 0.9, 0.8, 0.3, 0.4]
         chunks = build_chunks(total_seq_len=len(scores), chunk_size=2)
@@ -50,14 +60,6 @@ class SpecExtendCoreTests(unittest.TestCase):
         selected = select_chunks_by_attention(chunks, scores, top_k_chunks=2)
 
         self.assertEqual([chunk.chunk_id for chunk in selected], [1, 2])
-
-    def test_sparse_draft_context_uses_only_selected_retrieval_indices(self):
-        prefix = [10, 11, 12, 13, 14, 15]
-
-        context = QwenSpecExtendDraftBackend._draft_context(prefix, [0, 1, 4, 5])
-
-        self.assertEqual(context.token_ids, [10, 11, 14, 15])
-        self.assertEqual(context.position_ids, [0, 1, 4, 5])
 
     def test_tree_attention_mask_contains_ancestors(self):
         mask = QwenSpecExtendDraftBackend._tree_attention_mask([-1, 0, 1, 0])

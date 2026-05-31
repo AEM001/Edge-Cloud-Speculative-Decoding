@@ -57,6 +57,11 @@ class SpecExtendRetrievalState:
         if not self.selected_chunks:
             self.selected_chunks = self.chunks[-min(self.top_k_chunks, len(self.chunks)) :]
         else:
+            if len(self.chunks) > old_chunk_count:
+                selected_ids = {chunk.chunk_id for chunk in self.selected_chunks}
+                self.selected_chunks.extend(
+                    chunk for chunk in self.chunks[old_chunk_count:] if chunk.chunk_id not in selected_ids
+                )
             self._refresh_selected_tail()
 
         return len(self.chunks) > old_chunk_count

@@ -117,3 +117,27 @@ compaction before it can beat cached direct generation for this setup.
 - Validation so far is code-level only: `py_compile` and
   `tests/test_specextend_core.py` pass. No performance run has been executed for
   this change yet.
+
+## 2026-06-01 00:05 — SpecExtend KV Semantics Cleanup, Not Yet Benchmarked
+
+- Tightened the draft-side cache path to avoid fallback behavior that was not
+  faithful to SpecExtend. Removed the inactive sparse replay cache code
+  (`_sparse_cache`, `ensure_sparse_cache`, and
+  `generate_token_ids_cached_sparse`) so the draft backend must use the explicit
+  full draft KV cache plus retrieval-selected working KV cache.
+- Fixed retrieval chunk growth semantics to match SpecExtend more closely:
+  when appending verified tokens creates a new chunk, that new chunk is appended
+  to the selected working chunk set. Existing selected tail chunks are still
+  refreshed as their end position grows.
+- Fixed draft seeding after working-cache rebuild. The first draft-token logits
+  now come from the logits produced while forwarding the newly appended verified
+  prefix/correction token into the draft model, matching the original
+  SpecExtend flow, instead of recomputing from the last selected working-cache
+  token.
+- Removed the approximate `DRAFT_TREE_MODE=branching` implementation because it
+  recomputed paths from token ids rather than drafting through the explicit
+  working KV cache. The backend now raises if non-linear tree mode is requested
+  until branching is implemented on top of the strict KV path.
+- Validation so far is code-level only: `py_compile` and
+  `tests/test_specextend_core.py` pass. No performance run has been executed for
+  this cleanup yet.
