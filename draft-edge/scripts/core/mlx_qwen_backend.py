@@ -206,19 +206,12 @@ class MLXQwenDraftBackend(SpecExtendDraftBackend):
         prefix: List[int],
         retrieval_token_indices: Optional[List[int]],
     ):
-        """Select sparse (token_ids, position_ids) from prefix."""
-        recent_tokens = int(os.getenv("DRAFT_RECENT_TOKENS", "128"))
-        if not retrieval_token_indices:
-            return list(prefix), list(range(len(prefix)))
+        """Always use full prefix for draft to avoid cache rebuild overhead.
 
-        selected = {idx for idx in retrieval_token_indices if 0 <= idx < len(prefix)}
-        if recent_tokens > 0:
-            selected.update(range(max(0, len(prefix) - recent_tokens), len(prefix)))
-        if not selected:
-            return list(prefix), list(range(len(prefix)))
-
-        ordered = sorted(selected)
-        return [prefix[i] for i in ordered], ordered
+        Retrieval sparse context causes cache invalidation every round due to
+        position gaps; full prefix keeps cache monotonically append-only.
+        """
+        return list(prefix), list(range(len(prefix)))
 
     def _greedy_decode(
         self,
