@@ -1,0 +1,17 @@
+# Draft Edge (Mac) Dependencies
+# Install: pip install -r requirements-mac.txt
+
+# MLX runtime for Apple Silicon
+mlx>=0.25.0
+mlx-lm>=0.25.0
+
+# Networking & protocol
+requests>=2.32.0
+httpx>=0.28.0
+
+# Utilities
+numpy>=2.0.0
+tqdm
+
+# Optional: for tokenizer alignment checks
+ transformers>=4.45.0

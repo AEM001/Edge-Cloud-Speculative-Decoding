@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Start the verify server directly.
-# By default the 14B verifier runs on GPU 0.
+# Start the cloud verify server on this machine.
+# Serves Qwen3-14B-AWQ on GPU 0, binds 0.0.0.0 for local network access.
 #
 # Usage:
 #   bash start_verify.sh [--port 6007]
@@ -17,14 +17,14 @@ PORT=${PORT:-6007}
 # ============================================
 
 # Verify Model Settings
-VERIFY_MODEL_PATH="${VERIFY_MODEL_PATH:-$REPO_DIR/models/Qwen3-4B-AWQ}"
+VERIFY_MODEL_PATH="${VERIFY_MODEL_PATH:-$REPO_DIR/models/Qwen3-14B-AWQ}"
 VERIFY_GPU_ID="${VERIFY_GPU_ID:-0}"
 VERIFY_DEVICE="${VERIFY_DEVICE:-cuda:$VERIFY_GPU_ID}"
 VERIFY_MAX_LEN="${VERIFY_MAX_LEN:-6000}"
 VERIFY_DTYPE="${VERIFY_DTYPE:-fp8}"
 VERIFY_ATTN_IMPLEMENTATION="${VERIFY_ATTN_IMPLEMENTATION:-sdpa}"
-# Target model (4B) is larger — reserve more memory by default
-VERIFY_GPU_MEMORY_FRACTION="${VERIFY_GPU_MEMORY_FRACTION:-0.6}"
+# Target model (14B AWQ) — reserve most memory by default
+VERIFY_GPU_MEMORY_FRACTION="${VERIFY_GPU_MEMORY_FRACTION:-0.85}"
 
 # Use .venv environment
 PYTHON="$REPO_DIR/.venv/bin/python3"

@@ -1,8 +1,7 @@
-"""Custom Qwen backend for the SpecExtend protocol.
+"""Custom Qwen backend for the SpecExtend cloud target.
 
-It uses Hugging Face/Transformers models directly so the implementation can
-control draft trees, inspect target attention scores, and keep draft-side cache
-state visible to SpecExtend.
+This module contains only the target/verifier backend. Draft-side code lives in
+the separate `draft-edge/` package (intended for the Mac MLX runtime).
 """
 
 from __future__ import annotations
@@ -12,14 +11,12 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence
 
 import torch
-import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from core.protocol import SpecExtendTreeRequest, SpecExtendTreeResponse
-from core.specextend_backend import DraftTree, DraftTreeResult, SpecExtendDraftBackend
 from core.specextend_retrieval import build_chunks, select_chunks_by_attention
 
 logger = logging.getLogger(__name__)
@@ -34,56 +31,6 @@ class QwenBackendConfig:
     trust_remote_code: bool = True
     attn_implementation: str = "sdpa"
     gpu_memory_fraction: Optional[float] = None
-
-
-@dataclass(frozen=True)
-class SparseDraftContext:
-    token_ids: List[int]
-    position_ids: List[int]
-
-    def with_path(self, path: Sequence[int], position_start: int) -> "SparseDraftContext":
-        path = list(path)
-        return SparseDraftContext(
-            token_ids=self.token_ids + path,
-            position_ids=self.position_ids + list(range(position_start, position_start + len(path))),
-        )
-
-
-class VisibleTokenCache:
-    """Token-level cache bookkeeping for SpecExtend retrieval decisions.
-
-    Transformers owns the tensor KV cache internally for this correctness-first
-    implementation. This class keeps the full draft-cache token positions and a
-    working-cache view selected by retrieval, which is the backend-visible state
-    needed by the edge SpecExtend loop.
-    """
-
-    def __init__(self) -> None:
-        self.full_token_ids: List[int] = []
-        self.working_token_indices: List[int] = []
-
-    def append_missing_prefix(self, token_ids: Sequence[int]) -> int:
-        common = 0
-        limit = min(len(self.full_token_ids), len(token_ids))
-        while common < limit and self.full_token_ids[common] == token_ids[common]:
-            common += 1
-
-        if common < len(self.full_token_ids):
-            self.full_token_ids = self.full_token_ids[:common]
-
-        new_tokens = list(token_ids[common:])
-        self.full_token_ids.extend(new_tokens)
-        if not self.working_token_indices:
-            self.working_token_indices = list(range(len(self.full_token_ids)))
-        return len(new_tokens)
-
-    def select_working_tokens(self, indices: Optional[Iterable[int]]) -> None:
-        if indices is None:
-            self.working_token_indices = list(range(len(self.full_token_ids)))
-            return
-
-        valid = sorted({idx for idx in indices if 0 <= idx < len(self.full_token_ids)})
-        self.working_token_indices = valid or list(range(len(self.full_token_ids)))
 
 
 class QwenModelRuntime:
@@ -121,10 +68,6 @@ class QwenModelRuntime:
         self._cache_token_ids: List[int] = []
         self._cache = None
         self._cache_next_logits: Optional[torch.Tensor] = None
-        self._sparse_cache_token_ids: List[int] = []
-        self._sparse_cache_position_ids: List[int] = []
-        self._sparse_cache = None
-        self._sparse_cache_next_logits: Optional[torch.Tensor] = None
 
     @property
     def eos_token_id(self) -> Optional[int]:
@@ -136,29 +79,10 @@ class QwenModelRuntime:
         outputs = self.model(input_ids=input_ids, use_cache=False)
         return outputs.logits[:, -1, :]
 
-    @torch.inference_mode()
-    def next_logits_positioned(
-        self,
-        token_ids: Sequence[int],
-        position_ids: Sequence[int],
-    ) -> torch.Tensor:
-        if len(token_ids) != len(position_ids):
-            raise ValueError("token_ids and position_ids must have the same length")
-        input_ids = torch.tensor([list(token_ids)], dtype=torch.long, device=self.device)
-        pos_ids = torch.tensor([list(position_ids)], dtype=torch.long, device=self.device)
-        outputs = self.model(input_ids=input_ids, position_ids=pos_ids, use_cache=False)
-        return outputs.logits[:, -1, :]
-
     def reset_cache(self) -> None:
         self._cache_token_ids = []
         self._cache = None
         self._cache_next_logits = None
-
-    def reset_sparse_cache(self) -> None:
-        self._sparse_cache_token_ids = []
-        self._sparse_cache_position_ids = []
-        self._sparse_cache = None
-        self._sparse_cache_next_logits = None
 
     def _rewind_cache_for_prefix(self, common_length: int) -> int:
         if common_length <= 1 or self._cache is None:
@@ -199,34 +123,6 @@ class QwenModelRuntime:
         return outputs.logits
 
     @torch.inference_mode()
-    def _forward_sparse_cache_tokens(
-        self,
-        token_ids: Sequence[int],
-        position_ids: Sequence[int],
-    ) -> torch.Tensor:
-        if len(token_ids) != len(position_ids):
-            raise ValueError("token_ids and position_ids must have the same length")
-        if not token_ids:
-            if self._sparse_cache_next_logits is None:
-                raise ValueError("Cannot compute next logits for an empty sparse cache.")
-            return self._sparse_cache_next_logits
-
-        input_ids = torch.tensor([list(token_ids)], dtype=torch.long, device=self.device)
-        pos_ids = torch.tensor([list(position_ids)], dtype=torch.long, device=self.device)
-        outputs = self.model(
-            input_ids=input_ids,
-            position_ids=pos_ids,
-            past_key_values=self._sparse_cache,
-            use_cache=True,
-            return_dict=True,
-        )
-        self._sparse_cache = outputs.past_key_values
-        self._sparse_cache_token_ids.extend(int(token_id) for token_id in token_ids)
-        self._sparse_cache_position_ids.extend(int(position_id) for position_id in position_ids)
-        self._sparse_cache_next_logits = outputs.logits[:, -1, :]
-        return outputs.logits
-
-    @torch.inference_mode()
     def ensure_cache(self, token_ids: Sequence[int]) -> torch.Tensor:
         token_ids = list(token_ids)
         common = self._common_prefix_len(self._cache_token_ids, token_ids)
@@ -242,57 +138,6 @@ class QwenModelRuntime:
         return self._cache_next_logits
 
     @torch.inference_mode()
-    def ensure_sparse_cache(
-        self,
-        token_ids: Sequence[int],
-        position_ids: Sequence[int],
-    ) -> torch.Tensor:
-        token_ids = list(token_ids)
-        position_ids = list(position_ids)
-        if len(token_ids) != len(position_ids):
-            raise ValueError("token_ids and position_ids must have the same length")
-
-        common = 0
-        limit = min(len(self._sparse_cache_token_ids), len(token_ids))
-        while (
-            common < limit
-            and self._sparse_cache_token_ids[common] == token_ids[common]
-            and self._sparse_cache_position_ids[common] == position_ids[common]
-        ):
-            common += 1
-
-        if common < len(self._sparse_cache_token_ids):
-            # Cache has stale tail (retrieved chunks changed) — must rebuild.
-            # Reuse the common prefix by cropping the KV cache in-place.
-            if common > 0 and self._sparse_cache is not None:
-                self._sparse_cache.crop(common)
-                self._sparse_cache_token_ids = self._sparse_cache_token_ids[:common]
-                self._sparse_cache_position_ids = self._sparse_cache_position_ids[:common]
-                self._sparse_cache_next_logits = None
-            else:
-                self.reset_sparse_cache()
-                common = 0
-
-        missing_tokens = token_ids[common:]
-        missing_positions = position_ids[common:]
-        if missing_tokens:
-            self._forward_sparse_cache_tokens(missing_tokens, missing_positions)
-
-        if self._sparse_cache_next_logits is None:
-            # Cache is valid but next_logits was cleared (e.g. after draft-token crop).
-            # Re-forward the last cached token to restore logits.
-            if self._sparse_cache_token_ids:
-                last_token = self._sparse_cache_token_ids[-1]
-                last_pos = self._sparse_cache_position_ids[-1]
-                self._sparse_cache.crop(len(self._sparse_cache_token_ids) - 1)
-                self._sparse_cache_token_ids = self._sparse_cache_token_ids[:-1]
-                self._sparse_cache_position_ids = self._sparse_cache_position_ids[:-1]
-                self._forward_sparse_cache_tokens([last_token], [last_pos])
-            else:
-                raise ValueError("Sparse prompt cache is empty; at least one token is required.")
-        return self._sparse_cache_next_logits
-
-    @torch.inference_mode()
     def generate_token_ids_cached(self, token_ids: Sequence[int], max_new_tokens: int) -> List[int]:
         generated: List[int] = []
         self.ensure_cache(token_ids)
@@ -302,35 +147,6 @@ class QwenModelRuntime:
             self._forward_cache_tokens([next_token])
             if self.eos_token_id is not None and next_token == self.eos_token_id:
                 break
-        return generated
-
-    @torch.inference_mode()
-    def generate_token_ids_cached_sparse(
-        self,
-        token_ids: Sequence[int],
-        position_ids: Sequence[int],
-        next_position_id: int,
-        max_new_tokens: int,
-    ) -> List[int]:
-        generated: List[int] = []
-        self.ensure_sparse_cache(token_ids, position_ids)
-        # Record the context-only cache length so we can crop draft tokens
-        # appended during decoding before the next call to ensure_sparse_cache.
-        context_kv_len = len(self._sparse_cache_token_ids)
-        for offset in range(max_new_tokens):
-            next_token = int(torch.argmax(self._sparse_cache_next_logits, dim=-1).item())
-            generated.append(next_token)
-            self._forward_sparse_cache_tokens([next_token], [next_position_id + offset])
-            if self.eos_token_id is not None and next_token == self.eos_token_id:
-                break
-        # Crop draft tokens out of the sparse cache, keeping only context KV.
-        # This ensures the next ensure_sparse_cache call can reuse the prefix
-        # and only forward the newly appended recent tokens incrementally.
-        if generated and self._sparse_cache is not None and context_kv_len > 0:
-            self._sparse_cache.crop(context_kv_len)
-            self._sparse_cache_token_ids = self._sparse_cache_token_ids[:context_kv_len]
-            self._sparse_cache_position_ids = self._sparse_cache_position_ids[:context_kv_len]
-            self._sparse_cache_next_logits = None
         return generated
 
     @torch.inference_mode()
@@ -350,214 +166,6 @@ class QwenModelRuntime:
         return self.tokenizer.decode(list(token_ids), skip_special_tokens=True)
 
 
-class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
-    def __init__(self, config: QwenBackendConfig):
-        self.runtime = QwenModelRuntime(config)
-        self.tokenizer = self.runtime.tokenizer
-        self.cache = VisibleTokenCache()
-
-    def build_draft_tree(
-        self,
-        verified_prefix: List[int],
-        correction_token_id: Optional[int],
-        nodes: int,
-        threshold: float,
-        max_depth: int,
-        retrieval_token_indices: Optional[List[int]] = None,
-    ) -> DraftTreeResult:
-        start = time.perf_counter()
-        if correction_token_id is not None and (
-            not verified_prefix or verified_prefix[-1] != correction_token_id
-        ):
-            verified_prefix = list(verified_prefix) + [correction_token_id]
-
-        appended = self.cache.append_missing_prefix(verified_prefix)
-        self.cache.select_working_tokens(retrieval_token_indices)
-        draft_context = self._draft_context(verified_prefix, retrieval_token_indices)
-
-        tree = self._grow_tree(
-            draft_context,
-            nodes=max(1, nodes),
-            max_depth=max(1, max_depth),
-            position_start=len(verified_prefix),
-        )
-        return DraftTreeResult(
-            tree=tree,
-            draft_time_ms=(time.perf_counter() - start) * 1000,
-            appended_kv_tokens=appended,
-        )
-
-    def build_draft_candidate(
-        self,
-        verified_prefix: List[int],
-        nodes: int,
-        max_depth: int,
-        retrieval_token_indices: Optional[List[int]] = None,
-    ) -> DraftTreeResult:
-        start = time.perf_counter()
-        draft_context = self._draft_context(verified_prefix, retrieval_token_indices)
-        tree = self._grow_tree(
-            draft_context,
-            nodes=max(1, nodes),
-            max_depth=max(1, max_depth),
-            position_start=len(verified_prefix),
-        )
-        return DraftTreeResult(
-            tree=tree,
-            draft_time_ms=(time.perf_counter() - start) * 1000,
-            appended_kv_tokens=0,
-        )
-
-    @staticmethod
-    def _draft_context(
-        prefix: List[int],
-        retrieval_token_indices: Optional[List[int]],
-    ) -> SparseDraftContext:
-        recent_tokens = int(os.getenv("DRAFT_RECENT_TOKENS", "128"))
-        if not retrieval_token_indices:
-            return SparseDraftContext(
-                token_ids=list(prefix),
-                position_ids=list(range(len(prefix))),
-            )
-
-        selected = {idx for idx in retrieval_token_indices if 0 <= idx < len(prefix)}
-        if recent_tokens > 0:
-            selected.update(range(max(0, len(prefix) - recent_tokens), len(prefix)))
-        if not selected:
-            return SparseDraftContext(
-                token_ids=list(prefix),
-                position_ids=list(range(len(prefix))),
-            )
-        ordered = sorted(selected)
-        return SparseDraftContext(
-            token_ids=[prefix[idx] for idx in ordered],
-            position_ids=ordered,
-        )
-
-    def _grow_tree(
-        self,
-        prefix: SparseDraftContext,
-        nodes: int,
-        max_depth: int,
-        position_start: int,
-    ) -> DraftTree:
-        if os.getenv("DRAFT_TREE_MODE", "linear").strip().lower() != "branching":
-            return self._grow_linear_tree(
-                prefix,
-                nodes=nodes,
-                max_depth=max_depth,
-                position_start=position_start,
-            )
-
-        device = self.runtime.device
-        frontier = [([], -1, 0.0)]
-        records: List[Dict[str, object]] = []
-        branch_width = max(1, min(nodes, int(nodes**0.5) or 1))
-
-        for depth in range(max_depth):
-            candidates = []
-            for path, parent_idx, score in frontier:
-                context = prefix.with_path(path, position_start)
-                logits = self.runtime.next_logits_positioned(context.token_ids, context.position_ids)
-                logprobs = F.log_softmax(logits[0], dim=-1)
-                width = min(branch_width, nodes - len(records), logprobs.numel())
-                values, token_ids = torch.topk(logprobs, k=width)
-                for token_id, logprob in zip(token_ids.tolist(), values.tolist()):
-                    candidates.append((path + [int(token_id)], parent_idx, score + float(logprob)))
-
-            if not candidates:
-                break
-
-            candidates.sort(key=lambda item: item[2], reverse=True)
-            chosen = candidates[: max(1, min(nodes - len(records), len(candidates)))]
-            next_frontier = []
-            for path, _old_parent_idx, score in chosen:
-                parent_idx = self._find_parent_index(records, path[:-1])
-                node_idx = len(records)
-                records.append(
-                    {
-                        "token_id": path[-1],
-                        "position_id": position_start + len(path) - 1,
-                        "parent_idx": parent_idx,
-                        "path": path,
-                    }
-                )
-                next_frontier.append((path, node_idx, score))
-            frontier = next_frontier
-
-            if len(records) >= nodes:
-                break
-
-        if not records:
-            logits = self.runtime.next_logits_positioned(prefix.token_ids, prefix.position_ids)
-            token_id = int(torch.argmax(logits, dim=-1).item())
-            records.append(
-                {
-                    "token_id": token_id,
-                    "position_id": position_start,
-                    "parent_idx": -1,
-                    "path": [token_id],
-                }
-            )
-
-        records = records[:nodes]
-        input_ids = [int(record["token_id"]) for record in records]
-        position_ids = [int(record["position_id"]) for record in records]
-        parent_indices = [int(record["parent_idx"]) for record in records]
-        attention_mask = self._tree_attention_mask(parent_indices)
-
-        return DraftTree(
-            input_ids=input_ids,
-            position_ids=position_ids,
-            parent_indices=parent_indices,
-            attention_mask=attention_mask,
-        )
-
-    def _grow_linear_tree(
-        self,
-        prefix: SparseDraftContext,
-        nodes: int,
-        max_depth: int,
-        position_start: int,
-    ) -> DraftTree:
-        length = max(1, min(nodes, max_depth))
-        input_ids = self.runtime.generate_token_ids_cached_sparse(
-            prefix.token_ids,
-            prefix.position_ids,
-            next_position_id=position_start,
-            max_new_tokens=length,
-        )
-        position_ids = list(range(position_start, position_start + len(input_ids)))
-        parent_indices = [idx - 1 for idx in range(len(input_ids))]
-        attention_mask = self._tree_attention_mask(parent_indices)
-        return DraftTree(
-            input_ids=input_ids,
-            position_ids=position_ids,
-            parent_indices=parent_indices,
-            attention_mask=attention_mask,
-        )
-
-    @staticmethod
-    def _find_parent_index(records: List[Dict[str, object]], parent_path: List[int]) -> int:
-        if not parent_path:
-            return -1
-        for idx in range(len(records) - 1, -1, -1):
-            if records[idx]["path"] == parent_path:
-                return idx
-        return -1
-
-    @staticmethod
-    def _tree_attention_mask(parent_indices: Sequence[int]) -> List[List[int]]:
-        size = len(parent_indices)
-        mask = [[0 for _ in range(size)] for _ in range(size)]
-        for row in range(size):
-            idx = row
-            while idx >= 0:
-                mask[row][idx] = 1
-                idx = parent_indices[idx]
-        return mask
-
-
 class QwenSpecExtendTargetBackend:
     def __init__(self, config: QwenBackendConfig):
         self.runtime = QwenModelRuntime(config)
@@ -569,7 +177,7 @@ class QwenSpecExtendTargetBackend:
             "specextend_tree_verify": True,
             "attention_scores": True,
             "tree_attention": True,
-            "kv_cache": "transformers_dynamic_cache_plus_visible_token_cache",
+            "kv_cache": "transformers_dynamic_cache",
             "draft_tree_default": "linear",
         }
 

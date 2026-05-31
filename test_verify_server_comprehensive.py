@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Comprehensive test for verify server with 2048 input and 512 output tokens."""
 
+import os
 import requests
 import json
 import time
 import sys
 from typing import Dict, List
 
-SERVER_URL = "http://127.0.0.1:6007"
+# Set to the cloud machine's local-network IP when testing across a hotspot.
+SERVER_URL = os.getenv("VERIFY_SERVER_URL", "http://127.0.0.1:6007")
 
 def flush_print(msg: str, end: str = '\n'):
     """Print and immediately flush to stdout."""

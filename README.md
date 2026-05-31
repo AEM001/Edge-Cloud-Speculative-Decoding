@@ -1,103 +1,89 @@
-# Edge-Cloud SpecExtend
+# ECSD Cloud Target
 
-Research system for real SpecExtend-style edge-cloud speculative decoding. A
-custom Qwen3 draft backend runs on the edge GPU and a custom Qwen3 target
-backend runs on the cloud GPU. The active path uses draft trees, target tree
-verification, last-layer target attention scores, and retrieval-driven draft
-cache bookkeeping.
+Pure cloud verifier for SpecExtend-style speculative decoding. This machine runs
+the **target model only** (`Qwen3-14B-AWQ`). The draft/edge side has been moved
+to `draft-edge/` and is intended for a Mac running `Qwen3-0.6B-AWQ` via MLX.
 
-## Current Status
+## Network Setup (Phone Hotspot)
 
-- Runnable: direct cloud generation and real `specextend` tree verification on
-  the `good` network profile.
-- Backend: Hugging Face Qwen3 with eager attention, exposed through custom
-  backend classes in `scripts/core/qwen_specextend_backend.py`.
-- Protocol: `SpecExtendTreeRequest` and `SpecExtendTreeResponse` over HTTP.
-- Scope: batch size 1, correctness-first implementation. CUDA graph and custom
-  kernel optimization can be added after correctness/performance baselines are
-  stable.
+1. Enable your phone's personal hotspot.
+2. Connect **both** this cloud machine and the Mac draft machine to the hotspot.
+3. On the cloud machine, note its local IP:
+   ```bash
+   hostname -I
+   ```
+4. The server binds `0.0.0.0:6007` by default, so any device on the hotspot
+   can reach it at `http://<cloud-ip>:6007`.
 
-## Hardware Defaults
+## Model
 
-Single GPU setup running both draft and target models.
+Default target: `Qwen3-14B-AWQ` (AWQ-int4)
 
-Override with `VERIFY_MODEL_PATH`, `VERIFY_DEVICE`, `DRAFT_MODEL_PATH`, and
-`DRAFT_DEVICE`.
+Download it first:
 
-## Project Structure
-
-```text
-draft/
-├── scripts/
-│   ├── core/
-│   │   ├── protocol.py
-│   │   ├── qwen_specextend_backend.py
-│   │   ├── specextend_backend.py
-│   │   └── specextend_retrieval.py
-│   ├── client/
-│   │   ├── http_cloud_client.py
-│   │   └── specextend_edge_client.py
-│   ├── server/
-│   │   └── verify_server.py
-│   └── experiments/
-│       ├── network_conditions.py
-│       ├── prompt_loader.py
-│       ├── quick_test.py
-│       └── analyze_quick_run.py
-├── Docs/
-│   ├── specextend_integration.md
-│   └── metrics_system.md
-└── models/
+```bash
+python models/download.py --model qwen3-14b-awq
 ```
 
-## Quick Start
-
-Start the target verify server:
+## Start the Server
 
 ```bash
 bash start_verify.sh
 ```
 
-Run the quick experiment:
+Optional overrides:
 
 ```bash
-./quick.sh
+VERIFY_MODEL_PATH=/path/to/Qwen3-14B-AWQ VERIFY_GPU_ID=0 bash start_verify.sh
 ```
 
-Defaults:
+The server exposes:
 
-- prompt source: `prompts_2048`
-- prompt count: `1`
-- max generated tokens: `512`
-- draft tree nodes: `32`
-- max tree depth: `8`
-- retrieval chunk size: `32`
-- retrieval top-k chunks: `32`
+- `GET /health` — model info and readiness
+- `POST /verify` — linear speculative decoding compatibility endpoint
+- `POST /specextend/verify` — full tree verification endpoint
+- `POST /generate` — direct text generation baseline
 
-Results are written to:
+## Project Structure
 
 ```text
-scripts/experiments/outputs_quick/quick_test_results_*.json
+├── scripts/
+│   ├── core/
+│   │   ├── protocol.py              # Wire protocol dataclasses
+│   │   ├── qwen_specextend_backend.py  # Qwen3 target backend only
+│   │   └── specextend_retrieval.py  # Chunk selection (used by target)
+│   └── server/
+│       └── verify_server.py         # FastAPI cloud server
+├── draft-edge/                      # COPY THIS TO YOUR MAC
+│   ├── README.md
+│   ├── requirements-mac.txt
+│   └── scripts/
+│       ├── client/                  # HTTP client to this cloud server
+│       ├── core/                    # Shared protocols + draft backend iface
+│       └── experiments/             # Quick test runner
+├── models/
+│   └── download.py
+├── tests/
+│   └── test_specextend_core.py
+├── test_verify_server_comprehensive.py
+├── start_verify.sh
+└── pyproject.toml
 ```
 
-## SpecExtend Runtime
+## Draft Edge (Mac)
 
-The edge client:
+Copy the `draft-edge/` folder to your Mac. You will need to implement an
+**MLX draft backend** that conforms to `SpecExtendDraftBackend`. See
+`draft-edge/README.md` for details.
 
-- encodes the prompt
-- builds a draft tree through `QwenSpecExtendDraftBackend`
-- keeps full draft-cache token bookkeeping and a retrieval-selected working view
-- sends `SpecExtendTreeRequest` to the cloud
-- commits accepted tree-path tokens plus the target correction token
-- updates retrieval state from target attention scores
+## Testing the Server Locally
 
-The cloud server:
+```bash
+python test_verify_server_comprehensive.py
+```
 
-- loads the target Qwen3 model
-- verifies each request through `/specextend/verify`
-- returns accepted tree indices and a correction token
-- returns last-layer target attention scores when requested
-- keeps `/generate` for direct baseline generation
+Set `VERIFY_SERVER_URL` if testing from another machine on the hotspot:
 
-The compatibility `/verify` endpoint maps a linear draft request to a degenerate
-SpecExtend tree and uses the same custom target backend.
+```bash
+VERIFY_SERVER_URL=http://192.168.43.100:6007 python test_verify_server_comprehensive.py
+```

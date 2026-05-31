@@ -1,7 +1,7 @@
 [project]
 name = "ecsd"
 version = "1.0.0"
-description = "ECSD Cloud Target — Speculative Decoding Verifier Server"
+description = "ECSD — Edge-Cloud Speculative Decoding"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "torch==2.8.0",
@@ -11,11 +11,15 @@ dependencies = [
     "accelerate==1.13.0",
     "numpy==2.2.6",
     "requests==2.33.1",
+    "aiohttp==3.13.5",
+    "httpx==0.28.1",
     "fastapi==0.136.1",
     "uvicorn==0.46.0",
     "starlette==0.52.1",
     "pydantic==2.13.3",
     "pydantic-core==2.46.3",
+    "pydantic-settings==2.14.0",
+    "matplotlib==3.10.9",
     "huggingface-hub==0.34.4",
     "flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl",
 ]

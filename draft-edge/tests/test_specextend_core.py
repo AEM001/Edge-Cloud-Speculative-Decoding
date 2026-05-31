@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from core.protocol import SpecExtendTreeRequest, SpecExtendTreeResponse
-from core.qwen_specextend_backend import QwenSpecExtendTargetBackend
+from core.qwen_specextend_backend import QwenSpecExtendDraftBackend, QwenSpecExtendTargetBackend
 from core.specextend_retrieval import SpecExtendRetrievalState
 
 
@@ -42,6 +42,13 @@ class SpecExtendCoreTests(unittest.TestCase):
 
         self.assertEqual([chunk.chunk_id for chunk in selected], [1, 2])
         self.assertEqual(state.selected_token_indices(), [2, 3, 4, 5])
+
+    def test_tree_attention_mask_contains_ancestors(self):
+        mask = QwenSpecExtendDraftBackend._tree_attention_mask([-1, 0, 1, 0])
+
+        self.assertEqual(mask[0], [1, 0, 0, 0])
+        self.assertEqual(mask[2], [1, 1, 1, 0])
+        self.assertEqual(mask[3], [1, 0, 0, 1])
 
     def test_target_tree_path_helpers(self):
         tree_input_ids = [10, 11, 12, 13]
