@@ -1,4 +1,3 @@
-import os
 import sys
 import unittest
 from pathlib import Path
@@ -52,18 +51,10 @@ class SpecExtendCoreTests(unittest.TestCase):
 
         self.assertEqual([chunk.chunk_id for chunk in selected], [1, 2])
 
-    def test_sparse_draft_context_preserves_original_positions_and_recent_tail(self):
+    def test_sparse_draft_context_uses_only_selected_retrieval_indices(self):
         prefix = [10, 11, 12, 13, 14, 15]
-        old_value = os.environ.get("DRAFT_RECENT_TOKENS")
-        os.environ["DRAFT_RECENT_TOKENS"] = "0"
 
-        try:
-            context = QwenSpecExtendDraftBackend._draft_context(prefix, [0, 1, 4, 5])
-        finally:
-            if old_value is None:
-                os.environ.pop("DRAFT_RECENT_TOKENS", None)
-            else:
-                os.environ["DRAFT_RECENT_TOKENS"] = old_value
+        context = QwenSpecExtendDraftBackend._draft_context(prefix, [0, 1, 4, 5])
 
         self.assertEqual(context.token_ids, [10, 11, 14, 15])
         self.assertEqual(context.position_ids, [0, 1, 4, 5])

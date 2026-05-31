@@ -122,19 +122,13 @@ class SpecExtendDraftKVCache:
             value.zero_()
         self.working_cache = self._allocate_kv_cache(self.max_length)
 
-    def select_working_tokens_with_recent(
-        self,
-        indices: Optional[Iterable[int]],
-        recent_tokens: int,
-    ) -> None:
+    def select_working_tokens(self, indices: Optional[Iterable[int]]) -> None:
         if indices is None:
             selected = set(range(len(self.full_token_ids)))
         else:
             selected = {idx for idx in indices if 0 <= idx < len(self.full_token_ids)}
             if not selected:
                 selected = set(range(len(self.full_token_ids)))
-        if recent_tokens > 0:
-            selected.update(range(max(0, len(self.full_token_ids) - recent_tokens), len(self.full_token_ids)))
         self.working_token_indices = sorted(selected)
         self._rebuild_working_cache()
 
@@ -150,14 +144,6 @@ class SpecExtendDraftKVCache:
         if not self.working_token_indices:
             self.select_working_tokens(None)
         return len(new_tokens)
-
-    def select_working_tokens(self, indices: Optional[Iterable[int]]) -> None:
-        if indices is None:
-            self.working_token_indices = list(range(len(self.full_token_ids)))
-        else:
-            valid = sorted({idx for idx in indices if 0 <= idx < len(self.full_token_ids)})
-            self.working_token_indices = valid or list(range(len(self.full_token_ids)))
-        self._rebuild_working_cache()
 
     @torch.inference_mode()
     def append_prefix(self, runtime: "QwenModelRuntime", token_ids: Sequence[int]) -> int:
@@ -508,7 +494,7 @@ class QwenModelRuntime:
                 break
         # Crop draft tokens out of the sparse cache, keeping only context KV.
         # This ensures the next ensure_sparse_cache call can reuse the prefix
-        # and only forward the newly appended recent tokens incrementally.
+        # and only forward newly appended selected-context tokens incrementally.
         if generated and self._sparse_cache is not None and context_kv_len > 0:
             self._sparse_cache.crop(context_kv_len)
             self._sparse_cache_token_ids = self._sparse_cache_token_ids[:context_kv_len]
@@ -561,10 +547,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             verified_prefix = list(verified_prefix) + [correction_token_id]
 
         appended = self.cache.append_prefix(self.runtime, verified_prefix)
-        self.cache.select_working_tokens_with_recent(
-            retrieval_token_indices,
-            recent_tokens=int(os.getenv("DRAFT_RECENT_TOKENS", "128")),
-        )
+        self.cache.select_working_tokens(retrieval_token_indices)
         draft_context = self.cache.context()
 
         tree = self._grow_tree(
@@ -588,10 +571,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
     ) -> DraftTreeResult:
         start = time.perf_counter()
         old_indices = list(self.cache.working_token_indices)
-        self.cache.select_working_tokens_with_recent(
-            retrieval_token_indices,
-            recent_tokens=int(os.getenv("DRAFT_RECENT_TOKENS", "128")),
-        )
+        self.cache.select_working_tokens(retrieval_token_indices)
         draft_context = self.cache.context()
         if draft_context.token_ids != [verified_prefix[idx] for idx in draft_context.position_ids]:
             draft_context = self._draft_context(verified_prefix, retrieval_token_indices)
@@ -614,7 +594,6 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         prefix: List[int],
         retrieval_token_indices: Optional[List[int]],
     ) -> SparseDraftContext:
-        recent_tokens = int(os.getenv("DRAFT_RECENT_TOKENS", "128"))
         if not retrieval_token_indices:
             return SparseDraftContext(
                 token_ids=list(prefix),
@@ -622,8 +601,6 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             )
 
         selected = {idx for idx in retrieval_token_indices if 0 <= idx < len(prefix)}
-        if recent_tokens > 0:
-            selected.update(range(max(0, len(prefix) - recent_tokens), len(prefix)))
         if not selected:
             return SparseDraftContext(
                 token_ids=list(prefix),

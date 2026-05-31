@@ -96,7 +96,7 @@ compaction before it can beat cached direct generation for this setup.
 - Replaced the draft-side sparse replay cache with a SpecExtend-style tensor KV
   cache implementation. The draft backend now owns a full draft KV cache and
   rebuilds the active working KV cache by indexing selected retrieval chunks
-  plus the recent suffix, matching the core `full_draft_kv -> draft_stable_kv`
+  from the retrieval state, matching the core `full_draft_kv -> draft_stable_kv`
   pattern from the original SpecExtend implementation.
 - Added local Qwen3 KV model support inside this repo:
   `scripts/core/modeling_qwen3_kv.py` and `scripts/core/qwen_kv_cache.py`.
@@ -109,6 +109,11 @@ compaction before it can beat cached direct generation for this setup.
 - Disabled async pipeline candidate prefetch for this draft backend because
   speculative prefixes are not yet committed into the full draft KV cache; using
   them would violate the exact cache ownership/update discipline.
+- Removed the prior `DRAFT_RECENT_TOKENS` recent-window union. The working cache
+  is now driven by the same chunk selection semantics as SpecExtend: initial
+  selected chunks are chosen by the retrieval state, later retrieval updates
+  replace that selected chunk set, and the draft cache does not independently
+  append a recent-token suffix.
 - Validation so far is code-level only: `py_compile` and
   `tests/test_specextend_core.py` pass. No performance run has been executed for
   this change yet.

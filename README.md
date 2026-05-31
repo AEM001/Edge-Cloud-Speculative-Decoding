@@ -2,8 +2,8 @@
 
 Edge-cloud speculative decoding: a Qwen3 draft model on the edge GPU builds
 draft trees; a Qwen3 target model on the cloud GPU verifies them. The draft
-backend uses a sparse KV cache (retrieved chunks + recent window) so that only
-newly appended tokens are forwarded each round rather than the full context.
+backend uses a SpecExtend-style full draft KV cache plus retrieval-selected
+working KV cache so that only selected chunks are active during drafting.
 
 ## Hardware Defaults
 
@@ -51,7 +51,6 @@ SpecExtend is **1.78× faster** than direct generation.
 | `VERIFY_GPU_ID` | `0` | Target GPU |
 | `DRAFT_MODEL_PATH` | `models/Qwen3-1.7B` | Draft model path |
 | `DRAFT_GPU_ID` | `1` | Draft GPU |
-| `DRAFT_RECENT_TOKENS` | `256` | Recent-window size in sparse context |
 | `RETRIEVE_EVERY_N_STEPS` | `16` | Retrieval update frequency |
 | `NODES` | `32` | Draft tree node budget |
 | `MAX_TOKENS` | `256` | Max output tokens |

@@ -390,7 +390,6 @@ if __name__ == "__main__":
             "prompt_types": args.prompt_types,
             "dataset_split": args.dataset_split,
             "prompt_input_tokens": args.prompt_input_tokens,
-            "draft_recent_tokens": os.getenv("DRAFT_RECENT_TOKENS", "128"),
             "async_pipeline": os.getenv("SPECEXTEND_ASYNC_PIPELINE", "1"),
             "pipeline_offsets": os.getenv("SPECEXTEND_PIPELINE_OFFSETS", "full,half"),
             "nodes": args.nodes,
