@@ -35,6 +35,7 @@ DRAFT_DTYPE = dtype_from_env(os.getenv("DRAFT_DTYPE", "fp8"))
 DRAFT_MAX_LEN = int(os.getenv("DRAFT_MAX_LEN", "6000"))
 DRAFT_GPU_MEMORY_FRACTION = os.getenv("DRAFT_GPU_MEMORY_FRACTION", None)
 DRAFT_GPU_MEMORY_FRACTION = float(DRAFT_GPU_MEMORY_FRACTION) if DRAFT_GPU_MEMORY_FRACTION is not None else None
+DRAFT_ATTN_IMPLEMENTATION = os.getenv("DRAFT_ATTN_IMPLEMENTATION", "sdpa")
 REQUEST_TIMEOUT_SEC = float(os.getenv("QUICK_TEST_TIMEOUT_SEC", "600"))
 
 OUTPUT_DIR = Path(__file__).parent / "outputs_quick"
@@ -114,6 +115,29 @@ def load_prompt_set(prompt_types: List[str], prompt_count: int):
         prompts.extend((prompt, source) for prompt in loaded)
     logger.info("Loaded %d prompts", len(prompts))
     return prompts
+
+
+def truncate_prompts_to_tokens(prompts, tokenizer, max_input_tokens: int):
+    if max_input_tokens <= 0:
+        return prompts
+
+    truncated = []
+    for prompt_data, prompt_type in prompts:
+        input_ids = tokenizer.encode(prompt_data["text"])
+        token_count = len(input_ids)
+        if token_count > max_input_tokens:
+            prompt_data = dict(prompt_data)
+            prompt_data["text"] = tokenizer.decode(input_ids[:max_input_tokens])
+            prompt_data["prompt_input_tokens"] = max_input_tokens
+            prompt_data["original_prompt_input_tokens"] = token_count
+        else:
+            prompt_data = dict(prompt_data)
+            prompt_data["prompt_input_tokens"] = token_count
+            prompt_data["original_prompt_input_tokens"] = token_count
+        truncated.append((prompt_data, prompt_type))
+
+    logger.info("Using fixed input length up to %d tokens", max_input_tokens)
+    return truncated
 
 
 def direct_generate_with_throttle(prompt: str, throttled: ThrottledCloudClient, max_tokens: int) -> DirectTiming:
@@ -296,8 +320,10 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
             dtype=DRAFT_DTYPE,
             max_model_len=DRAFT_MAX_LEN,
             gpu_memory_fraction=DRAFT_GPU_MEMORY_FRACTION,
+            attn_implementation=DRAFT_ATTN_IMPLEMENTATION,
         )
     )
+    prompts = truncate_prompts_to_tokens(prompts, draft_backend.tokenizer, config.get("prompt_input_tokens", 0))
     specextend_client = SpecExtendEdgeClient(
         draft_backend=draft_backend,
         cloud_verify_tree=base_client.verify_specextend_tree,
@@ -345,6 +371,7 @@ def parse_args():
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--prompt-count", type=int, default=1)
     parser.add_argument("--prompt-types", type=str, nargs="+", default=["prompts_2048"])
+    parser.add_argument("--prompt-input-tokens", type=int, default=0, help="Truncate prompts to this many input tokens.")
     parser.add_argument("--nodes", type=int, default=32, help="Maximum draft-tree nodes.")
     parser.add_argument("--threshold", type=float, default=0.7)
     parser.add_argument("--max-depth", type=int, default=8)
@@ -363,12 +390,16 @@ if __name__ == "__main__":
             "max_tokens": args.max_tokens,
             "prompt_count": args.prompt_count,
             "prompt_types": args.prompt_types,
+            "prompt_input_tokens": args.prompt_input_tokens,
             "nodes": args.nodes,
             "threshold": args.threshold,
             "max_depth": args.max_depth,
             "retrieval_chunk_size": args.retrieval_chunk_size,
             "retrieve_top_k": args.retrieve_top_k,
             "retrieve_every_n_steps": args.retrieve_every_n_steps,
+            "draft_recent_tokens": os.getenv("DRAFT_RECENT_TOKENS", "128"),
+            "async_pipeline": os.getenv("SPECEXTEND_ASYNC_PIPELINE", "1"),
+            "pipeline_offsets": os.getenv("SPECEXTEND_PIPELINE_OFFSETS", "full,half"),
         }
     )
     sys.exit(0 if success else 1)

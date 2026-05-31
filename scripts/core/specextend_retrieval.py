@@ -142,3 +142,50 @@ class SpecExtendRetrievalState:
                 last_chunk if chunk.chunk_id == last_chunk.chunk_id else chunk
                 for chunk in self.selected_chunks
             ]
+
+
+def build_chunks(total_seq_len: int, chunk_size: int) -> List[RetrievalChunk]:
+    if total_seq_len < 0:
+        raise ValueError("total_seq_len must be non-negative")
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+
+    chunks: List[RetrievalChunk] = []
+    start = 0
+    chunk_id = 0
+    while start < total_seq_len:
+        end = min(start + chunk_size, total_seq_len)
+        chunks.append(RetrievalChunk(chunk_id=chunk_id, start=start, end=end))
+        start = end
+        chunk_id += 1
+    return chunks
+
+
+def select_chunks_by_attention(
+    chunks: Sequence[RetrievalChunk],
+    attention_scores: Sequence[float],
+    top_k_chunks: int,
+) -> List[RetrievalChunk]:
+    if top_k_chunks <= 0:
+        raise ValueError("top_k_chunks must be positive")
+    if not chunks:
+        return []
+    if len(attention_scores) <= 0:
+        raise ValueError("attention_scores must not be empty")
+
+    scored = []
+    for chunk in chunks:
+        if chunk.end > len(attention_scores):
+            continue
+        values = attention_scores[chunk.start : chunk.end]
+        if not values:
+            continue
+        scored.append((sum(values) / len(values), chunk))
+
+    if not scored:
+        raise ValueError("attention_scores do not cover any retrieval chunk")
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    selected = [chunk for _, chunk in scored[:top_k_chunks]]
+    selected.sort(key=lambda chunk: chunk.chunk_id)
+    return selected

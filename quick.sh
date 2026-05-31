@@ -7,7 +7,7 @@
 # MAX TOKENS TO GENERATE
 # LongWriter prompts are intended for long-form generation.
 # ============================================
-MAX_TOKENS="${MAX_TOKENS:-128}"
+MAX_TOKENS="${MAX_TOKENS:-512}"
 
 # ============================================
 # PROMPT COUNT PER TYPE
@@ -20,7 +20,7 @@ PROMPT_COUNT="${PROMPT_COUNT:-1}"
 # PROMPT TYPES
 # Options: govreport
 # ============================================
-PROMPT_TYPES="${PROMPT_TYPES:-govreport}"
+PROMPT_TYPES="${PROMPT_TYPES:-pg19}"
 
 # ============================================
 # DRAFT MODEL SETTINGS
@@ -61,6 +61,7 @@ DRAFT_GPU_ID="${DRAFT_GPU_ID:-0}"  # GPU 0 for single GPU setup
 DRAFT_DEVICE="${DRAFT_DEVICE:-cuda:$DRAFT_GPU_ID}"
 DRAFT_DTYPE="${DRAFT_DTYPE:-fp8}"
 DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-6000}"
+DRAFT_ATTN_IMPLEMENTATION="${DRAFT_ATTN_IMPLEMENTATION:-sdpa}"
 # Draft model (0.6B) is smaller — needs less memory by default
 DRAFT_GPU_MEMORY_FRACTION="${DRAFT_GPU_MEMORY_FRACTION:-0.3}"
 
@@ -70,6 +71,7 @@ export DRAFT_GPU_ID
 export DRAFT_DEVICE
 export DRAFT_DTYPE
 export DRAFT_MAX_LEN
+export DRAFT_ATTN_IMPLEMENTATION
 export DRAFT_GPU_MEMORY_FRACTION
 export VERIFY_SERVER_URL
 

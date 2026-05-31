@@ -92,6 +92,7 @@ async def _lifespan(app: FastAPI):
     max_len = int(_env("VERIFY_MAX_LEN", "6000"))
     gpu_mem_frac = _env("VERIFY_GPU_MEMORY_FRACTION", None)
     gpu_mem_frac = float(gpu_mem_frac) if gpu_mem_frac is not None else None
+    attn_impl = _env("VERIFY_ATTN_IMPLEMENTATION", "sdpa")
 
     logger.info("Loading custom Qwen SpecExtend target backend: %s", model_path)
     _verifier = QwenSpecExtendTargetBackend(
@@ -101,6 +102,7 @@ async def _lifespan(app: FastAPI):
             dtype=dtype,
             max_model_len=max_len,
             gpu_memory_fraction=gpu_mem_frac,
+            attn_implementation=attn_impl,
         )
     )
     logger.info("Custom Qwen target backend loaded")

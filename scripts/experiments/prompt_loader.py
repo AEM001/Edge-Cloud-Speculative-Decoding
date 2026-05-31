@@ -246,18 +246,39 @@ def _load_govreport(split: str = "test") -> List[Dict]:
 
 
 def _load_pg19(split: str = "test") -> List[Dict]:
-    path = _DATA_DIR / "pg19" / f"{split}.jsonl"
+    # Map split to the pg-19 partitioned files; default test → 2K tokens
+    split_to_file = {
+        "test": "pg19_2K.jsonl",
+        "train": "pg19_2K.jsonl",
+        "512": "pg19_512.jsonl",
+        "1k": "pg19_1K.jsonl",
+        "2k": "pg19_2K.jsonl",
+        "4k": "pg19_4K.jsonl",
+        "8k": "pg19_8K.jsonl",
+        "16k": "pg19_16K.jsonl",
+    }
+    filename = split_to_file.get(split.lower(), f"{split}.jsonl")
+    path = _DATA_DIR / "pg-19" / filename
     if not path.exists():
-        raise FileNotFoundError(f"PG-19 data not found at {path}. Run "
-            "`python scripts/download_govreport_pg19.py --dataset pg19` first.")
+        raise FileNotFoundError(
+            f"PG-19 data not found at {path}. "
+            "Available splits: 512, 1k, 2k, 4k, 8k, 16k, test, train."
+        )
     prompts = []
     with open(path) as f:
         for line in f:
             row = json.loads(line)
-            text = row["text"]
-            # ~8000 chars ≈ 2048 tokens for English text
-            text = text[:8000]
-            prompts.append({"text": text, "title": row.get("title", "")})
+            text = row.get("text", "")
+            prompts.append(
+                {
+                    "text": text,
+                    "original_id": row.get("original_id"),
+                    "book_title": row.get("book_title"),
+                    "publication_date": row.get("publication_date"),
+                    "text_chars": len(text),
+                    "text_words": len(text.split()),
+                }
+            )
     return prompts
 
 
