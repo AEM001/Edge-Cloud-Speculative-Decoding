@@ -15,11 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from client.http_cloud_client import create_http_cloud_client
 from client.specextend_edge_client import SpecExtendEdgeClient
-from core.qwen_specextend_backend import (
-    QwenBackendConfig,
-    QwenSpecExtendDraftBackend,
-    dtype_from_env,
-)
+from core.mlx_qwen_backend import MLXBackendConfig, MLXQwenDraftBackend
 from experiments.network_conditions import NetworkCondition, ThrottledCloudClient
 from experiments.prompt_loader import load_prompts
 
@@ -27,15 +23,10 @@ from experiments.prompt_loader import load_prompts
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-SERVER_URL = os.getenv("VERIFY_SERVER_URL", "http://127.0.0.1:6007")
-DRAFT_MODEL_PATH = Path(os.getenv("DRAFT_MODEL_PATH", "/root/code/draft/models/Qwen3-0_6B_int4_awq"))
-DRAFT_GPU_ID = os.getenv("DRAFT_GPU_ID", "1")
-DRAFT_DEVICE = os.getenv("DRAFT_DEVICE", f"cuda:{DRAFT_GPU_ID}")
-DRAFT_DTYPE = dtype_from_env(os.getenv("DRAFT_DTYPE", "fp8"))
+SERVER_URL = os.getenv("VERIFY_SERVER_URL", "http://172.20.10.5:6007")
+_SCRIPT_DIR = Path(__file__).parent.parent.parent
+DRAFT_MODEL_PATH = Path(os.getenv("DRAFT_MODEL_PATH", str(_SCRIPT_DIR / "models" / "Qwen3-0.6B-4bit-AWQ")))
 DRAFT_MAX_LEN = int(os.getenv("DRAFT_MAX_LEN", "6000"))
-DRAFT_GPU_MEMORY_FRACTION = os.getenv("DRAFT_GPU_MEMORY_FRACTION", None)
-DRAFT_GPU_MEMORY_FRACTION = float(DRAFT_GPU_MEMORY_FRACTION) if DRAFT_GPU_MEMORY_FRACTION is not None else None
-DRAFT_ATTN_IMPLEMENTATION = os.getenv("DRAFT_ATTN_IMPLEMENTATION", "sdpa")
 REQUEST_TIMEOUT_SEC = float(os.getenv("QUICK_TEST_TIMEOUT_SEC", "600"))
 
 OUTPUT_DIR = Path(__file__).parent / "outputs_quick"
@@ -266,7 +257,7 @@ def run_specextend_case(
     )
 
 
-def warmup(draft_backend: QwenSpecExtendDraftBackend, cloud_client, prompt: str) -> None:
+def warmup(draft_backend, cloud_client, prompt: str) -> None:
     logger.info("Warming up custom draft and target backends ...")
     prompt_ids = list(draft_backend.tokenizer.encode(prompt))
     draft = draft_backend.build_draft_tree(
@@ -307,20 +298,16 @@ def save_results(results: List[ExperimentResult], config: Dict[str, Any]) -> Non
 def run_quick_test(config: Dict[str, Any]) -> bool:
     logger.info("=" * 70)
     logger.info("QUICK TEST - direct vs real SpecExtend on good network")
-    logger.info("Draft model: %s on %s", DRAFT_MODEL_PATH, DRAFT_DEVICE)
+    logger.info("Draft model (MLX): %s", DRAFT_MODEL_PATH)
     logger.info("=" * 70)
 
     prompts = load_prompt_set(config["prompt_types"], config["prompt_count"])
     base_client = create_http_cloud_client(SERVER_URL, timeout=REQUEST_TIMEOUT_SEC)
 
-    draft_backend = QwenSpecExtendDraftBackend(
-        QwenBackendConfig(
+    draft_backend = MLXQwenDraftBackend(
+        MLXBackendConfig(
             model_path=DRAFT_MODEL_PATH,
-            device=DRAFT_DEVICE,
-            dtype=DRAFT_DTYPE,
             max_model_len=DRAFT_MAX_LEN,
-            gpu_memory_fraction=DRAFT_GPU_MEMORY_FRACTION,
-            attn_implementation=DRAFT_ATTN_IMPLEMENTATION,
         )
     )
     prompts = truncate_prompts_to_tokens(prompts, draft_backend.tokenizer, config.get("prompt_input_tokens", 0))

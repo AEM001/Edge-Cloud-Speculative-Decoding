@@ -1,0 +1,25 @@
+{
+  "config": {
+    "network": "good",
+    "methods": [
+      "direct",
+      "specextend"
+    ],
+    "max_tokens": 512,
+    "prompt_count": 1,
+    "prompt_types": [
+      "pg19"
+    ],
+    "prompt_input_tokens": 2048,
+    "nodes": 8,
+    "threshold": 0.7,
+    "max_depth": 4,
+    "retrieval_chunk_size": 32,
+    "retrieve_top_k": 32,
+    "retrieve_every_n_steps": 8,
+    "draft_recent_tokens": "128",
+    "async_pipeline": "1",
+    "pipeline_offsets": "full,half"
+  },
+  "results": []
+}
