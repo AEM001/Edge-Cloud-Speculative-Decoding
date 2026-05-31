@@ -237,6 +237,8 @@ class SpecExtendEdgeClient:
         draft_result: DraftTreeResult,
         retrieval_indices: List[int],
     ):
+        if not getattr(self.draft_backend, "supports_pipeline_candidates", True):
+            return [], 0
         if not hasattr(self.draft_backend, "build_draft_candidate"):
             return [], 0
 

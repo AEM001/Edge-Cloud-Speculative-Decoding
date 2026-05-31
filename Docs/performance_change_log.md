@@ -90,3 +90,25 @@ full-prefix implementation, but on one V100 the optimized direct baseline is
 still faster than speculative decoding. The speculative path needs separate
 draft/target GPUs, higher draft-target agreement, or tensor-level retrieval KV
 compaction before it can beat cached direct generation for this setup.
+
+## 2026-05-31 20:33 — Code Change, Not Yet Benchmarked
+
+- Replaced the draft-side sparse replay cache with a SpecExtend-style tensor KV
+  cache implementation. The draft backend now owns a full draft KV cache and
+  rebuilds the active working KV cache by indexing selected retrieval chunks
+  plus the recent suffix, matching the core `full_draft_kv -> draft_stable_kv`
+  pattern from the original SpecExtend implementation.
+- Added local Qwen3 KV model support inside this repo:
+  `scripts/core/modeling_qwen3_kv.py` and `scripts/core/qwen_kv_cache.py`.
+  The draft backend no longer imports custom model/cache code from sibling
+  repos.
+- Changed the Qwen draft backend to load the local custom `Qwen3ForCausalLM`
+  path for draft generation so the cache tensors are visible and mutable by the
+  SpecExtend cache manager. The target verifier path still uses the existing
+  verifier runtime.
+- Disabled async pipeline candidate prefetch for this draft backend because
+  speculative prefixes are not yet committed into the full draft KV cache; using
+  them would violate the exact cache ownership/update discipline.
+- Validation so far is code-level only: `py_compile` and
+  `tests/test_specextend_core.py` pass. No performance run has been executed for
+  this change yet.

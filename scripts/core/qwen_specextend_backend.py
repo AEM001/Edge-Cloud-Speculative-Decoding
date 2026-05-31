@@ -1,8 +1,8 @@
 """Custom Qwen backend for the SpecExtend protocol.
 
-It uses Hugging Face/Transformers models directly so the implementation can
-control draft trees, inspect target attention scores, and keep draft-side cache
-state visible to SpecExtend.
+The target verifier can use the standard Transformers runtime, but the edge
+draft path uses explicit SpecExtend-style KV cache tensors: a full draft cache
+plus a retrieval-selected working cache.
 """
 
 from __future__ import annotations
@@ -19,6 +19,8 @@ import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from core.protocol import SpecExtendTreeRequest, SpecExtendTreeResponse
+from core.modeling_qwen3_kv import Qwen3ForCausalLM
+from core.qwen_kv_cache import KVCache
 from core.specextend_backend import DraftTree, DraftTreeResult, SpecExtendDraftBackend
 from core.specextend_retrieval import build_chunks, select_chunks_by_attention
 
@@ -39,6 +41,7 @@ class QwenBackendConfig:
 class SparseDraftContext:
     token_ids: List[int]
     position_ids: List[int]
+    past_key_values: object = None
 
     def with_path(self, path: Sequence[int], position_start: int) -> "SparseDraftContext":
         path = list(path)
@@ -48,45 +51,228 @@ class SparseDraftContext:
         )
 
 
-class VisibleTokenCache:
-    """Token-level cache bookkeeping for SpecExtend retrieval decisions.
+class SpecExtendDraftKVCache:
+    """SpecExtend draft cache: full KV store plus retrieval-selected working KV.
 
-    Transformers owns the tensor KV cache internally for this correctness-first
-    implementation. This class keeps the full draft-cache token positions and a
-    working-cache view selected by retrieval, which is the backend-visible state
-    needed by the edge SpecExtend loop.
+    This mirrors ``SpecExtend/specextend/application/model_classic.py``:
+    ``update_full_draft_cache`` appends newly forwarded K/V tensors to a full
+    cache, and ``update_working_cache_retrieval`` rebuilds ``draft_stable_kv``
+    by indexing selected chunks out of that full cache.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, model, max_length: int, device: torch.device) -> None:
+        self.model = model
+        self.max_length = max_length
+        self.device = device
+        self.dtype = model.dtype
         self.full_token_ids: List[int] = []
         self.working_token_indices: List[int] = []
+        self.full_draft_kv = self._allocate_tensor_kv(max_length)
+        self.working_cache = self._allocate_kv_cache(max_length)
+
+    @property
+    def total_seq_len(self) -> int:
+        return len(self.full_token_ids)
+
+    def _allocate_tensor_kv(self, max_length: int) -> List[tuple[torch.Tensor, torch.Tensor]]:
+        config = self.model.config
+        head_dim = getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
+        kv = []
+        for layer in self.model.model.layers:
+            layer_device = layer.self_attn.q_proj.weight.device
+            key = torch.zeros(
+                [1, config.num_key_value_heads, max_length, head_dim],
+                dtype=self.dtype,
+                device=layer_device,
+            )
+            value = torch.zeros_like(key)
+            kv.append((key, value))
+        return kv
+
+    def _allocate_kv_cache(self, max_length: int):
+        current_length_data = torch.zeros(self.model.config.num_hidden_layers * 2, dtype=torch.long, device="cpu")
+        cache = []
+        for layer_idx, layer in enumerate(self.model.model.layers):
+            layer_device = layer.self_attn.q_proj.weight.device
+            full_key, _ = self.full_draft_kv[layer_idx]
+            data_shape = [1, self.model.config.num_key_value_heads, max_length, full_key.shape[-1]]
+            key_data = torch.zeros(data_shape, dtype=self.dtype, device=layer_device)
+            value_data = torch.zeros(data_shape, dtype=self.dtype, device=layer_device)
+            cache.append(
+                [
+                    KVCache(key_data, current_length_data[layer_idx * 2]),
+                    KVCache(value_data, current_length_data[layer_idx * 2 + 1]),
+                ]
+            )
+        return cache
+
+    @staticmethod
+    def _common_prefix_len(left: Sequence[int], right: Sequence[int]) -> int:
+        common = 0
+        limit = min(len(left), len(right))
+        while common < limit and left[common] == right[common]:
+            common += 1
+        return common
+
+    def reset(self) -> None:
+        self.full_token_ids = []
+        self.working_token_indices = []
+        for key, value in self.full_draft_kv:
+            key.zero_()
+            value.zero_()
+        self.working_cache = self._allocate_kv_cache(self.max_length)
+
+    def select_working_tokens_with_recent(
+        self,
+        indices: Optional[Iterable[int]],
+        recent_tokens: int,
+    ) -> None:
+        if indices is None:
+            selected = set(range(len(self.full_token_ids)))
+        else:
+            selected = {idx for idx in indices if 0 <= idx < len(self.full_token_ids)}
+            if not selected:
+                selected = set(range(len(self.full_token_ids)))
+        if recent_tokens > 0:
+            selected.update(range(max(0, len(self.full_token_ids) - recent_tokens), len(self.full_token_ids)))
+        self.working_token_indices = sorted(selected)
+        self._rebuild_working_cache()
 
     def append_missing_prefix(self, token_ids: Sequence[int]) -> int:
-        common = 0
-        limit = min(len(self.full_token_ids), len(token_ids))
-        while common < limit and self.full_token_ids[common] == token_ids[common]:
-            common += 1
+        token_ids = list(token_ids)
+        common = self._common_prefix_len(self.full_token_ids, token_ids)
 
         if common < len(self.full_token_ids):
-            self.full_token_ids = self.full_token_ids[:common]
+            self.reset()
+            common = 0
 
         new_tokens = list(token_ids[common:])
-        self.full_token_ids.extend(new_tokens)
         if not self.working_token_indices:
-            self.working_token_indices = list(range(len(self.full_token_ids)))
+            self.select_working_tokens(None)
         return len(new_tokens)
 
     def select_working_tokens(self, indices: Optional[Iterable[int]]) -> None:
         if indices is None:
             self.working_token_indices = list(range(len(self.full_token_ids)))
+        else:
+            valid = sorted({idx for idx in indices if 0 <= idx < len(self.full_token_ids)})
+            self.working_token_indices = valid or list(range(len(self.full_token_ids)))
+        self._rebuild_working_cache()
+
+    @torch.inference_mode()
+    def append_prefix(self, runtime: "QwenModelRuntime", token_ids: Sequence[int]) -> int:
+        token_ids = list(token_ids)
+        common = self._common_prefix_len(self.full_token_ids, token_ids)
+        if common < len(self.full_token_ids):
+            self.reset()
+            common = 0
+
+        new_tokens = token_ids[common:]
+        if not new_tokens:
+            return 0
+        if self.total_seq_len + len(new_tokens) > self.max_length:
+            raise RuntimeError(
+                f"Full draft KV budget exceeded: {self.total_seq_len} + {len(new_tokens)} > {self.max_length}"
+            )
+
+        if not self.working_token_indices and self.total_seq_len:
+            self.select_working_tokens(None)
+
+        start = self.total_seq_len
+        input_ids = torch.tensor([new_tokens], dtype=torch.long, device=runtime.device)
+        position_ids = torch.arange(start, start + len(new_tokens), dtype=torch.long, device=runtime.device).unsqueeze(0)
+        outputs = runtime.model(
+            input_ids=input_ids,
+            position_ids=position_ids,
+            past_key_values=self.working_cache,
+            use_cache=True,
+            return_dict=True,
+        )
+        working_start = len(self.working_token_indices)
+        self._copy_working_tail_to_full(working_start=working_start, dest_start=start, length=len(new_tokens))
+        self.full_token_ids.extend(new_tokens)
+        self.working_token_indices.extend(range(start, start + len(new_tokens)))
+        return len(new_tokens)
+
+    def _copy_working_tail_to_full(self, working_start: int, dest_start: int, length: int) -> None:
+        dest_end = dest_start + length
+        for layer_idx, (full_key, full_value) in enumerate(self.full_draft_kv):
+            working_key = self.working_cache[layer_idx][0].data
+            working_value = self.working_cache[layer_idx][1].data
+            full_key[:, :, dest_start:dest_end, :].copy_(
+                working_key[:, :, working_start : working_start + length, :],
+                non_blocking=True,
+            )
+            full_value[:, :, dest_start:dest_end, :].copy_(
+                working_value[:, :, working_start : working_start + length, :],
+                non_blocking=True,
+            )
+
+    def _rebuild_working_cache(self) -> None:
+        self.working_cache = self._allocate_kv_cache(self.max_length)
+        if not self.working_token_indices:
             return
 
-        valid = sorted({idx for idx in indices if 0 <= idx < len(self.full_token_ids)})
-        self.working_token_indices = valid or list(range(len(self.full_token_ids)))
+        for layer_idx, (full_key, full_value) in enumerate(self.full_draft_kv):
+            index = torch.tensor(self.working_token_indices, dtype=torch.long, device=full_key.device)
+            key_slice = full_key.index_select(dim=2, index=index)
+            value_slice = full_value.index_select(dim=2, index=index)
+            self.working_cache[layer_idx][0].data[:, :, : key_slice.shape[2], :].copy_(key_slice, non_blocking=True)
+            self.working_cache[layer_idx][1].data[:, :, : value_slice.shape[2], :].copy_(value_slice, non_blocking=True)
+            self.working_cache[layer_idx][0].current_length.fill_(key_slice.shape[2])
+            self.working_cache[layer_idx][1].current_length.fill_(value_slice.shape[2])
+
+    def context(self) -> SparseDraftContext:
+        return SparseDraftContext(
+            token_ids=[self.full_token_ids[idx] for idx in self.working_token_indices],
+            position_ids=list(self.working_token_indices),
+            past_key_values=self.working_cache,
+        )
+
+    @torch.inference_mode()
+    def next_logits(self, runtime: "QwenModelRuntime") -> torch.Tensor:
+        context = self.context()
+        if not context.token_ids:
+            raise ValueError("Draft working cache is empty; at least one token is required.")
+
+        last_token = context.token_ids[-1]
+        last_position = context.position_ids[-1]
+        self.working_token_indices = self.working_token_indices[:-1]
+        self._rebuild_working_cache()
+
+        input_ids = torch.tensor([[last_token]], dtype=torch.long, device=runtime.device)
+        position_ids = torch.tensor([[last_position]], dtype=torch.long, device=runtime.device)
+        outputs = runtime.model(
+            input_ids=input_ids,
+            position_ids=position_ids,
+            past_key_values=self.working_cache,
+            use_cache=True,
+            return_dict=True,
+        )
+        self.working_token_indices.append(last_position)
+        return outputs.logits[:, -1, :]
+
+    @torch.inference_mode()
+    def forward_draft_token(
+        self,
+        runtime: "QwenModelRuntime",
+        token_id: int,
+        position_id: int,
+    ) -> torch.Tensor:
+        input_ids = torch.tensor([[int(token_id)]], dtype=torch.long, device=runtime.device)
+        position_ids = torch.tensor([[int(position_id)]], dtype=torch.long, device=runtime.device)
+        outputs = runtime.model(
+            input_ids=input_ids,
+            position_ids=position_ids,
+            past_key_values=self.working_cache,
+            use_cache=True,
+            return_dict=True,
+        )
+        return outputs.logits[:, -1, :]
 
 
 class QwenModelRuntime:
-    def __init__(self, config: QwenBackendConfig):
+    def __init__(self, config: QwenBackendConfig, use_custom_kv_model: bool = False):
         path = Path(config.model_path)
         if not path.exists() and os.sep in str(path):
             raise FileNotFoundError(f"Model not found: {path}")
@@ -101,12 +287,19 @@ class QwenModelRuntime:
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_path,
-            torch_dtype=config.dtype,
-            trust_remote_code=config.trust_remote_code,
-            attn_implementation=config.attn_implementation,
-        ).to(self.device)
+        if use_custom_kv_model:
+            self.model = Qwen3ForCausalLM.from_pretrained(
+                self.model_path,
+                torch_dtype=config.dtype,
+            ).to(self.device)
+            self.model.config._attn_implementation = config.attn_implementation
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_path,
+                torch_dtype=config.dtype,
+                trust_remote_code=config.trust_remote_code,
+                attn_implementation=config.attn_implementation,
+            ).to(self.device)
         self.model.eval()
         self._cache_token_ids: List[int] = []
         self._cache = None
@@ -341,10 +534,16 @@ class QwenModelRuntime:
 
 
 class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
+    supports_pipeline_candidates = False
+
     def __init__(self, config: QwenBackendConfig):
-        self.runtime = QwenModelRuntime(config)
+        self.runtime = QwenModelRuntime(config, use_custom_kv_model=True)
         self.tokenizer = self.runtime.tokenizer
-        self.cache = VisibleTokenCache()
+        self.cache = SpecExtendDraftKVCache(
+            self.runtime.model,
+            max_length=config.max_model_len,
+            device=self.runtime.device,
+        )
 
     def build_draft_tree(
         self,
@@ -361,9 +560,12 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         ):
             verified_prefix = list(verified_prefix) + [correction_token_id]
 
-        appended = self.cache.append_missing_prefix(verified_prefix)
-        self.cache.select_working_tokens(retrieval_token_indices)
-        draft_context = self._draft_context(verified_prefix, retrieval_token_indices)
+        appended = self.cache.append_prefix(self.runtime, verified_prefix)
+        self.cache.select_working_tokens_with_recent(
+            retrieval_token_indices,
+            recent_tokens=int(os.getenv("DRAFT_RECENT_TOKENS", "128")),
+        )
+        draft_context = self.cache.context()
 
         tree = self._grow_tree(
             draft_context,
@@ -385,13 +587,22 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         retrieval_token_indices: Optional[List[int]] = None,
     ) -> DraftTreeResult:
         start = time.perf_counter()
-        draft_context = self._draft_context(verified_prefix, retrieval_token_indices)
+        old_indices = list(self.cache.working_token_indices)
+        self.cache.select_working_tokens_with_recent(
+            retrieval_token_indices,
+            recent_tokens=int(os.getenv("DRAFT_RECENT_TOKENS", "128")),
+        )
+        draft_context = self.cache.context()
+        if draft_context.token_ids != [verified_prefix[idx] for idx in draft_context.position_ids]:
+            draft_context = self._draft_context(verified_prefix, retrieval_token_indices)
         tree = self._grow_tree(
             draft_context,
             nodes=max(1, nodes),
             max_depth=max(1, max_depth),
             position_start=len(verified_prefix),
         )
+        self.cache.working_token_indices = old_indices
+        self.cache._rebuild_working_cache()
         return DraftTreeResult(
             tree=tree,
             draft_time_ms=(time.perf_counter() - start) * 1000,
@@ -511,12 +722,18 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         position_start: int,
     ) -> DraftTree:
         length = max(1, min(nodes, max_depth))
-        input_ids = self.runtime.generate_token_ids_cached_sparse(
-            prefix.token_ids,
-            prefix.position_ids,
-            next_position_id=position_start,
-            max_new_tokens=length,
-        )
+        if prefix.past_key_values is not None:
+            input_ids = self._generate_linear_from_working_cache(
+                next_position_id=position_start,
+                max_new_tokens=length,
+            )
+        else:
+            input_ids = self.runtime.generate_token_ids_cached_sparse(
+                prefix.token_ids,
+                prefix.position_ids,
+                next_position_id=position_start,
+                max_new_tokens=length,
+            )
         position_ids = list(range(position_start, position_start + len(input_ids)))
         parent_indices = [idx - 1 for idx in range(len(input_ids))]
         attention_mask = self._tree_attention_mask(parent_indices)
@@ -526,6 +743,26 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             parent_indices=parent_indices,
             attention_mask=attention_mask,
         )
+
+    def _generate_linear_from_working_cache(self, next_position_id: int, max_new_tokens: int) -> List[int]:
+        generated: List[int] = []
+        original_indices = list(self.cache.working_token_indices)
+        logits = self.cache.next_logits(self.runtime)
+        try:
+            for offset in range(max_new_tokens):
+                next_token = int(torch.argmax(logits, dim=-1).item())
+                generated.append(next_token)
+                logits = self.cache.forward_draft_token(
+                    self.runtime,
+                    token_id=next_token,
+                    position_id=next_position_id + offset,
+                )
+                if self.runtime.eos_token_id is not None and next_token == self.runtime.eos_token_id:
+                    break
+        finally:
+            self.cache.working_token_indices = original_indices
+            self.cache._rebuild_working_cache()
+        return generated
 
     @staticmethod
     def _find_parent_index(records: List[Dict[str, object]], parent_path: List[int]) -> int:
