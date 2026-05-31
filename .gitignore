@@ -68,6 +68,8 @@ htmlcov/
 models/hf.txt
 /experiments/outputs*/
 models/Qwen3-4B-AWQ
+/draft-edge/models/
+
 # Local data artifacts
 models/Qwen3-14B-AWQ
 *.parquet
