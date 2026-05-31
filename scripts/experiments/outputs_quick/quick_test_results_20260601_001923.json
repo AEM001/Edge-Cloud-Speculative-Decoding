@@ -1,0 +1,990 @@
+{
+  "config": {
+    "network": "good",
+    "methods": [
+      "direct",
+      "specextend"
+    ],
+    "max_tokens": 256,
+    "prompt_count": 1,
+    "prompt_types": [
+      "pg19"
+    ],
+    "dataset_split": "pg19_512",
+    "prompt_input_tokens": 2048,
+    "async_pipeline": "1",
+    "pipeline_offsets": "full,half",
+    "nodes": 32,
+    "threshold": 0.7,
+    "max_depth": 8,
+    "retrieval_chunk_size": 64,
+    "retrieve_top_k": 16,
+    "retrieve_every_n_steps": 16
+  },
+  "results": [
+    {
+      "method": "direct",
+      "method_family": "direct",
+      "network": "good",
+      "prompt_type": "pg19",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 256,
+        "total_time_ms": 17601.14714327556,
+        "tokens_per_second": 14.544506554949383
+      },
+      "timing": {
+        "client_wall_ms": 17601.14714327556,
+        "local_draft_ms": 0.0,
+        "server_model_ms": 17583.324367180467,
+        "server_total_ms": 17583.324367180467,
+        "http_rpc_ms": 17585.938576608896,
+        "simulated_ul_ms": 7.669066666666667,
+        "simulated_dl_ms": 7.5395,
+        "simulated_network_ms": 15.208566666666666,
+        "avg_rtt_ms": 0.0
+      },
+      "speculative": {
+        "rounds": 0,
+        "nodes": 0,
+        "accepted_draft_tokens": 0,
+        "correction_tokens": 0,
+        "generated_per_round": 0.0,
+        "acceptance_length": 0.0
+      },
+      "verify_runtime": {
+        "backend": null,
+        "specextend_tree_verify": null,
+        "attention_scores": null
+      },
+      "raw": {
+        "direct_timing": {
+          "tokens": 256,
+          "total_ms": 17601.14714327556,
+          "server_ms": 17583.324367180467,
+          "http_ms": 17585.938576608896,
+          "ul_ms": 7.669066666666667,
+          "dl_ms": 7.5395
+        }
+      }
+    },
+    {
+      "method": "specextend_n32",
+      "method_family": "specextend",
+      "network": "good",
+      "prompt_type": "pg19",
+      "prompt_id": 1,
+      "output": {
+        "tokens_generated": 259,
+        "total_time_ms": 20174.101181328297,
+        "tokens_per_second": 12.838242342103046
+      },
+      "timing": {
+        "client_wall_ms": 20174.101181328297,
+        "local_draft_ms": 11482.255896553397,
+        "server_model_ms": 7705.650864169002,
+        "server_total_ms": 7705.650864169002,
+        "http_rpc_ms": 0.0,
+        "simulated_ul_ms": 389.96,
+        "simulated_dl_ms": 368.05,
+        "simulated_network_ms": 758.01,
+        "avg_rtt_ms": 19.96834804208911
+      },
+      "speculative": {
+        "rounds": 49,
+        "nodes": 32,
+        "accepted_draft_tokens": 210,
+        "correction_tokens": 49,
+        "generated_per_round": 5.285714285714286,
+        "acceptance_length": 4.285714285714286
+      },
+      "verify_runtime": {
+        "backend": "custom_qwen3",
+        "specextend_tree_verify": true,
+        "attention_scores": false
+      },
+      "raw": {
+        "network": {
+          "condition": "good",
+          "num_calls": 49,
+          "total_simulated_uplink_delay_ms": 389.96,
+          "total_simulated_downlink_delay_ms": 368.05,
+          "total_simulated_overhead_ms": 758.01,
+          "total_uplink_bytes": 168470,
+          "total_downlink_bytes": 16420,
+          "avg_overhead_per_call_ms": 15.47
+        },
+        "selected_chunk_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "round_details": [
+          {
+            "round": 0,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 162.47944347560406,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 1,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 168.839193880558,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 2,
+            "tree_nodes": 8,
+            "accepted_len": 4,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 166.8696328997612,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 3,
+            "tree_nodes": 8,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 169.5137955248356,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 4,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 171.61179333925247,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 5,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 171.33225873112679,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 6,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 169.98444683849812,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 7,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 171.338913962245,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 8,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 171.50278016924858,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 9,
+            "tree_nodes": 8,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 171.36353999376297,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 10,
+            "tree_nodes": 8,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 170.7985009998083,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 11,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 170.97572050988674,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 12,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 183.58151242136955,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 13,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 172.4047251045704,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 14,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 173.45984280109406,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 15,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 169.05874013900757,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 16,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 304.52248454093933,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 17,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 102.46807895600796,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 18,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 179.7300297766924,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 19,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 170.37643492221832,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 20,
+            "tree_nodes": 8,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 169.06500048935413,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 21,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 170.42179219424725,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 22,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 173.21295477449894,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 23,
+            "tree_nodes": 8,
+            "accepted_len": 6,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 171.6910284012556,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 24,
+            "tree_nodes": 8,
+            "accepted_len": 6,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 169.64091174304485,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 25,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 171.62219807505608,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 26,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 169.01699639856815,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 27,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 173.1974110007286,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 28,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 170.44594883918762,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 29,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 171.18109203875065,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 30,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 170.52563652396202,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 31,
+            "tree_nodes": 8,
+            "accepted_len": 7,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 173.53328503668308,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 32,
+            "tree_nodes": 8,
+            "accepted_len": 4,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 311.53708323836327,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 33,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 100.709592923522,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 34,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 183.3871267735958,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 35,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 172.03034833073616,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 36,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 177.86413989961147,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 37,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 170.2328324317932,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 38,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 171.632943674922,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 39,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 169.30893808603287,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 40,
+            "tree_nodes": 8,
+            "accepted_len": 5,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 172.33936861157417,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 41,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 173.13100956380367,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 42,
+            "tree_nodes": 8,
+            "accepted_len": 1,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 174.57516491413116,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 43,
+            "tree_nodes": 8,
+            "accepted_len": 3,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 172.16975055634975,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 44,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 175.93561485409737,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 45,
+            "tree_nodes": 8,
+            "accepted_len": 2,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 172.16401174664497,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 46,
+            "tree_nodes": 8,
+            "accepted_len": 7,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 172.75905422866344,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 47,
+            "tree_nodes": 8,
+            "accepted_len": 0,
+            "retrieval": false,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 172.68573120236397,
+            "pipeline_reuse": false
+          },
+          {
+            "round": 48,
+            "tree_nodes": 8,
+            "accepted_len": 8,
+            "retrieval": true,
+            "selected_chunk_ids": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ],
+            "pipeline_hit": false,
+            "pipeline_built": 0,
+            "pipeline_wait_ms": 293.6585620045662,
+            "pipeline_reuse": false
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -125,12 +125,23 @@ class SpecExtendDraftKVCache:
 
     def select_working_tokens(self, indices: Optional[Iterable[int]]) -> None:
         if indices is None:
-            selected = set(range(len(self.full_token_ids)))
+            new_chunk_indices = sorted(range(len(self.full_token_ids)))
         else:
-            selected = {idx for idx in indices if 0 <= idx < len(self.full_token_ids)}
-            if not selected:
-                selected = set(range(len(self.full_token_ids)))
-        self.working_token_indices = sorted(selected)
+            new_chunk_indices = sorted(
+                idx for idx in indices if 0 <= idx < len(self.full_token_ids)
+            )
+            if not new_chunk_indices:
+                new_chunk_indices = sorted(range(len(self.full_token_ids)))
+
+        old_chunk_indices = [
+            idx for idx in self.working_token_indices
+            if idx < len(self.full_token_ids)
+        ]
+        if new_chunk_indices == old_chunk_indices:
+            self.working_token_indices = new_chunk_indices
+            return
+
+        self.working_token_indices = new_chunk_indices
         self._rebuild_working_cache()
 
     def append_missing_prefix(self, token_ids: Sequence[int]) -> int:
@@ -162,10 +173,8 @@ class SpecExtendDraftKVCache:
                 f"Full draft KV budget exceeded: {self.total_seq_len} + {len(new_tokens)} > {self.max_length}"
             )
 
-        if not self.working_token_indices and self.total_seq_len:
-            self.select_working_tokens(None)
-
         start = self.total_seq_len
+        working_start = len(self.working_token_indices)
         input_ids = torch.tensor([new_tokens], dtype=torch.long, device=runtime.device)
         position_ids = torch.arange(start, start + len(new_tokens), dtype=torch.long, device=runtime.device).unsqueeze(0)
         outputs = runtime.model(
@@ -176,11 +185,15 @@ class SpecExtendDraftKVCache:
             return_dict=True,
         )
         self.last_prefix_logits = outputs.logits[:, -1, :]
-        working_start = len(self.working_token_indices)
         self._copy_working_tail_to_full(working_start=working_start, dest_start=start, length=len(new_tokens))
         self.full_token_ids.extend(new_tokens)
         self.working_token_indices.extend(range(start, start + len(new_tokens)))
         return len(new_tokens)
+
+    def _rebuild_working_cache_all(self) -> None:
+        """Rebuild working cache to cover all full_token_ids (used on first call)."""
+        self.working_token_indices = list(range(len(self.full_token_ids)))
+        self._rebuild_working_cache()
 
     def _copy_working_tail_to_full(self, working_start: int, dest_start: int, length: int) -> None:
         dest_end = dest_start + length
@@ -197,18 +210,21 @@ class SpecExtendDraftKVCache:
             )
 
     def _rebuild_working_cache(self) -> None:
-        self.working_cache = self._allocate_kv_cache(self.max_length)
-        if not self.working_token_indices:
-            return
-
+        n = len(self.working_token_indices)
         for layer_idx, (full_key, full_value) in enumerate(self.full_draft_kv):
+            kv_k = self.working_cache[layer_idx][0]
+            kv_v = self.working_cache[layer_idx][1]
+            if n == 0:
+                kv_k.current_length.fill_(0)
+                kv_v.current_length.fill_(0)
+                continue
             index = torch.tensor(self.working_token_indices, dtype=torch.long, device=full_key.device)
             key_slice = full_key.index_select(dim=2, index=index)
             value_slice = full_value.index_select(dim=2, index=index)
-            self.working_cache[layer_idx][0].data[:, :, : key_slice.shape[2], :].copy_(key_slice, non_blocking=True)
-            self.working_cache[layer_idx][1].data[:, :, : value_slice.shape[2], :].copy_(value_slice, non_blocking=True)
-            self.working_cache[layer_idx][0].current_length.fill_(key_slice.shape[2])
-            self.working_cache[layer_idx][1].current_length.fill_(value_slice.shape[2])
+            kv_k.data[:, :, :n, :].copy_(key_slice, non_blocking=True)
+            kv_v.data[:, :, :n, :].copy_(value_slice, non_blocking=True)
+            kv_k.current_length.fill_(n)
+            kv_v.current_length.fill_(n)
 
     def context(self) -> DraftContext:
         return DraftContext(
@@ -413,8 +429,8 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         ):
             verified_prefix = list(verified_prefix) + [correction_token_id]
 
-        appended = self.cache.append_prefix(self.runtime, verified_prefix)
         self.cache.select_working_tokens(retrieval_token_indices)
+        appended = self.cache.append_prefix(self.runtime, verified_prefix)
         draft_context = self.cache.context()
 
         tree = self._grow_tree(
@@ -474,9 +490,25 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             attention_mask=attention_mask,
         )
 
+    def _snapshot_working_lengths(self) -> List[int]:
+        """Snapshot current_length for every KVCache slot in working_cache."""
+        return [
+            self.cache.working_cache[i][j].current_length.item()
+            for i in range(len(self.cache.working_cache))
+            for j in range(2)
+        ]
+
+    def _restore_working_lengths(self, snapshot: List[int]) -> None:
+        """Restore current_length from a snapshot (no data copy needed)."""
+        idx = 0
+        for i in range(len(self.cache.working_cache)):
+            for j in range(2):
+                self.cache.working_cache[i][j].current_length.fill_(snapshot[idx])
+                idx += 1
+
     def _generate_linear_from_working_cache(self, next_position_id: int, max_new_tokens: int) -> List[int]:
         generated: List[int] = []
-        original_indices = list(self.cache.working_token_indices)
+        length_snapshot = self._snapshot_working_lengths()
         logits = self.cache.next_logits(self.runtime)
         try:
             for offset in range(max_new_tokens):
@@ -490,9 +522,83 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
                 if self.runtime.eos_token_id is not None and next_token == self.runtime.eos_token_id:
                     break
         finally:
-            self.cache.working_token_indices = original_indices
-            self.cache._rebuild_working_cache()
+            self._restore_working_lengths(length_snapshot)
         return generated
+
+    @torch.inference_mode()
+    def build_draft_candidate(
+        self,
+        verified_prefix: List[int],
+        nodes: int,
+        max_depth: int,
+        retrieval_token_indices: Optional[List[int]] = None,
+    ) -> "DraftTreeResult":
+        """Build a pipeline-prefetch draft without committing to the main cache.
+
+        Appends candidate prefix tokens onto the working cache temporarily,
+        generates the draft, then rolls back current_length.
+        Does NOT update full_draft_kv or full_token_ids.
+        """
+        start = time.perf_counter()
+        full_ids = list(self.cache.full_token_ids)
+        working_indices = list(self.cache.working_token_indices)
+        last_prefix_logits = self.cache.last_prefix_logits
+
+        candidate_tokens = verified_prefix[len(full_ids):]
+        if not candidate_tokens:
+            logits = self.cache.last_prefix_logits
+            if logits is None:
+                return None
+        else:
+            length_snap = self._snapshot_working_lengths()
+            try:
+                for i, tok in enumerate(candidate_tokens):
+                    pos = len(full_ids) + i
+                    input_ids_t = torch.tensor([[tok]], dtype=torch.long, device=self.runtime.device)
+                    pos_ids_t = torch.tensor([[pos]], dtype=torch.long, device=self.runtime.device)
+                    out = self.runtime.model(
+                        input_ids=input_ids_t,
+                        position_ids=pos_ids_t,
+                        past_key_values=self.cache.working_cache,
+                        use_cache=True,
+                        return_dict=True,
+                    )
+                    self.cache.last_prefix_logits = out.logits[:, -1, :]
+            except Exception:
+                self._restore_working_lengths(length_snap)
+                self.cache.full_token_ids = full_ids
+                self.cache.working_token_indices = working_indices
+                self.cache.last_prefix_logits = last_prefix_logits
+                return None
+
+        position_start = len(verified_prefix)
+        length = max(1, min(nodes, max_depth))
+        try:
+            input_ids = self._generate_linear_from_working_cache(
+                next_position_id=position_start,
+                max_new_tokens=length,
+            )
+        finally:
+            if candidate_tokens:
+                self._restore_working_lengths(length_snap)
+            self.cache.full_token_ids = full_ids
+            self.cache.working_token_indices = working_indices
+            self.cache.last_prefix_logits = last_prefix_logits
+
+        position_ids = list(range(position_start, position_start + len(input_ids)))
+        parent_indices = [idx - 1 for idx in range(len(input_ids))]
+        attention_mask = self._tree_attention_mask(parent_indices)
+        tree = DraftTree(
+            input_ids=input_ids,
+            position_ids=position_ids,
+            parent_indices=parent_indices,
+            attention_mask=attention_mask,
+        )
+        return DraftTreeResult(
+            tree=tree,
+            draft_time_ms=(time.perf_counter() - start) * 1000,
+            appended_kv_tokens=0,
+        )
 
     @staticmethod
     def _find_parent_index(records: List[Dict[str, object]], parent_path: List[int]) -> int:

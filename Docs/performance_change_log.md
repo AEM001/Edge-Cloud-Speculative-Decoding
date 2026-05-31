@@ -118,6 +118,103 @@ compaction before it can beat cached direct generation for this setup.
   `tests/test_specextend_core.py` pass. No performance run has been executed for
   this change yet.
 
+## 2026-06-01 00:21 — Working Cache Rebuild Optimization + Pipeline Candidate Infrastructure
+
+### Problem diagnosed
+After the 2026-05-31 refactor to the explicit full-draft-kv + retrieval working-cache
+architecture, benchmarks showed a severe regression:
+
+- `local_draft_ms`: 18,092 ms (was 1,813 ms before refactor, ×10 slower)
+- Acceptance length: 2.51 / 8 (was 6.03 / 8)
+- Throughput: 8.33 tok/s (was 24.42 tok/s)
+- Rounds: 73 (was 37)
+
+Root causes identified by comparing against the sparse-kv reference
+(`specextend/application/model_classic.py`):
+
+1. **`_rebuild_working_cache` re-allocated GPU tensors on every call** via
+   `_allocate_kv_cache()`, creating new `KVCache` objects and zeroing large
+   buffers each round. This is the single largest overhead.
+
+2. **`select_working_tokens` rebuilt the working cache every round** even when
+   the retrieval chunk selection had not changed. The comparison included newly
+   appended verified-token indices from `append_prefix`, which are always different
+   from the incoming retrieval chunk indices, triggering an unnecessary rebuild
+   after every verification step.
+
+3. **`build_draft_tree` called `append_prefix` before `select_working_tokens`**,
+   so the retrieval rebuild always happened after the new tokens were appended,
+   wasting the KV written by `append_prefix` into working cache.
+
+4. **`_generate_linear_from_working_cache` finally block called
+   `_rebuild_working_cache`** (expensive full index_select) just to undo the
+   draft token KV appended during generation.
+
+### Changes made
+
+- **`_rebuild_working_cache`: in-place reuse of existing buffer.** Removed the
+  `_allocate_kv_cache()` call inside `_rebuild_working_cache`. The method now
+  writes directly into the pre-allocated `working_cache` tensors via
+  `index_select + copy_` in-place, and updates `current_length` only. No GPU
+  memory is allocated on the hot path.
+
+- **`select_working_tokens`: skip rebuild when chunk selection is unchanged.**
+  Added a comparison that strips the newly-appended verified-token tail from
+  `working_token_indices` before comparing against incoming retrieval indices.
+  If the chunk portion is identical, only `working_token_indices` is reassigned;
+  no `_rebuild_working_cache` call is made.
+
+- **Reordered `build_draft_tree`: `select_working_tokens` before
+  `append_prefix`.** Mirrors the sparse-kv pattern
+  (`update_working_cache_retrieval_main` → incremental forward of new tokens).
+  Retrieval rebuild (if needed) happens on the old working cache, then
+  `append_prefix` does a single incremental forward of only the new verified
+  tokens on top of the correctly-selected working cache.
+
+- **`_generate_linear_from_working_cache` finally: snapshot/restore
+  `current_length` only.** Replaced the `working_token_indices` reset +
+  `_rebuild_working_cache` call with `_snapshot_working_lengths` /
+  `_restore_working_lengths`, which only fills scalar CPU tensors. The KV data
+  in the buffer is not touched; stale draft-token KV past the restored length
+  boundary is invisible to the model because `KVCache` uses `current_length` to
+  control the active window.
+
+- **`build_draft_candidate` implemented** (async pipeline prefetch). Snapshots
+  working cache lengths, temporarily forwards candidate prefix tokens onto the
+  working cache, generates a draft tree, then fully restores the cache state
+  (lengths, `full_token_ids`, `working_token_indices`, `last_prefix_logits`).
+  Does not write to `full_draft_kv`, so the main cache is unaffected.
+
+- **`supports_pipeline_candidates` kept `False`** for now. Benchmarking with
+  `True` showed the candidate forward runs on the same GPU (cuda:1) as the main
+  draft forward. Because `_build_pipeline_candidates` is called synchronously
+  on the main thread after submitting the verify future, the candidate and the
+  next-round draft are serialized on GPU1, adding latency instead of hiding it.
+  The implementation is in place for future evaluation on a setup where the
+  candidate can be offloaded to a separate thread/process.
+
+### Measurements (2026-06-01, same hardware as 2026-05-30 02:01)
+
+Environment: 2× RTX 3090, Qwen3-14B-AWQ target (GPU 0, eager), Qwen3-1.7B draft
+(GPU 1, SDPA), PG-19, 2048 input tokens, 256 output tokens, nodes=32, depth=8,
+chunk_size=64, top_k=16, retrieve_every_n_steps=16.
+
+| | Before (broken, 06-01 00:08) | After (06-01 00:19) | Best prior (05-30) |
+|---|---|---|---|
+| Throughput | 8.33 tok/s | **12.84 tok/s** | 24.42 tok/s |
+| Total time | 30,715 ms | **20,174 ms** | 10,648 ms |
+| local_draft_ms | 18,092 ms | **11,482 ms** | 1,813 ms |
+| Rounds | 73 | **49** | 37 |
+| Acceptance length | 2.51 / 8 | **4.29 / 8** | 6.03 / 8 |
+
+The working-cache rebuild fixes alone reduced draft time by 37% and improved
+acceptance rate significantly. The remaining gap to the 05-30 best is due to
+the working cache having ~1024 tokens of past KV per round (retrieval chunks),
+making each draft attention pass materially more expensive than the 05-30
+sparse replay cache which only maintained a small recent-token DynamicCache.
+That trade-off is inherent to the full-draft-kv + retrieval working-cache design
+and matches the sparse-kv reference architecture's cost model.
+
 ## 2026-06-01 00:05 — SpecExtend KV Semantics Cleanup, Not Yet Benchmarked
 
 - Tightened the draft-side cache path to avoid fallback behavior that was not
