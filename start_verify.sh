@@ -20,11 +20,12 @@ PORT=${PORT:-6007}
 VERIFY_MODEL_PATH="${VERIFY_MODEL_PATH:-$REPO_DIR/models/Qwen3-14B-AWQ}"
 VERIFY_GPU_ID="${VERIFY_GPU_ID:-0}"
 VERIFY_DEVICE="${VERIFY_DEVICE:-cuda:$VERIFY_GPU_ID}"
-VERIFY_MAX_LEN="${VERIFY_MAX_LEN:-6000}"
-VERIFY_DTYPE="${VERIFY_DTYPE:-fp8}"
-VERIFY_ATTN_IMPLEMENTATION="${VERIFY_ATTN_IMPLEMENTATION:-sdpa}"
-# Target model (14B AWQ) — reserve most memory by default
-VERIFY_GPU_MEMORY_FRACTION="${VERIFY_GPU_MEMORY_FRACTION:-0.85}"
+VERIFY_MAX_LEN="${VERIFY_MAX_LEN:-32768}"
+VERIFY_DTYPE="${VERIFY_DTYPE:-auto}"
+VERIFY_ATTN_IMPLEMENTATION="${VERIFY_ATTN_IMPLEMENTATION:-eager}"
+TRANSFORMERS_OFFLINE="${TRANSFORMERS_OFFLINE:-1}"
+# Optional. Set this only when you need to reserve part of the GPU for another process.
+VERIFY_GPU_MEMORY_FRACTION="${VERIFY_GPU_MEMORY_FRACTION:-}"
 
 # Use .venv environment
 PYTHON="$REPO_DIR/.venv/bin/python3"
@@ -35,7 +36,12 @@ export VERIFY_DEVICE
 export VERIFY_MAX_LEN
 export VERIFY_DTYPE
 export VERIFY_ATTN_IMPLEMENTATION
-export VERIFY_GPU_MEMORY_FRACTION
+export TRANSFORMERS_OFFLINE
+if [[ -n "$VERIFY_GPU_MEMORY_FRACTION" ]]; then
+  export VERIFY_GPU_MEMORY_FRACTION
+else
+  unset VERIFY_GPU_MEMORY_FRACTION
+fi
 
 # Parse optional --port arg
 while [[ $# -gt 0 ]]; do
@@ -53,6 +59,8 @@ echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
 echo "Verify device: $VERIFY_DEVICE"
 echo "Verify dtype: $VERIFY_DTYPE"
 echo "Verify max model length: $VERIFY_MAX_LEN"
+echo "Verify attention: $VERIFY_ATTN_IMPLEMENTATION"
+echo "Transformers offline: $TRANSFORMERS_OFFLINE"
 echo ""
 
 cd "$REPO_DIR"

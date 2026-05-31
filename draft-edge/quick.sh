@@ -24,7 +24,7 @@ PROMPT_TYPES="${PROMPT_TYPES:-pg19}"
 
 # ============================================
 # DRAFT MODEL SETTINGS
-# Defaults are set after SCRIPT_DIR is defined.
+# Defaults are set after SCRIPT_DIR is defined. This folder is Mac/MLX-only.
 # ============================================
 
 # ============================================
@@ -56,23 +56,12 @@ PYTHON="$SCRIPT_DIR/.venv/bin/python3"
 # ============================================
 # DRAFT MODEL SETTINGS (set after SCRIPT_DIR is defined)
 # ============================================
-DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-$SCRIPT_DIR/models/Qwen3-0_6B_int4_awq}"
-DRAFT_GPU_ID="${DRAFT_GPU_ID:-0}"  # GPU 0 for single GPU setup
-DRAFT_DEVICE="${DRAFT_DEVICE:-cuda:$DRAFT_GPU_ID}"
-DRAFT_DTYPE="${DRAFT_DTYPE:-fp8}"
+DRAFT_MODEL_PATH="${DRAFT_MODEL_PATH:-$SCRIPT_DIR/models/Qwen3-0.6B-4bit-AWQ}"
 DRAFT_MAX_LEN="${DRAFT_MAX_LEN:-6000}"
-DRAFT_ATTN_IMPLEMENTATION="${DRAFT_ATTN_IMPLEMENTATION:-sdpa}"
-# Draft model (0.6B) is smaller — needs less memory by default
-DRAFT_GPU_MEMORY_FRACTION="${DRAFT_GPU_MEMORY_FRACTION:-0.3}"
 
 # Export environment variables
 export DRAFT_MODEL_PATH
-export DRAFT_GPU_ID
-export DRAFT_DEVICE
-export DRAFT_DTYPE
 export DRAFT_MAX_LEN
-export DRAFT_ATTN_IMPLEMENTATION
-export DRAFT_GPU_MEMORY_FRACTION
 export VERIFY_SERVER_URL
 
 # Build command
@@ -99,7 +88,7 @@ echo "Nodes: ${NODES}"
 echo "Max Depth: ${MAX_DEPTH}"
 echo "Retrieval Chunk Size: ${RETRIEVAL_CHUNK_SIZE}"
 echo "Draft Model: ${DRAFT_MODEL_PATH}"
-echo "Draft Device: ${DRAFT_DEVICE}"
+echo "Draft Runtime: MLX on Apple Silicon"
 echo "Verify Server URL: ${VERIFY_SERVER_URL}"
 echo "=========================================="
 echo ""

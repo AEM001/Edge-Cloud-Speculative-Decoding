@@ -24,7 +24,7 @@ def _env(name: str, default: str) -> str:
     return os.getenv(name, default)
 
 
-_DEFAULT_MODEL_PATH = os.getenv("VERIFY_MODEL_PATH", "/root/code/draft/models/Qwen3-4B-AWQ")
+_DEFAULT_MODEL_PATH = os.getenv("VERIFY_MODEL_PATH", "/root/code/draft/models/Qwen3-14B-AWQ")
 
 
 class VerifyRequest(BaseModel):
@@ -88,8 +88,8 @@ async def _lifespan(app: FastAPI):
     model_path = Path(_env("VERIFY_MODEL_PATH", _DEFAULT_MODEL_PATH))
     gpu_id = _env("VERIFY_GPU_ID", "0")
     device = _env("VERIFY_DEVICE", f"cuda:{gpu_id}")
-    dtype = dtype_from_env(_env("VERIFY_DTYPE", "fp8"))
-    max_len = int(_env("VERIFY_MAX_LEN", "6000"))
+    dtype = dtype_from_env(_env("VERIFY_DTYPE", "auto"))
+    max_len = int(_env("VERIFY_MAX_LEN", "32768"))
     gpu_mem_frac = _env("VERIFY_GPU_MEMORY_FRACTION", None)
     gpu_mem_frac = float(gpu_mem_frac) if gpu_mem_frac is not None else None
     attn_impl = _env("VERIFY_ATTN_IMPLEMENTATION", "sdpa")

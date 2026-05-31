@@ -1,8 +1,10 @@
-# ECSD Cloud Target
+# ECSD Split Runtime
 
-Pure cloud verifier for SpecExtend-style speculative decoding. This machine runs
-the **target model only** (`Qwen3-14B-AWQ`). The draft/edge side has been moved
-to `draft-edge/` and is intended for a Mac running `Qwen3-0.6B-AWQ` via MLX.
+This branch is organized for two machines on the same phone hotspot:
+
+- **Ubuntu/cloud**: repo root, runs the target verifier with `Qwen3-14B-AWQ`.
+- **Mac/edge**: `draft-edge/`, runs the draft model with MLX and calls the
+  Ubuntu verifier over HTTP.
 
 ## Network Setup (Phone Hotspot)
 
@@ -25,7 +27,7 @@ Download it first:
 python models/download.py --model qwen3-14b-awq
 ```
 
-## Start the Server
+## Ubuntu: Start The Server
 
 ```bash
 bash start_verify.sh
@@ -70,11 +72,11 @@ The server exposes:
 └── pyproject.toml
 ```
 
-## Draft Edge (Mac)
+## Mac: Run Draft Edge
 
-Copy the `draft-edge/` folder to your Mac. You will need to implement an
-**MLX draft backend** that conforms to `SpecExtendDraftBackend`. See
-`draft-edge/README.md` for details.
+Use the `draft-edge/` folder on the Mac. It contains the MLX draft backend,
+the edge orchestration client, prompt loading, and the quick-test runner. See
+`draft-edge/README.md` for setup details.
 
 ## Testing the Server Locally
 

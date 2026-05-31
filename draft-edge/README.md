@@ -1,7 +1,7 @@
 # Draft Edge (Mac MLX)
 
 This folder contains the **edge/draft-side** code for the SpecExtend system.
-Copy this entire folder to your Mac that will run the small draft model.
+Run this folder on the Mac that hosts the small draft model.
 
 ## Target Mac Setup
 
@@ -24,24 +24,15 @@ source .venv/bin/activate
 pip install -r requirements-mac.txt
 ```
 
-## You Must Implement
+## Draft Backend
 
-The current `scripts/core/qwen_specextend_backend.py` is the **CUDA/Transformers** backend.
-On Mac you need to replace it with an **MLX draft backend** that implements:
+`scripts/core/mlx_qwen_backend.py` is the Mac draft backend. It implements
+`SpecExtendDraftBackend` with `mlx` and `mlx-lm`, keeps the selected sparse
+context plus recent tail, and builds the draft tree sent to the Ubuntu verifier.
 
-```python
-from core.specextend_backend import SpecExtendDraftBackend
-
-class MLXQwenDraftBackend(SpecExtendDraftBackend):
-    tokenizer: object
-
-    def build_draft_tree(self, verified_prefix, correction_token_id, nodes, threshold, max_depth, retrieval_token_indices=None):
-        ...
-```
-
-Key libraries to use on Mac:
-- `mlx` and `mlx-lm` for Qwen3 0.6B AWQ inference
-- Keep `core/protocol.py`, `core/specextend_retrieval.py`, `client/http_cloud_client.py`, and `client/specextend_edge_client.py` unchanged.
+`scripts/core/qwen_specextend_backend.py` is a compatibility shim for older
+imports and points to the MLX backend. The Ubuntu/cloud target backend is not
+part of this Mac folder.
 
 ## Running a Quick Test
 
@@ -59,6 +50,7 @@ bash quick.sh
 | `scripts/client/specextend_edge_client.py` | SpecExtend edge orchestration loop |
 | `scripts/core/protocol.py` | Wire protocol dataclasses |
 | `scripts/core/specextend_backend.py` | Backend protocols (`SpecExtendDraftBackend`) |
+| `scripts/core/mlx_qwen_backend.py` | Mac MLX draft backend |
 | `scripts/core/specextend_retrieval.py` | Edge-side retrieval chunk selection |
 | `scripts/experiments/quick_test.py` | End-to-end quick test runner |
 | `scripts/experiments/network_conditions.py` | Network throttling simulation |

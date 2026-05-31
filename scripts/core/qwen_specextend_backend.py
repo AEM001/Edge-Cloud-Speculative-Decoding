@@ -18,6 +18,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from core.protocol import SpecExtendTreeRequest, SpecExtendTreeResponse
 from core.specextend_retrieval import build_chunks, select_chunks_by_attention
+from core.tree_utils import indices_for_path, paths_from_tree
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class QwenBackendConfig:
     model_path: Path
     device: str = "cuda:0"
     dtype: torch.dtype = torch.float16
-    max_model_len: int = 6000
+    max_model_len: int = 32768
     trust_remote_code: bool = True
     attn_implementation: str = "sdpa"
     gpu_memory_fraction: Optional[float] = None
@@ -83,6 +84,10 @@ class QwenModelRuntime:
         self._cache_token_ids = []
         self._cache = None
         self._cache_next_logits = None
+
+    def clear_request_kv_cache(self, request_id: Optional[str] = None) -> None:
+        """Compatibility hook used by the FastAPI error path."""
+        self.reset_cache()
 
     def _rewind_cache_for_prefix(self, common_length: int) -> int:
         if common_length <= 1 or self._cache is None:
@@ -193,7 +198,7 @@ class QwenSpecExtendTargetBackend:
     @torch.inference_mode()
     def verify_tree(self, request: SpecExtendTreeRequest) -> SpecExtendTreeResponse:
         start = time.perf_counter()
-        paths = self._paths_from_tree(request.tree_input_ids, request.parent_indices)
+        paths = paths_from_tree(request.tree_input_ids, request.parent_indices)
 
         accepted_indices: List[int] = []
         correction_token_id: Optional[int] = None
@@ -213,7 +218,7 @@ class QwenSpecExtendTargetBackend:
                 accepted_len, correction = self._verify_path_against_tokens(path, target_tokens)
                 if accepted_len > best_accept_len:
                     best_accept_len = accepted_len
-                    accepted_indices = self._indices_for_path(node_idx, request.parent_indices)
+                    accepted_indices = indices_for_path(node_idx, request.parent_indices)
                     accepted_indices = accepted_indices[:accepted_len]
                     correction_token_id = correction
         else:
@@ -333,28 +338,11 @@ class QwenSpecExtendTargetBackend:
 
     @staticmethod
     def _paths_from_tree(tree_input_ids: Sequence[int], parent_indices: Sequence[int]) -> List[List[int]]:
-        paths: List[List[int]] = []
-        for idx in range(len(tree_input_ids)):
-            reverse_path = []
-            current = idx
-            seen = set()
-            while current >= 0 and current not in seen:
-                seen.add(current)
-                reverse_path.append(int(tree_input_ids[current]))
-                current = int(parent_indices[current])
-            paths.append(list(reversed(reverse_path)))
-        return paths
+        return paths_from_tree(tree_input_ids, parent_indices)
 
     @staticmethod
     def _indices_for_path(node_idx: int, parent_indices: Sequence[int]) -> List[int]:
-        indices = []
-        current = node_idx
-        seen = set()
-        while current >= 0 and current not in seen:
-            seen.add(current)
-            indices.append(current)
-            current = int(parent_indices[current])
-        return list(reversed(indices))
+        return indices_for_path(node_idx, parent_indices)
 
     @torch.inference_mode()
     def _last_query_attention_scores_cached(self, token_ids: Sequence[int]) -> List[float]:
