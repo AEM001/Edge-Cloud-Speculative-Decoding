@@ -273,7 +273,7 @@ def warmup(draft_backend: QwenSpecExtendDraftBackend, cloud_client, prompt: str)
         nodes=4,
         threshold=0.7,
         max_depth=2,
-        retrieval_token_indices=None,
+        retrieval_chunk_ids=None,
     )
     from core.protocol import SpecExtendTreeRequest
 

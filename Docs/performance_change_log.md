@@ -309,3 +309,57 @@ given that:
 - Validation so far is code-level only: `py_compile` and
   `tests/test_specextend_core.py` pass. No performance run has been executed for
   this cleanup yet.
+
+## 2026-06-05 — Chunk-Level Working Cache Selection
+
+### Motivation
+`SpecExtendDraftKVCache` previously accepted a flat list of token indices
+(`retrieval_token_indices`) from the edge client to rebuild the working KV cache.
+This was different from the original sparse-kv reference, which manages chunks
+internally and only accepts chunk IDs from the caller. Moving to chunk-level
+selection makes the draft cache manager responsible for chunk bookkeeping,
+keeps the chunk→token expansion logic in one place, and aligns the draft
+backend with the sparse-kv architecture.
+
+### Changes made
+
+- **`SpecExtendDraftKVCache`**: added internal chunk bookkeeping fields
+  (`chunk_size`, `chunks`, `selected_chunks`).
+
+- **Replaced `select_working_tokens(indices)` with `select_chunks(chunk_ids)`**.
+  The method now accepts a list of chunk IDs, looks up the corresponding
+  `RetrievalChunk` objects, and expands them into `working_token_indices` via
+  `_update_working_indices_from_chunks`. If `chunk_ids` is `None`, all chunks
+  are selected (full cache).
+
+- **Added `_update_chunks_from_full()`**: rebuilds the chunk list from
+  `full_token_ids` after every `append_prefix`, returning `True` when new
+  chunks were created.
+
+- **Added `_refresh_selected_tail()`**: keeps the last selected chunk in sync
+  with the latest full-cache tail, matching sparse-kv's behavior.
+
+- **`append_prefix` now maintains chunk bookkeeping automatically**.
+  On first call it selects all chunks; on subsequent calls it appends newly
+  created tail chunks to the selected set and refreshes the tail chunk end
+  position before rebuilding the working cache.
+
+- **Updated `build_draft_tree` / `build_draft_candidate` signatures** in
+  `QwenSpecExtendDraftBackend` and the `SpecExtendDraftBackend` Protocol:
+  parameter renamed from `retrieval_token_indices` to `retrieval_chunk_ids`.
+
+- **Updated `specextend_edge_client.py`**: the client now passes
+  `self.retrieval.selected_chunk_ids()` instead of
+  `self.retrieval.selected_token_indices()` to the draft backend.
+
+- **`position_ids` semantics are unchanged**: `context()` still returns
+  `working_token_indices` (original global positions) as `position_ids`,
+  preserving the correct RoPE encoding that distinguishes this backend from
+  sparse-kv's local-position approach.
+
+- **Also fixed `quick_test.py` warmup call** to use the new parameter name.
+
+### Validation so far
+
+Code-level checks pass (`py_compile`, existing tests). No performance benchmark
+has been run yet for this refactor.

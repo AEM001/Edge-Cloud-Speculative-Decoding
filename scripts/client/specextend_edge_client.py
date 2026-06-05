@@ -100,7 +100,7 @@ class SpecExtendEdgeClient:
                     and metrics.total_rounds % self.retrieve_every_n_steps == 0
                     and metrics.total_rounds > 0
                 )
-                retrieval_indices = self.retrieval.selected_token_indices()
+                retrieval_chunk_ids = self.retrieval.selected_chunk_ids()
                 pipeline_hit = False
                 pipeline_built = 0
                 pipeline_wait_ms = 0.0
@@ -116,7 +116,7 @@ class SpecExtendEdgeClient:
                         nodes=self.nodes,
                         threshold=self.threshold,
                         max_depth=self.max_depth,
-                        retrieval_token_indices=retrieval_indices,
+                        retrieval_chunk_ids=retrieval_chunk_ids,
                     )
                 prefetched = None
 
@@ -140,7 +140,7 @@ class SpecExtendEdgeClient:
                         verify_future=verify_future,
                         base_prefix=verified_prefix,
                         draft_result=draft_result,
-                        retrieval_indices=retrieval_indices,
+                        retrieval_chunk_ids=retrieval_chunk_ids,
                     )
                     wait_start = time.perf_counter()
                     response = verify_future.result()
@@ -240,7 +240,7 @@ class SpecExtendEdgeClient:
         verify_future,
         base_prefix: List[int],
         draft_result: DraftTreeResult,
-        retrieval_indices: List[int],
+        retrieval_chunk_ids: List[int],
     ):
         """Build pipeline candidates synchronously while verify is in-flight.
 
@@ -257,7 +257,7 @@ class SpecExtendEdgeClient:
                     verified_prefix=candidate_prefix,
                     nodes=self.nodes,
                     max_depth=self.max_depth,
-                    retrieval_token_indices=retrieval_indices,
+                    retrieval_chunk_ids=retrieval_chunk_ids,
                 )
             except Exception:
                 candidate = None

@@ -36,7 +36,7 @@ class SpecExtendDraftBackend(Protocol):
         nodes: int,
         threshold: float,
         max_depth: int,
-        retrieval_token_indices: Optional[List[int]] = None,
+        retrieval_chunk_ids: Optional[List[int]] = None,
     ) -> DraftTreeResult:
         """Grow a SpecExtend draft tree for the current verified prefix."""
 

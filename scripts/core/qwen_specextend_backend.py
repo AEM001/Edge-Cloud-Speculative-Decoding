@@ -21,7 +21,7 @@ from core.protocol import SpecExtendTreeRequest, SpecExtendTreeResponse
 from core.modeling_qwen3_kv import Qwen3ForCausalLM
 from core.qwen_kv_cache import KVCache
 from core.specextend_backend import DraftTree, DraftTreeResult, SpecExtendDraftBackend
-from core.specextend_retrieval import build_chunks, select_chunks_by_attention
+from core.specextend_retrieval import RetrievalChunk, build_chunks, select_chunks_by_attention
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +69,9 @@ class SpecExtendDraftKVCache:
         self.last_prefix_logits: Optional[torch.Tensor] = None
         self.full_draft_kv = self._allocate_tensor_kv(max_length)
         self.working_cache = self._allocate_kv_cache(max_length)
+        self.chunk_size: int = 32
+        self.chunks: List[RetrievalChunk] = []
+        self.selected_chunks: List[RetrievalChunk] = []
 
     @property
     def total_seq_len(self) -> int:
@@ -118,31 +121,50 @@ class SpecExtendDraftKVCache:
         self.full_token_ids = []
         self.working_token_indices = []
         self.last_prefix_logits = None
+        self.chunks = []
+        self.selected_chunks = []
         for key, value in self.full_draft_kv:
             key.zero_()
             value.zero_()
         self.working_cache = self._allocate_kv_cache(self.max_length)
 
-    def select_working_tokens(self, indices: Optional[Iterable[int]]) -> None:
-        if indices is None:
-            new_chunk_indices = sorted(range(len(self.full_token_ids)))
+    def select_chunks(self, chunk_ids: Optional[List[int]] = None) -> None:
+        """Select working cache by chunk IDs, mirroring sparse-kv's chunk-level retrieval."""
+        if chunk_ids is None:
+            self.selected_chunks = list(self.chunks)
         else:
-            new_chunk_indices = sorted(
-                idx for idx in indices if 0 <= idx < len(self.full_token_ids)
-            )
-            if not new_chunk_indices:
-                new_chunk_indices = sorted(range(len(self.full_token_ids)))
+            wanted = set(chunk_ids)
+            self.selected_chunks = [chunk for chunk in self.chunks if chunk.chunk_id in wanted]
+            if not self.selected_chunks:
+                self.selected_chunks = list(self.chunks)
 
-        old_chunk_indices = [
-            idx for idx in self.working_token_indices
-            if idx < len(self.full_token_ids)
-        ]
-        if new_chunk_indices == old_chunk_indices:
-            self.working_token_indices = new_chunk_indices
-            return
-
-        self.working_token_indices = new_chunk_indices
+        self._update_working_indices_from_chunks()
         self._rebuild_working_cache()
+
+    def _update_working_indices_from_chunks(self) -> None:
+        """Expand selected_chunks into working_token_indices (sorted, unique)."""
+        indices = []
+        for chunk in self.selected_chunks:
+            indices.extend(range(chunk.start, chunk.end))
+        self.working_token_indices = sorted(set(indices))
+
+    def _update_chunks_from_full(self) -> bool:
+        """Rebuild chunk list from full_token_ids. Return True if new chunks were added."""
+        old_count = len(self.chunks)
+        self.chunks = build_chunks(len(self.full_token_ids), self.chunk_size)
+        return len(self.chunks) > old_count
+
+    def _refresh_selected_tail(self) -> None:
+        """Keep the selected tail chunk in sync with the latest full cache, matching sparse-kv."""
+        if not self.chunks or not self.selected_chunks:
+            return
+        selected_ids = {chunk.chunk_id for chunk in self.selected_chunks}
+        last_chunk = self.chunks[-1]
+        if last_chunk.chunk_id in selected_ids:
+            self.selected_chunks = [
+                last_chunk if chunk.chunk_id == last_chunk.chunk_id else chunk
+                for chunk in self.selected_chunks
+            ]
 
     def append_missing_prefix(self, token_ids: Sequence[int]) -> int:
         token_ids = list(token_ids)
@@ -154,7 +176,7 @@ class SpecExtendDraftKVCache:
 
         new_tokens = list(token_ids[common:])
         if not self.working_token_indices:
-            self.select_working_tokens(None)
+            self.select_chunks(None)
         return len(new_tokens)
 
     @torch.inference_mode()
@@ -187,7 +209,24 @@ class SpecExtendDraftKVCache:
         self.last_prefix_logits = outputs.logits[:, -1, :]
         self._copy_working_tail_to_full(working_start=working_start, dest_start=start, length=len(new_tokens))
         self.full_token_ids.extend(new_tokens)
-        self.working_token_indices.extend(range(start, start + len(new_tokens)))
+
+        # Maintain chunk bookkeeping (mirrors sparse-kv's update_chunks)
+        is_new_chunks = self._update_chunks_from_full()
+        if not self.selected_chunks:
+            # First call: select all chunks
+            self.selected_chunks = list(self.chunks)
+            self._update_working_indices_from_chunks()
+            self._rebuild_working_cache()
+        else:
+            if is_new_chunks:
+                selected_ids = {chunk.chunk_id for chunk in self.selected_chunks}
+                last_chunk = self.chunks[-1]
+                if last_chunk.chunk_id not in selected_ids:
+                    self.selected_chunks.append(last_chunk)
+            self._refresh_selected_tail()
+            self._update_working_indices_from_chunks()
+            self._rebuild_working_cache()
+
         return len(new_tokens)
 
     def _rebuild_working_cache_all(self) -> None:
@@ -427,7 +466,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         nodes: int,
         threshold: float,
         max_depth: int,
-        retrieval_token_indices: Optional[List[int]] = None,
+        retrieval_chunk_ids: Optional[List[int]] = None,
     ) -> DraftTreeResult:
         start = time.perf_counter()
         if correction_token_id is not None and (
@@ -435,7 +474,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         ):
             verified_prefix = list(verified_prefix) + [correction_token_id]
 
-        self.cache.select_working_tokens(retrieval_token_indices)
+        self.cache.select_chunks(retrieval_chunk_ids)
         appended = self.cache.append_prefix(self.runtime, verified_prefix)
         draft_context = self.cache.context()
 
@@ -537,7 +576,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         verified_prefix: List[int],
         nodes: int,
         max_depth: int,
-        retrieval_token_indices: Optional[List[int]] = None,
+        retrieval_chunk_ids: Optional[List[int]] = None,
     ) -> "DraftTreeResult":
         """Build a pipeline-prefetch draft without committing to the main cache.
 
@@ -548,6 +587,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         full_token_ids.
         """
         start = time.perf_counter()
+        self.cache.select_chunks(retrieval_chunk_ids)
         full_ids = list(self.cache.full_token_ids)
         last_prefix_logits = self.cache.last_prefix_logits
         if last_prefix_logits is None:
