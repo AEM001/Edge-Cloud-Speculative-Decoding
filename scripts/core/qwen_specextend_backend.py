@@ -478,7 +478,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         appended = self.cache.append_prefix(self.runtime, verified_prefix)
         draft_context = self.cache.context()
 
-        tree = self._grow_tree(
+        tree = self._grow_linear_tree(
             draft_context,
             nodes=max(1, nodes),
             max_depth=max(1, max_depth),
@@ -489,27 +489,6 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             draft_time_ms=(time.perf_counter() - start) * 1000,
             appended_kv_tokens=appended,
         )
-
-    def _grow_tree(
-        self,
-        prefix: DraftContext,
-        nodes: int,
-        max_depth: int,
-        position_start: int,
-    ) -> DraftTree:
-        tree_mode = os.getenv("DRAFT_TREE_MODE", "linear").strip().lower()
-        if tree_mode != "linear":
-            raise NotImplementedError(
-                "Branching draft trees must be implemented on top of the explicit "
-                "SpecExtend working KV cache before enabling DRAFT_TREE_MODE=branching."
-            )
-        else:
-            return self._grow_linear_tree(
-                prefix,
-                nodes=nodes,
-                max_depth=max_depth,
-                position_start=position_start,
-            )
 
     def _grow_linear_tree(
         self,
@@ -637,15 +616,6 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         )
 
     @staticmethod
-    def _find_parent_index(records: List[Dict[str, object]], parent_path: List[int]) -> int:
-        if not parent_path:
-            return -1
-        for idx in range(len(records) - 1, -1, -1):
-            if records[idx]["path"] == parent_path:
-                return idx
-        return -1
-
-    @staticmethod
     def _tree_attention_mask(parent_indices: Sequence[int]) -> List[List[int]]:
         size = len(parent_indices)
         mask = [[0 for _ in range(size)] for _ in range(size)]
@@ -685,35 +655,11 @@ class QwenSpecExtendTargetBackend:
     @torch.inference_mode()
     def verify_tree(self, request: SpecExtendTreeRequest) -> SpecExtendTreeResponse:
         start = time.perf_counter()
-        paths = self._paths_from_tree(request.tree_input_ids, request.parent_indices)
-
-        accepted_indices: List[int] = []
-        correction_token_id: Optional[int] = None
-        best_accept_len = -1
-        max_path_len = max((len(path) for path in paths), default=0)
-
-        if self._is_linear_tree(request.parent_indices):
-            accepted_len, correction_token_id = self._verify_linear_path(
-                request.prefix_ids,
-                list(request.tree_input_ids),
-            )
-            best_accept_len = accepted_len
-            accepted_indices = list(range(accepted_len))
-        elif max_path_len > 0:
-            target_tokens = self.runtime.generate_token_ids_cached(request.prefix_ids, max_path_len + 1)
-            for node_idx, path in enumerate(paths):
-                accepted_len, correction = self._verify_path_against_tokens(path, target_tokens)
-                if accepted_len > best_accept_len:
-                    best_accept_len = accepted_len
-                    accepted_indices = self._indices_for_path(node_idx, request.parent_indices)
-                    accepted_indices = accepted_indices[:accepted_len]
-                    correction_token_id = correction
-        else:
-            target_tokens = self.runtime.generate_token_ids_cached(request.prefix_ids, 1)
-            correction_token_id = target_tokens[0] if target_tokens else None
-
-        if best_accept_len < 0:
-            best_accept_len = 0
+        accepted_len, correction_token_id = self._verify_linear_path(
+            request.prefix_ids,
+            list(request.tree_input_ids),
+        )
+        accepted_indices = list(range(accepted_len))
 
         target_attn_scores = None
         selected_chunk_ids = None
@@ -781,10 +727,6 @@ class QwenSpecExtendTargetBackend:
                 break
         return generated
 
-    @staticmethod
-    def _is_linear_tree(parent_indices: Sequence[int]) -> bool:
-        return all(parent_idx == idx - 1 for idx, parent_idx in enumerate(parent_indices))
-
     @torch.inference_mode()
     def _verify_linear_path(self, prefix_ids: List[int], path: List[int]) -> tuple[int, Optional[int]]:
         next_logits = self.runtime.ensure_cache(prefix_ids)
@@ -806,47 +748,6 @@ class QwenSpecExtendTargetBackend:
         if accepted == len(path):
             correction = int(torch.argmax(path_logits[:, -1, :], dim=-1).item())
         return accepted, correction
-
-    @staticmethod
-    def _verify_path_against_tokens(path: List[int], target_tokens: List[int]) -> tuple[int, Optional[int]]:
-        accepted = 0
-        correction = None
-        for idx, draft_token in enumerate(path):
-            if idx >= len(target_tokens):
-                break
-            target_token = int(target_tokens[idx])
-            if target_token != draft_token:
-                correction = target_token
-                break
-            accepted += 1
-        if accepted == len(path) and accepted < len(target_tokens):
-            correction = int(target_tokens[accepted])
-        return accepted, correction
-
-    @staticmethod
-    def _paths_from_tree(tree_input_ids: Sequence[int], parent_indices: Sequence[int]) -> List[List[int]]:
-        paths: List[List[int]] = []
-        for idx in range(len(tree_input_ids)):
-            reverse_path = []
-            current = idx
-            seen = set()
-            while current >= 0 and current not in seen:
-                seen.add(current)
-                reverse_path.append(int(tree_input_ids[current]))
-                current = int(parent_indices[current])
-            paths.append(list(reversed(reverse_path)))
-        return paths
-
-    @staticmethod
-    def _indices_for_path(node_idx: int, parent_indices: Sequence[int]) -> List[int]:
-        indices = []
-        current = node_idx
-        seen = set()
-        while current >= 0 and current not in seen:
-            seen.add(current)
-            indices.append(current)
-            current = int(parent_indices[current])
-        return list(reversed(indices))
 
     @torch.inference_mode()
     def _last_query_attention_scores_cached(self, token_ids: Sequence[int]) -> List[float]:

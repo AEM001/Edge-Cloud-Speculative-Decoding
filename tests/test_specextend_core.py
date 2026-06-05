@@ -68,17 +68,6 @@ class SpecExtendCoreTests(unittest.TestCase):
         self.assertEqual(mask[2], [1, 1, 1, 0])
         self.assertEqual(mask[3], [1, 0, 0, 1])
 
-    def test_target_tree_path_helpers(self):
-        tree_input_ids = [10, 11, 12, 13]
-        parent_indices = [-1, 0, 1, 0]
-
-        paths = QwenSpecExtendTargetBackend._paths_from_tree(tree_input_ids, parent_indices)
-        indices = QwenSpecExtendTargetBackend._indices_for_path(2, parent_indices)
-
-        self.assertEqual(paths[2], [10, 11, 12])
-        self.assertEqual(paths[3], [10, 13])
-        self.assertEqual(indices, [0, 1, 2])
-
 
 if __name__ == "__main__":
     unittest.main()

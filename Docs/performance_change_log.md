@@ -363,3 +363,51 @@ backend with the sparse-kv architecture.
 
 Code-level checks pass (`py_compile`, existing tests). No performance benchmark
 has been run yet for this refactor.
+
+## 2026-06-05 23:42 — Remove Branching Tree Decoding, Keep Linear-Only Draft
+
+### Background
+The draft backend (`QwenSpecExtendDraftBackend`) already only supported linear
+speculative decoding in practice: `_grow_tree` checked `DRAFT_TREE_MODE` and
+raised `NotImplementedError` for any non-linear mode. However, the codebase
+still carried a large amount of branching-tree scaffolding, helper methods,
+and experiment scripts that were never exercised and cluttered the linear path.
+
+### Changes made
+
+- **`scripts/experiments/proactive_tree.py` — deleted.**
+  Pure tree-branch-planning logic; never imported or run by the linear pipeline.
+
+- **`scripts/core/qwen_specextend_backend.py` — cleaned up draft backend.**
+  - `build_draft_tree` now calls `_grow_linear_tree` directly; removed the
+    `_grow_tree` wrapper and the `DRAFT_TREE_MODE` environment variable check.
+  - Removed unused `_find_parent_index` static method.
+
+- **`scripts/core/qwen_specextend_backend.py` — cleaned up target verifier.**
+  - `verify_tree` now unconditionally calls `_verify_linear_path`; removed the
+    `_is_linear_tree` branch and the full branching-tree verification fallback.
+  - Removed branching-tree helper methods:
+    - `_is_linear_tree`
+    - `_paths_from_tree`
+    - `_indices_for_path`
+    - `_verify_path_against_tokens`
+
+- **`tests/test_specextend_core.py` — removed branching-tree tests.**
+  - Deleted `test_target_tree_path_helpers` (tested `_paths_from_tree` and
+    `_indices_for_path`, both now removed).
+  - Kept `test_tree_attention_mask_contains_ancestors`; linear draft still
+    produces a degenerate tree (`parent_indices = [-1, 0, 1, …]`) and the
+    `_tree_attention_mask` helper remains valid.
+
+- **Cleaned orphaned `__pycache__/*.pyc` files** for the deleted experiment
+  scripts (`proactive_tree`, `tree_async_client`).
+
+### What is intentionally preserved
+
+- `DraftTree`, `DraftTreeResult`, `SpecExtendTreeRequest/Response`, and the
+  `_tree_attention_mask` helper are kept because the linear path is represented
+  as a degenerate 1-branch tree in the SpecExtend wire protocol; removing these
+  would require redesigning the protocol itself.
+- `modeling_qwen3_kv.py` still supports a `tree_mask` field because the linear
+  draft runs through the same batch-attention path that uses tree masks; this is
+  not branching-specific.
