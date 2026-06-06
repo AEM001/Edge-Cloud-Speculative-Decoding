@@ -22,6 +22,7 @@ from core.modeling_qwen3_kv import Qwen3ForCausalLM
 from core.qwen_kv_cache import KVCache
 from core.specextend_backend import DraftTree, DraftTreeResult, SpecExtendDraftBackend
 from core.specextend_retrieval import RetrievalChunk, build_chunks, select_chunks_by_attention
+from core.tiered_kv_store import KVLoadMetrics, KVTier, TieredKVStore
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,8 @@ class SpecExtendDraftKVCache:
         self.chunk_size: int = 32
         self.chunks: List[RetrievalChunk] = []
         self.selected_chunks: List[RetrievalChunk] = []
+        self.tiered_store = TieredKVStore(self.full_draft_kv, chunk_size=self.chunk_size)
+        self.last_load_metrics: Optional[KVLoadMetrics] = None
 
     @property
     def total_seq_len(self) -> int:
@@ -123,6 +126,8 @@ class SpecExtendDraftKVCache:
         self.last_prefix_logits = None
         self.chunks = []
         self.selected_chunks = []
+        self.last_load_metrics = None
+        self.tiered_store.reset()
         for key, value in self.full_draft_kv:
             key.zero_()
             value.zero_()
@@ -250,20 +255,53 @@ class SpecExtendDraftKVCache:
 
     def _rebuild_working_cache(self) -> None:
         n = len(self.working_token_indices)
-        for layer_idx, (full_key, full_value) in enumerate(self.full_draft_kv):
+        for layer_idx in range(len(self.full_draft_kv)):
             kv_k = self.working_cache[layer_idx][0]
             kv_v = self.working_cache[layer_idx][1]
-            if n == 0:
-                kv_k.current_length.fill_(0)
-                kv_v.current_length.fill_(0)
-                continue
-            index = torch.tensor(self.working_token_indices, dtype=torch.long, device=full_key.device)
-            key_slice = full_key.index_select(dim=2, index=index)
-            value_slice = full_value.index_select(dim=2, index=index)
-            kv_k.data[:, :, :n, :].copy_(key_slice, non_blocking=True)
-            kv_v.data[:, :, :n, :].copy_(value_slice, non_blocking=True)
-            kv_k.current_length.fill_(n)
-            kv_v.current_length.fill_(n)
+            kv_k.current_length.fill_(0)
+            kv_v.current_length.fill_(0)
+        if n == 0:
+            self.last_load_metrics = KVLoadMetrics()
+            return
+
+        all_gpu = all(
+            self.tiered_store.tier_of(chunk.chunk_id) == KVTier.GPU
+            for chunk in self.selected_chunks
+        )
+        if all_gpu:
+            metrics = KVLoadMetrics()
+            t0 = time.perf_counter()
+            for layer_idx, (full_key, full_value) in enumerate(self.full_draft_kv):
+                kv_k = self.working_cache[layer_idx][0]
+                kv_v = self.working_cache[layer_idx][1]
+                index = torch.tensor(
+                    self.working_token_indices, dtype=torch.long, device=full_key.device
+                )
+                key_slice = full_key.index_select(dim=2, index=index)
+                value_slice = full_value.index_select(dim=2, index=index)
+                kv_k.data[:, :, :n, :].copy_(key_slice, non_blocking=True)
+                kv_v.data[:, :, :n, :].copy_(value_slice, non_blocking=True)
+                kv_k.current_length.fill_(n)
+                kv_v.current_length.fill_(n)
+            torch.cuda.synchronize()
+            metrics.gpu_chunks = len(self.selected_chunks)
+            metrics.gpu_load_ms = (time.perf_counter() - t0) * 1000
+            self.last_load_metrics = metrics
+        else:
+            working_key_list = [self.working_cache[i][0].data for i in range(len(self.full_draft_kv))]
+            working_val_list = [self.working_cache[i][1].data for i in range(len(self.full_draft_kv))]
+            chunk_ids = [chunk.chunk_id for chunk in self.selected_chunks]
+            metrics = self.tiered_store.load_chunks(
+                chunk_ids=chunk_ids,
+                total_seq_len=self.total_seq_len,
+                token_indices=self.working_token_indices,
+                working_key_list=working_key_list,
+                working_val_list=working_val_list,
+            )
+            for layer_idx in range(len(self.full_draft_kv)):
+                self.working_cache[layer_idx][0].current_length.fill_(n)
+                self.working_cache[layer_idx][1].current_length.fill_(n)
+            self.last_load_metrics = metrics
 
     def context(self) -> DraftContext:
         return DraftContext(
@@ -271,6 +309,18 @@ class SpecExtendDraftKVCache:
             position_ids=list(self.working_token_indices),
             past_key_values=self.working_cache,
         )
+
+    def evict_to_cpu(self, chunk_id: int) -> None:
+        """Evict a chunk's KV data to CPU pinned memory (tier = CPU)."""
+        self.tiered_store.evict_to_cpu(chunk_id, self.total_seq_len)
+
+    def evict_to_ssd(self, chunk_id: int) -> None:
+        """Serialise a chunk's KV data to SSD (tier = SSD)."""
+        self.tiered_store.evict_to_ssd(chunk_id, self.total_seq_len)
+
+    def chunk_tier_summary(self) -> Dict[str, int]:
+        """Return {tier_name: chunk_count} across all known chunks."""
+        return self.tiered_store.tier_summary(len(self.chunks))
 
     def _working_cache_seq_len(self) -> int:
         """Current sequence length of working_cache (KVCache)."""
@@ -488,6 +538,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             tree=tree,
             draft_time_ms=(time.perf_counter() - start) * 1000,
             appended_kv_tokens=appended,
+            kv_load_metrics=self.cache.last_load_metrics,
         )
 
     def _grow_linear_tree(
@@ -691,7 +742,7 @@ class QwenSpecExtendTargetBackend:
         elapsed_ms = (time.perf_counter() - start) * 1000
         return SpecExtendTreeResponse(
             request_id=request.request_id,
-            accepted_len=max(0, best_accept_len),
+            accepted_len=max(0, accepted_len),
             correction_token_id=correction_token_id,
             accepted_tree_indices=accepted_indices,
             server_verify_time_ms=elapsed_ms,

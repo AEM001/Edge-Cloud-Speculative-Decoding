@@ -7,8 +7,8 @@ edge-cloud glue.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import List, Optional, Protocol
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, List, Optional, Protocol
 
 
 @dataclass
@@ -24,6 +24,7 @@ class DraftTreeResult:
     tree: DraftTree
     draft_time_ms: float
     appended_kv_tokens: int
+    kv_load_metrics: Optional[Any] = field(default=None)
 
 
 class SpecExtendDraftBackend(Protocol):

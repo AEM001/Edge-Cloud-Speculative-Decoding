@@ -411,3 +411,42 @@ and experiment scripts that were never exercised and cluttered the linear path.
 - `modeling_qwen3_kv.py` still supports a `tree_mask` field because the linear
   draft runs through the same batch-attention path that uses tree masks; this is
   not branching-specific.
+
+## 2026-06-05 23:57 — Tiered KV Store Abstraction (Research Infrastructure)
+
+### Motivation
+
+研究"稀疏 KV 选取收益 vs. 跨层级加载延迟 overhead"的 trade-off。当前所有 KV
+均驻留在 GPU HBM，无法量化 CPU/SSD 加载对端到端延迟的影响。
+
+### Changes made
+
+- **新增 `scripts/core/tiered_kv_store.py`**
+  - `KVTier` enum: `GPU` / `CPU` / `SSD`
+  - `KVLoadMetrics` dataclass: 每次 working cache rebuild 的精确延迟分解
+    (`gpu/cpu/ssd_chunks`, `gpu/cpu/ssd_load_ms`, `total_load_ms`, `.as_dict()`)
+  - `TieredKVStore`: 管理每个 chunk 的层级标签；`evict_to_cpu` 将 chunk 数据
+    搬至 CPU pinned memory，`evict_to_ssd` 序列化至 SSD；`load_chunks` 在
+    `_rebuild_working_cache` 热路径上按层级搬运数据并计时（含 `cuda.synchronize()`）
+
+- **修改 `scripts/core/qwen_specextend_backend.py`**
+  - `SpecExtendDraftKVCache.__init__` 构造 `TieredKVStore`，新增
+    `last_load_metrics: Optional[KVLoadMetrics]`
+  - `_rebuild_working_cache` 改为双路：全 GPU chunk 走原 `index_select + copy_`
+    fast path 并整体计时；混合层级路由至 `tiered_store.load_chunks()` 逐 chunk
+    计时
+  - 新增公开接口 `evict_to_cpu(chunk_id)` / `evict_to_ssd(chunk_id)` /
+    `chunk_tier_summary()`
+  - `reset()` 同步调用 `tiered_store.reset()` 清理 SSD 文件和层级状态
+  - `build_draft_tree` 返回的 `DraftTreeResult` 现附带 `kv_load_metrics`
+
+- **修改 `scripts/core/specextend_backend.py`**
+  - `DraftTreeResult` 新增 `kv_load_metrics: Optional[Any] = None`（向后兼容）
+
+- **Bug 修复**: `verify_tree` 中 `best_accept_len`（未定义变量）改为 `accepted_len`
+
+### 设计原则
+
+不改变推理引擎，不引入 paged attention。所有 KV 数据结构和 attention 计算不变；
+tiered store 仅在 `_rebuild_working_cache` 的数据搬运层插入一个可控延迟的测量点。
+代码无性能影响（全 GPU 时走原 fast path）。
