@@ -446,3 +446,14 @@ draft working KV selection:
 
 Validation: `py_compile` passes and `tests/test_specextend_core.py` reports
 5 tests OK.
+
+## 2026-06-07 22:13
+Summary
+Bug fix (the crash)
+Root cause: evict_to_cpu() snapshots the tail chunk when it has, say, 17 tokens. The tail chunk is still growing (it's the last chunk, _refresh_selected_tail updates it). When load_chunk_to_gpu is called later, it recomputes _chunk_slice(chunk_id, current_total_seq_len) which now returns 19 tokens, then tries to copy into a [..., 19, ...] target slice from a CPU tensor of shape [..., 17, ...] → size mismatch at dim 2.
+
+Fix (across tiered_kv_store.py and qwen_specextend_backend.py):
+
+load_chunk_to_gpu now uses cpu_k.shape[2] (the stored size) as length for CPU/SSD tiers, and returns it as a 4th value actual_len.
+load_chunks accumulates target_pos from actual_len and stores it in metrics.tokens_written.
+_rebuild_working_cache uses metrics.tokens_written (not n) to set current_length, and clips working_token_indices to match if they diverge.

@@ -76,3 +76,5 @@ models/hf.txt
 data/pg19
 # macOS
 .DS_Store
+
+scripts/experiments/outputs_quick

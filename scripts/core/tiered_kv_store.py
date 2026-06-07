@@ -58,6 +58,8 @@ class KVLoadMetrics:
     cpu_load_ms: float = 0.0
     ssd_load_ms: float = 0.0
 
+    tokens_written: int = 0
+
     @property
     def total_load_ms(self) -> float:
         return self.gpu_load_ms + self.cpu_load_ms + self.ssd_load_ms
@@ -185,12 +187,14 @@ class TieredKVStore:
         target_key_list: List[torch.Tensor],
         target_val_list: List[torch.Tensor],
         target_start: int,
-    ) -> Tuple[float, float, float]:
+    ) -> Tuple[float, float, float, int]:
         """Ensure chunk data is accessible on GPU and copy into target buffers.
 
         ``target_key_list[layer_idx]`` and ``target_val_list[layer_idx]`` are
         the destination slices (pre-sized by the caller).  Returns
-        ``(gpu_ms, cpu_ms, ssd_ms)`` with exactly one non-zero entry.
+        ``(gpu_ms, cpu_ms, ssd_ms, actual_len)`` where ``actual_len`` is the
+        number of tokens actually written (may be less than the current chunk
+        slice for CPU/SSD chunks evicted when the tail chunk was smaller).
 
         For GPU-tier chunks the data is already in ``full_draft_kv``; this
         method still copies it into the target buffer for uniform downstream
@@ -217,11 +221,14 @@ class TieredKVStore:
             assert meta.cpu_data is not None, f"chunk {chunk_id} marked CPU but cpu_data is None"
             t0 = time.perf_counter()
             for layer_idx, (cpu_k, cpu_v) in enumerate(meta.cpu_data):
+                # Use actual stored size: the chunk may have grown since eviction (tail chunk).
+                stored_len = cpu_k.shape[2]
                 gpu_k = cpu_k.cuda(non_blocking=True)
                 gpu_v = cpu_v.cuda(non_blocking=True)
                 torch.cuda.synchronize()
-                target_key_list[layer_idx][:, :, target_start:target_start + length, :].copy_(gpu_k)
-                target_val_list[layer_idx][:, :, target_start:target_start + length, :].copy_(gpu_v)
+                target_key_list[layer_idx][:, :, target_start:target_start + stored_len, :].copy_(gpu_k)
+                target_val_list[layer_idx][:, :, target_start:target_start + stored_len, :].copy_(gpu_v)
+            length = stored_len
             cpu_ms = (time.perf_counter() - t0) * 1000
 
         elif meta.tier == KVTier.SSD:
@@ -233,14 +240,17 @@ class TieredKVStore:
                 meta.ssd_path, map_location="cpu", weights_only=True
             )
             for layer_idx, (cpu_k, cpu_v) in enumerate(layer_data):
+                # Use actual stored size: the chunk may have grown since eviction (tail chunk).
+                stored_len = cpu_k.shape[2]
                 gpu_k = cpu_k.cuda(non_blocking=True)
                 gpu_v = cpu_v.cuda(non_blocking=True)
                 torch.cuda.synchronize()
-                target_key_list[layer_idx][:, :, target_start:target_start + length, :].copy_(gpu_k)
-                target_val_list[layer_idx][:, :, target_start:target_start + length, :].copy_(gpu_v)
+                target_key_list[layer_idx][:, :, target_start:target_start + stored_len, :].copy_(gpu_k)
+                target_val_list[layer_idx][:, :, target_start:target_start + stored_len, :].copy_(gpu_v)
+            length = stored_len
             ssd_ms = (time.perf_counter() - t0) * 1000
 
-        return gpu_ms, cpu_ms, ssd_ms
+        return gpu_ms, cpu_ms, ssd_ms, length
 
     def load_chunks(
         self,
@@ -262,9 +272,7 @@ class TieredKVStore:
 
         target_pos = 0
         for chunk_id in sorted(chunk_ids):
-            start, end = self._chunk_slice(chunk_id, total_seq_len)
-            length = end - start
-            gpu_ms, cpu_ms, ssd_ms = self.load_chunk_to_gpu(
+            gpu_ms, cpu_ms, ssd_ms, actual_len = self.load_chunk_to_gpu(
                 chunk_id,
                 total_seq_len,
                 working_key_list,
@@ -281,8 +289,9 @@ class TieredKVStore:
             else:
                 metrics.ssd_chunks += 1
                 metrics.ssd_load_ms += ssd_ms
-            target_pos += length
+            target_pos += actual_len
 
+        metrics.tokens_written = target_pos
         return metrics
 
     def tier_summary(self, total_chunks: int) -> Dict[str, int]:

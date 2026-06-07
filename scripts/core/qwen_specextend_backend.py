@@ -326,10 +326,13 @@ class SpecExtendDraftKVCache:
                 working_key_list=working_key_list,
                 working_val_list=working_val_list,
             )
+            actual_n = metrics.tokens_written if metrics.tokens_written > 0 else n
+            if actual_n != n:
+                self.working_token_indices = self.working_token_indices[:actual_n]
             for layer_idx in range(len(self.full_draft_kv)):
                 with torch.inference_mode(False):
-                    self.working_cache[layer_idx][0].current_length.fill_(n)
-                    self.working_cache[layer_idx][1].current_length.fill_(n)
+                    self.working_cache[layer_idx][0].current_length.fill_(actual_n)
+                    self.working_cache[layer_idx][1].current_length.fill_(actual_n)
             self.last_load_metrics = metrics
 
     def context(self) -> DraftContext:
