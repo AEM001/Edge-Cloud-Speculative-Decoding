@@ -473,3 +473,73 @@ Fix (across tiered_kv_store.py and qwen_specextend_backend.py):
 load_chunk_to_gpu now uses cpu_k.shape[2] (the stored size) as length for CPU/SSD tiers, and returns it as a 4th value actual_len.
 load_chunks accumulates target_pos from actual_len and stores it in metrics.tokens_written.
 _rebuild_working_cache uses metrics.tokens_written (not n) to set current_length, and clips working_token_indices to match if they diverge.
+
+## 2026-06-08 — Custom Qwen Cache, Attention Retrieval, and Tree Verify Fixes
+
+### Problems
+
+Real benchmark runs showed the current SpecExtend path was still much slower
+than direct generation:
+
+- direct endpoint: about 17.5-17.9s for 256 output tokens
+- branching SpecExtend before this fix: 126.1s for 256 output tokens
+- linear SpecExtend before this fix: 93.8s for 256 output tokens
+
+The root causes were separate but compounding:
+
+1. The local custom `Qwen3Model` did not create a `DynamicCache` when
+   `use_cache=True` and `past_key_values=None`, so target-side cached scoring
+   and retrieval-attention paths could leave `runtime._cache` as `None`.
+2. The verify server default requested `flash_attention_2`, but the local Qwen3
+   implementation only provides eager and SDPA layers. The instantiated layer
+   and causal-mask path could disagree, causing incorrect tree verification.
+3. SDPA mask elision could bypass the custom tree mask.
+4. Tree mask application used incorrect broadcast/indexing for 4D masks.
+5. Branching target verification had fallen back to sequential token generation
+   over paths instead of a single batched tree forward.
+6. Branching draft generation recomputed full paths one by one. It also lacked
+   `torch.inference_mode()`, so the batched tree attempt retained autograd graph
+   state and could OOM GPU 1.
+
+### Fixes
+
+- `modeling_qwen3_kv.py`
+  - Initialize `DynamicCache()` inside custom `Qwen3Model.forward()` on first
+    cached forward.
+  - Preserve `cache_position` and `position_embeddings` when SDPA falls back to
+    eager attention for multi-token attention output.
+  - Prevent SDPA causal-mask elision when a tree mask is active.
+  - Apply tree masks with explicit 4D broadcasting and support partial frontier
+    rows during batched tree expansion.
+
+- `qwen_specextend_backend.py`
+  - Normalize unsupported custom-model `flash_attention_2` requests to `sdpa`
+    before model construction; `/health` now reports the effective attention
+    implementation.
+  - Load custom Qwen config before construction and set `_attn_implementation`
+    before layers are instantiated.
+  - Replace path-by-path target tree verification with a batched tree forward
+    using the draft tree mask.
+  - Replace naive branching draft generation with layer-wise batched expansion
+    inspired by `~/code/long-ecsd/specextend/shared/opt_tree.py`.
+  - Wrap branching tree draft generation in `@torch.inference_mode()`.
+
+- Runtime defaults
+  - `quick_benchmark_config.json`: changed default tree depth from 8 to 4 for
+    the current 2x3090/Qwen3-1.7B setup.
+  - `quick.sh`: changed default `DRAFT_MAX_LEN` from 32768 to 4096 to avoid
+    excessive draft KV preallocation in the quick benchmark. Larger contexts can
+    still override this with `DRAFT_MAX_LEN`.
+
+### Validation
+
+- `py_compile` passed for the edited core/client/benchmark files.
+- Direct quick result: 256 tokens, 17,878 ms, 14.32 tok/s.
+- Fixed SpecExtend result: 258 tokens, 28,908 ms, 8.92 tok/s.
+- Fixed SpecExtend breakdown: `local_draft_ms=15,261`,
+  `server_model_ms=12,146`, 77 rounds, acceptance length 2.35.
+
+Conclusion: the minutes-scale regression is fixed, and target retrieval now
+returns real chunk selections, but this short 256-token setup still does not
+beat direct generation. Remaining bottlenecks are draft tree cost and acceptance
+rate.

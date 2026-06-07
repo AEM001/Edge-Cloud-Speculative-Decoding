@@ -12,6 +12,44 @@
 
 ---
 
+## 2026-06-08 — Tree Cache/Verify Fix Retest (pg19_2K, 256 input tokens)
+
+Environment: 2x RTX 3090, Qwen3-14B-AWQ target on GPU 0, Qwen3-1.7B draft on
+GPU 1, PG-19 prompt 1, 256 tokenizer input tokens, 256 output tokens, simulated
+"good" network. The verify server normalizes the local custom Qwen backend from
+requested `flash_attention_2` to effective `sdpa` because this repo does not
+implement a FlashAttention2 Qwen3 layer.
+
+| Method | Tokens | Total (ms) | Throughput (t/s) | Rounds | Acceptance |
+|--------|--------|------------|------------------|--------|------------|
+| direct | 256 | 17,878 | **14.32** | — | — |
+| specextend branching, broken baseline | 256 | 126,107 | 2.03 | 86 | 1.98 |
+| specextend linear, broken baseline | 256 | 93,751 | 2.73 | 198 | 0.29 |
+| specextend branching, fixed, nodes=32 depth=4 | 258 | 28,908 | 8.92 | 77 | 2.35 |
+
+Fixed SpecExtend timing breakdown:
+
+- `local_draft_ms`: 15,261 ms
+- `server_model_ms`: 12,146 ms
+- `kv_load_ms`: 16.7 ms
+- retrieval selected chunks reached `[0, 1, 2, 3, 4, 5, 6, 7]`
+
+Result: the minutes-scale regression is fixed (126.1s -> 28.9s), but direct
+generation is still faster on this short 256-token input. Remaining cost is
+mostly the number of verify rounds and Qwen3-1.7B draft tree construction.
+
+The fastest short-run sweep for 64 output tokens was `nodes=32, depth=4`:
+
+| Tree config | Tokens | Total (ms) | Throughput (t/s) | Rounds | Acceptance |
+|-------------|--------|------------|------------------|--------|------------|
+| nodes=16 depth=4 | 66 | 8,769 | 7.53 | 23 | 1.87 |
+| nodes=24 depth=4 | 64 | 8,364 | 7.65 | 23 | 1.78 |
+| nodes=32 depth=4 | 64 | 7,161 | **8.94** | 19 | 2.37 |
+| nodes=32 depth=5 | 64 | 10,501 | 6.09 | 22 | 1.91 |
+| nodes=32 depth=6 | 66 | 9,055 | 7.29 | 21 | 2.14 |
+
+---
+
 ## 2026-06-07 — 4K Input Benchmark (pg19_4K, 4096 input tokens)
 
 | Prompt | Method | Tokens | Total (ms) | Throughput (t/s) |

@@ -16,7 +16,7 @@ from typing import Dict, Iterable, List, Optional, Sequence
 
 import torch
 import torch.nn.functional as F
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
 from core.protocol import SpecExtendRequest, SpecExtendResponse
 from core.modeling_qwen3_kv import Qwen3ForCausalLM
@@ -420,6 +420,12 @@ class QwenModelRuntime:
         self.config = config
         self.model_path = str(path)
         self.device = torch.device(config.device)
+        self.attn_implementation = config.attn_implementation
+        if use_custom_kv_model and self.attn_implementation == "flash_attention_2":
+            # The local Qwen3 implementation does not define a FlashAttention2
+            # layer. Normalize to SDPA before model construction so mask
+            # generation and the instantiated attention layer agree.
+            self.attn_implementation = "sdpa"
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_path,
             trust_remote_code=config.trust_remote_code,
@@ -434,7 +440,6 @@ class QwenModelRuntime:
         # Fallback: check model config if tokenizer config didn't have it
         if not is_awq:
             try:
-                from transformers import AutoConfig
                 mcfg = AutoConfig.from_pretrained(self.model_path, trust_remote_code=config.trust_remote_code)
                 is_awq = bool(
                     getattr(mcfg, "quantization_config", None)
@@ -444,15 +449,20 @@ class QwenModelRuntime:
                 pass
 
         if use_custom_kv_model:
+            model_config = AutoConfig.from_pretrained(
+                self.model_path,
+                trust_remote_code=config.trust_remote_code,
+            )
+            model_config._attn_implementation = self.attn_implementation
             self.model = Qwen3ForCausalLM.from_pretrained(
                 self.model_path,
+                config=model_config,
                 torch_dtype=config.dtype,
             ).to(self.device)
-            self.model.config._attn_implementation = config.attn_implementation
         else:
             load_kwargs = {
                 "trust_remote_code": config.trust_remote_code,
-                "attn_implementation": config.attn_implementation,
+                "attn_implementation": self.attn_implementation,
             }
             if is_awq:
                 # AWQ models must use device_map="auto" and should not specify torch_dtype or call .to()
@@ -696,7 +706,175 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             position_ids=position_ids,
         )
 
+    @torch.inference_mode()
     def _grow_branching_tree(
+        self,
+        prefix: DraftContext,
+        nodes: int,
+        max_depth: int,
+        position_start: int,
+    ) -> DraftSequence:
+        if prefix.past_key_values is None:
+            raise ValueError("Branching draft generation requires the explicit SpecExtend working KV cache.")
+
+        records: List[Dict[str, object]] = []
+        frontier: List[int] = []
+        next_logits = self.cache.next_logits(self.runtime)
+        probs = torch.softmax(next_logits[0], dim=-1, dtype=torch.float32)
+        width = min(nodes, probs.numel())
+        values, token_ids = torch.topk(probs, k=width)
+        for token_id, logprob in zip(token_ids.tolist(), values.tolist()):
+            node_idx = len(records)
+            records.append(
+                {
+                    "token_id": int(token_id),
+                    "position_id": position_start,
+                    "parent_idx": -1,
+                    "score": float(logprob),
+                    "depth": 0,
+                }
+            )
+            frontier.append(node_idx)
+
+        length_snapshot = self._snapshot_working_lengths()
+        model_body = getattr(self.runtime.model, "model", None)
+        previous_tree_mask = getattr(model_body, "tree_mask", None) if model_body is not None else None
+        try:
+            for depth in range(max_depth):
+                if not frontier:
+                    break
+
+                input_ids = torch.tensor(
+                    [[int(records[idx]["token_id"]) for idx in frontier]],
+                    dtype=torch.long,
+                    device=self.runtime.device,
+                )
+                position_ids = torch.tensor(
+                    [[int(records[idx]["position_id"]) for idx in frontier]],
+                    dtype=torch.long,
+                    device=self.runtime.device,
+                )
+                if model_body is not None:
+                    model_body.tree_mask = torch.tensor(
+                        self._tree_attention_mask([int(record["parent_idx"]) for record in records]),
+                        dtype=torch.bool,
+                        device=self.runtime.device,
+                    )
+
+                outputs = self.runtime.model(
+                    input_ids=input_ids,
+                    position_ids=position_ids,
+                    past_key_values=self.cache.working_cache,
+                    use_cache=True,
+                    return_dict=True,
+                )
+
+                if depth + 1 >= max_depth:
+                    break
+
+                logits_by_parent = outputs.logits[0]
+                candidates = []
+                per_parent_width = min(nodes, logits_by_parent.shape[-1])
+                for local_idx, parent_idx in enumerate(frontier):
+                    parent_score = float(records[parent_idx]["score"])
+                    child_probs = torch.softmax(logits_by_parent[local_idx], dim=-1, dtype=torch.float32)
+                    child_values, child_token_ids = torch.topk(child_probs, k=per_parent_width)
+                    for token_id, prob in zip(child_token_ids.tolist(), child_values.tolist()):
+                        candidates.append((parent_idx, int(token_id), parent_score * float(prob)))
+
+                if not candidates:
+                    break
+
+                candidates.sort(key=lambda item: item[2], reverse=True)
+                next_frontier = []
+                for parent_idx, token_id, score in candidates[:nodes]:
+                    node_idx = len(records)
+                    records.append(
+                        {
+                            "token_id": token_id,
+                            "position_id": position_start + depth + 1,
+                            "parent_idx": parent_idx,
+                            "score": score,
+                            "depth": depth + 1,
+                        }
+                    )
+                    next_frontier.append(node_idx)
+                frontier = next_frontier
+        finally:
+            if model_body is not None:
+                model_body.tree_mask = previous_tree_mask
+            self._restore_working_lengths(length_snapshot)
+
+        if not records:
+            token_id = int(torch.argmax(next_logits, dim=-1).item())
+            records.append(
+                {
+                    "token_id": token_id,
+                    "position_id": position_start,
+                    "parent_idx": -1,
+                    "score": 0.0,
+                    "depth": 0,
+                }
+            )
+
+        selected_records = self._select_branching_tree_records(records, nodes)
+        input_ids = [int(record["token_id"]) for record in selected_records]
+        position_ids = [int(record["position_id"]) for record in selected_records]
+        parent_indices = [int(record["parent_idx"]) for record in selected_records]
+        attention_mask = self._tree_attention_mask(parent_indices)
+        return DraftSequence(
+            input_ids=input_ids,
+            position_ids=position_ids,
+            parent_indices=parent_indices,
+            attention_mask=attention_mask,
+        )
+
+    @staticmethod
+    def _select_branching_tree_records(
+        records: List[Dict[str, object]],
+        max_nodes: int,
+    ) -> List[Dict[str, object]]:
+        selected: set[int] = set()
+        ordered_candidates = sorted(
+            range(len(records)),
+            key=lambda idx: float(records[idx].get("score", 0.0)),
+            reverse=True,
+        )
+
+        def chain_to_root(idx: int) -> List[int]:
+            chain = []
+            seen = set()
+            while idx >= 0 and idx not in seen:
+                seen.add(idx)
+                chain.append(idx)
+                idx = int(records[idx]["parent_idx"])
+            return list(reversed(chain))
+
+        for idx in ordered_candidates:
+            chain = chain_to_root(idx)
+            missing = [item for item in chain if item not in selected]
+            if len(selected) + len(missing) <= max_nodes:
+                selected.update(missing)
+            if len(selected) >= max_nodes:
+                break
+
+        if not selected:
+            selected.add(0)
+
+        selected_order = sorted(
+            selected,
+            key=lambda idx: (int(records[idx].get("depth", 0)), idx),
+        )
+        remap = {old_idx: new_idx for new_idx, old_idx in enumerate(selected_order)}
+        selected_records: List[Dict[str, object]] = []
+        for old_idx in selected_order:
+            record = dict(records[old_idx])
+            old_parent = int(record["parent_idx"])
+            record["parent_idx"] = remap.get(old_parent, -1)
+            selected_records.append(record)
+        return selected_records
+
+    def _grow_branching_tree_slow(
         self,
         prefix: DraftContext,
         nodes: int,
@@ -904,7 +1082,7 @@ class QwenSpecExtendTargetBackend:
             "device": str(self.runtime.device),
             "dtype": str(self.runtime.config.dtype).replace("torch.", ""),
             "max_model_len": self.runtime.config.max_model_len,
-            "attn_implementation": self.runtime.config.attn_implementation,
+            "attn_implementation": self.runtime.attn_implementation,
         }
 
     @torch.inference_mode()
@@ -912,24 +1090,13 @@ class QwenSpecExtendTargetBackend:
         start = time.perf_counter()
         parent_indices = request.parent_indices or []
         if parent_indices and not self._is_linear_tree(parent_indices):
-            paths = self._paths_from_tree(request.draft_ids, parent_indices)
-            accepted_indices: List[int] = []
-            correction_token_id: Optional[int] = None
-            accepted_len = -1
-            max_path_len = max((len(path) for path in paths), default=0)
-            if max_path_len > 0:
-                target_tokens = self.runtime.generate_token_ids_cached(request.prefix_ids, max_path_len + 1)
-                for node_idx, path in enumerate(paths):
-                    path_accept_len, correction = self._verify_path_against_tokens(path, target_tokens)
-                    if path_accept_len > accepted_len:
-                        accepted_len = path_accept_len
-                        accepted_indices = self._indices_for_path(node_idx, parent_indices)[:path_accept_len]
-                        correction_token_id = correction
-            else:
-                target_tokens = self.runtime.generate_token_ids_cached(request.prefix_ids, 1)
-                correction_token_id = target_tokens[0] if target_tokens else None
-                accepted_len = 0
-            accepted_len = max(0, accepted_len)
+            accepted_len, correction_token_id, accepted_indices = self._verify_branching_tree(
+                request.prefix_ids,
+                list(request.draft_ids),
+                parent_indices,
+                request.draft_position_ids,
+                request.draft_attention_mask,
+            )
         else:
             accepted_len, correction_token_id = self._verify_linear_path(
                 request.prefix_ids,
@@ -1069,6 +1236,90 @@ class QwenSpecExtendTargetBackend:
             indices.append(current)
             current = int(parent_indices[current])
         return list(reversed(indices))
+
+    @torch.inference_mode()
+    def _verify_branching_tree(
+        self,
+        prefix_ids: List[int],
+        draft_ids: List[int],
+        parent_indices: Sequence[int],
+        draft_position_ids: Optional[Sequence[int]],
+        draft_attention_mask: Optional[Sequence[Sequence[int]]],
+    ) -> tuple[int, Optional[int], List[int]]:
+        if not draft_ids:
+            next_logits = self.runtime.ensure_cache(prefix_ids)
+            correction = int(torch.argmax(next_logits, dim=-1).item())
+            return 0, correction, []
+
+        next_logits = self.runtime.ensure_cache(prefix_ids)
+        prefix_cache_len = len(prefix_ids)
+        input_ids = torch.tensor([draft_ids], dtype=torch.long, device=self.runtime.device)
+        if draft_position_ids is None:
+            position_ids = torch.arange(
+                prefix_cache_len,
+                prefix_cache_len + len(draft_ids),
+                dtype=torch.long,
+                device=self.runtime.device,
+            ).unsqueeze(0)
+        else:
+            position_ids = torch.tensor([list(draft_position_ids)], dtype=torch.long, device=self.runtime.device)
+
+        tree_mask = None
+        if draft_attention_mask is not None:
+            tree_mask = torch.tensor(draft_attention_mask, dtype=torch.bool, device=self.runtime.device)
+        model_body = getattr(self.runtime.model, "model", None)
+        previous_tree_mask = getattr(model_body, "tree_mask", None) if model_body is not None else None
+        if model_body is not None:
+            model_body.tree_mask = tree_mask
+
+        try:
+            outputs = self.runtime.model(
+                input_ids=input_ids,
+                position_ids=position_ids,
+                past_key_values=self.runtime._cache,
+                use_cache=True,
+                return_dict=True,
+            )
+        finally:
+            if model_body is not None:
+                model_body.tree_mask = previous_tree_mask
+
+        self.runtime._cache = outputs.past_key_values
+        if self.runtime._cache is not None:
+            self.runtime._cache.crop(prefix_cache_len)
+        self.runtime._cache_token_ids = list(prefix_ids)
+        self.runtime._cache_next_logits = next_logits
+
+        logits = outputs.logits[0]
+        accepted_depth_by_node: List[int] = [0 for _ in draft_ids]
+        best_node = -1
+        best_depth = 0
+        correction_token_id = int(torch.argmax(next_logits, dim=-1).item())
+
+        for node_idx, draft_token in enumerate(draft_ids):
+            parent_idx = int(parent_indices[node_idx])
+            if parent_idx < 0:
+                parent_accepted_depth = 0
+                parent_logits = next_logits[0]
+            else:
+                parent_accepted_depth = accepted_depth_by_node[parent_idx]
+                if parent_accepted_depth <= 0:
+                    continue
+                parent_logits = logits[parent_idx]
+
+            target_token = int(torch.argmax(parent_logits, dim=-1).item())
+            if target_token != int(draft_token):
+                continue
+
+            depth = parent_accepted_depth + 1
+            accepted_depth_by_node[node_idx] = depth
+            if depth > best_depth:
+                best_depth = depth
+                best_node = node_idx
+                correction_token_id = int(torch.argmax(logits[node_idx], dim=-1).item())
+
+        accepted_indices = self._indices_for_path(best_node, parent_indices) if best_node >= 0 else []
+        return best_depth, correction_token_id, accepted_indices[:best_depth]
 
     @torch.inference_mode()
     def _last_query_attention_scores_cached(self, token_ids: Sequence[int]) -> List[float]:

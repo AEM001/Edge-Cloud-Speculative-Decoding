@@ -228,7 +228,8 @@ class Qwen3SdpaAttention(Qwen3Attention):
         if output_attentions and hidden_states.shape[1] != 1:
             return super().forward(
                 hidden_states=hidden_states, attention_mask=attention_mask, position_ids=position_ids,
-                past_key_value=past_key_value, output_attentions=output_attentions, use_cache=use_cache)
+                past_key_value=past_key_value, output_attentions=output_attentions, use_cache=use_cache,
+                cache_position=cache_position, position_embeddings=position_embeddings)
         bsz, q_len, _ = hidden_states.size()
         query_states = self.q_proj(hidden_states)
         key_states = self.k_proj(hidden_states)
@@ -414,6 +415,9 @@ class Qwen3Model(Qwen3PreTrainedModel):
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
 
+        if use_cache and past_key_values is None:
+            past_key_values = DynamicCache()
+
         if cache_position is None:
             past_seen_tokens = _get_past_seen_tokens(past_key_values)
             cache_position = torch.arange(
@@ -487,7 +491,12 @@ class Qwen3Model(Qwen3PreTrainedModel):
         if hasattr(self, "tree_mask") and self.tree_mask is not None:
             tree_mask = self.tree_mask
             tree_len = tree_mask.size(-1)
-            causal_mask[:, :, -tree_len:, -tree_len:][tree_mask == 0] = causal_mask.min()
+            query_tree_len = min(tree_len, causal_mask.size(-2))
+            tree_slice = causal_mask[:, :, -query_tree_len:, -tree_len:]
+            causal_mask[:, :, -query_tree_len:, -tree_len:] = tree_slice.masked_fill(
+                tree_mask[-query_tree_len:, :][None, None, :, :] == 0,
+                causal_mask.min(),
+            )
         return causal_mask
 
     def _update_causal_mask(self, attention_mask, input_tensor, cache_position, past_key_values, output_attentions):
@@ -499,7 +508,8 @@ class Qwen3Model(Qwen3PreTrainedModel):
         past_seen_tokens = _get_past_seen_tokens(past_key_values)
         using_static_cache = isinstance(past_key_values, StaticCache)
 
-        if self.config._attn_implementation == "sdpa" and not using_static_cache and not output_attentions:
+        has_tree_mask = hasattr(self, "tree_mask") and self.tree_mask is not None
+        if self.config._attn_implementation == "sdpa" and not using_static_cache and not output_attentions and not has_tree_mask:
             if AttentionMaskConverter._ignore_causal_mask_sdpa(
                     attention_mask, inputs_embeds=input_tensor,
                     past_key_values_length=past_seen_tokens, is_training=self.training):
