@@ -47,7 +47,8 @@ class KVCache:
         tgt = self.data.index_select(dim, indices)
         dst = self.data.narrow(dim, prev_length, tgt.shape[dim])
         dst.copy_(tgt, non_blocking=True)
-        self.current_length.fill_(prev_length + tgt.shape[dim])
+        with torch.inference_mode(False):
+            self.current_length.fill_(prev_length + tgt.shape[dim])
 
     def cat(self, tensor: torch.Tensor, dim: int = 2):
         """
@@ -62,7 +63,8 @@ class KVCache:
         """
         dst = self.data.narrow(dim, self.current_length, tensor.shape[dim])
         dst.copy_(tensor)
-        self.current_length.add_(tensor.shape[dim])
+        with torch.inference_mode(False):
+            self.current_length.add_(tensor.shape[dim])
         return torch.narrow(self.data, 2, 0, self.current_length)
 
 

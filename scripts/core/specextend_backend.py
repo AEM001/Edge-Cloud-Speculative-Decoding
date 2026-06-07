@@ -1,8 +1,7 @@
 """Backend interfaces for edge-cloud SpecExtend.
 
-Full SpecExtend needs backend-visible KV caches, tree masks, and target
-attention scores, so this module defines the contract expected by the
-edge-cloud glue.
+SpecExtend uses backend-visible KV caches, linear draft sequences, and
+target-attention-driven retrieval selection.
 """
 
 from __future__ import annotations
@@ -12,16 +11,14 @@ from typing import TYPE_CHECKING, Any, List, Optional, Protocol
 
 
 @dataclass
-class DraftTree:
+class DraftSequence:
     input_ids: List[int]
     position_ids: List[int]
-    parent_indices: List[int]
-    attention_mask: List[List[int]]
 
 
 @dataclass
-class DraftTreeResult:
-    tree: DraftTree
+class DraftResult:
+    draft: DraftSequence
     draft_time_ms: float
     appended_kv_tokens: int
     kv_load_metrics: Optional[Any] = field(default=None)
@@ -30,7 +27,7 @@ class DraftTreeResult:
 class SpecExtendDraftBackend(Protocol):
     tokenizer: object
 
-    def build_draft_tree(
+    def build_draft(
         self,
         verified_prefix: List[int],
         correction_token_id: Optional[int],
@@ -38,10 +35,10 @@ class SpecExtendDraftBackend(Protocol):
         threshold: float,
         max_depth: int,
         retrieval_chunk_ids: Optional[List[int]] = None,
-    ) -> DraftTreeResult:
-        """Grow a SpecExtend draft tree for the current verified prefix."""
+    ) -> DraftResult:
+        """Build a linear draft sequence for the current verified prefix."""
 
 
 class SpecExtendTargetBackend(Protocol):
-    def verify_tree(self, request):
-        """Verify a SpecExtend tree request and return SpecExtendTreeResponse."""
+    def verify(self, request):
+        """Verify a SpecExtend request and return a SpecExtendResponse."""

@@ -6,8 +6,8 @@ import requests
 from core.protocol import (
     CloudResponse,
     EdgeRequest,
-    SpecExtendTreeRequest,
-    SpecExtendTreeResponse,
+    SpecExtendRequest,
+    SpecExtendResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -103,7 +103,7 @@ class HTTPCloudClient:
         logger.error(f"All retry attempts failed. Last error: {last_error}")
         raise RuntimeError(f"Failed to verify draft after {self.retry_attempts} attempts: {last_error}")
 
-    def verify_specextend_tree(self, request: SpecExtendTreeRequest) -> SpecExtendTreeResponse:
+    def verify_specextend(self, request: SpecExtendRequest) -> SpecExtendResponse:
         request_start = time.time()
         request_data = request.to_dict()
 
@@ -117,7 +117,7 @@ class HTTPCloudClient:
                 )
                 response.raise_for_status()
 
-                cloud_response = SpecExtendTreeResponse.from_dict(response.json())
+                cloud_response = SpecExtendResponse.from_dict(response.json())
                 cloud_response.rtt_ms = (time.time() - request_start) * 1000
                 return cloud_response
 
@@ -144,7 +144,7 @@ class HTTPCloudClient:
 
         logger.error("All SpecExtend retry attempts failed. Last error: %s", last_error)
         raise RuntimeError(
-            f"Failed to verify SpecExtend tree after {self.retry_attempts} attempts: {last_error}"
+            f"Failed to verify SpecExtend after {self.retry_attempts} attempts: {last_error}"
         )
 
     def check_health(self) -> bool:

@@ -17,10 +17,10 @@ from typing import Dict, Iterable, List, Optional, Sequence
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from core.protocol import SpecExtendTreeRequest, SpecExtendTreeResponse
+from core.protocol import SpecExtendRequest, SpecExtendResponse
 from core.modeling_qwen3_kv import Qwen3ForCausalLM
 from core.qwen_kv_cache import KVCache
-from core.specextend_backend import DraftTree, DraftTreeResult, SpecExtendDraftBackend
+from core.specextend_backend import DraftSequence, DraftResult, SpecExtendDraftBackend
 from core.specextend_retrieval import RetrievalChunk, build_chunks, select_chunks_by_attention
 from core.tiered_kv_store import KVLoadMetrics, KVTier, TieredKVStore
 
@@ -97,20 +97,21 @@ class SpecExtendDraftKVCache:
         return kv
 
     def _allocate_kv_cache(self, max_length: int):
-        current_length_data = torch.zeros(self.model.config.num_hidden_layers * 2, dtype=torch.long, device="cpu")
-        cache = []
-        for layer_idx, layer in enumerate(self.model.model.layers):
-            layer_device = layer.self_attn.q_proj.weight.device
-            full_key, _ = self.full_draft_kv[layer_idx]
-            data_shape = [1, self.model.config.num_key_value_heads, max_length, full_key.shape[-1]]
-            key_data = torch.zeros(data_shape, dtype=self.dtype, device=layer_device)
-            value_data = torch.zeros(data_shape, dtype=self.dtype, device=layer_device)
-            cache.append(
-                [
-                    KVCache(key_data, current_length_data[layer_idx * 2]),
-                    KVCache(value_data, current_length_data[layer_idx * 2 + 1]),
-                ]
-            )
+        with torch.inference_mode(False):
+            current_length_data = torch.zeros(self.model.config.num_hidden_layers * 2, dtype=torch.long, device="cpu")
+            cache = []
+            for layer_idx, layer in enumerate(self.model.model.layers):
+                layer_device = layer.self_attn.q_proj.weight.device
+                full_key, _ = self.full_draft_kv[layer_idx]
+                data_shape = [1, self.model.config.num_key_value_heads, max_length, full_key.shape[-1]]
+                key_data = torch.zeros(data_shape, dtype=self.dtype, device=layer_device)
+                value_data = torch.zeros(data_shape, dtype=self.dtype, device=layer_device)
+                cache.append(
+                    [
+                        KVCache(key_data, current_length_data[layer_idx * 2]),
+                        KVCache(value_data, current_length_data[layer_idx * 2 + 1]),
+                    ]
+                )
         return cache
 
     @staticmethod
@@ -271,11 +272,12 @@ class SpecExtendDraftKVCache:
 
     def _rebuild_working_cache(self) -> None:
         n = len(self.working_token_indices)
-        for layer_idx in range(len(self.full_draft_kv)):
-            kv_k = self.working_cache[layer_idx][0]
-            kv_v = self.working_cache[layer_idx][1]
-            kv_k.current_length.fill_(0)
-            kv_v.current_length.fill_(0)
+        with torch.inference_mode(False):
+            for layer_idx in range(len(self.full_draft_kv)):
+                kv_k = self.working_cache[layer_idx][0]
+                kv_v = self.working_cache[layer_idx][1]
+                kv_k.current_length.fill_(0)
+                kv_v.current_length.fill_(0)
         if n == 0:
             self.last_load_metrics = KVLoadMetrics()
             return
@@ -297,8 +299,9 @@ class SpecExtendDraftKVCache:
                 value_slice = full_value.index_select(dim=2, index=index)
                 kv_k.data[:, :, :n, :].copy_(key_slice, non_blocking=True)
                 kv_v.data[:, :, :n, :].copy_(value_slice, non_blocking=True)
-                kv_k.current_length.fill_(n)
-                kv_v.current_length.fill_(n)
+                with torch.inference_mode(False):
+                    kv_k.current_length.fill_(n)
+                    kv_v.current_length.fill_(n)
             torch.cuda.synchronize()
             metrics.gpu_chunks = len(self.selected_chunks)
             metrics.gpu_load_ms = (time.perf_counter() - t0) * 1000
@@ -315,8 +318,9 @@ class SpecExtendDraftKVCache:
                 working_val_list=working_val_list,
             )
             for layer_idx in range(len(self.full_draft_kv)):
-                self.working_cache[layer_idx][0].current_length.fill_(n)
-                self.working_cache[layer_idx][1].current_length.fill_(n)
+                with torch.inference_mode(False):
+                    self.working_cache[layer_idx][0].current_length.fill_(n)
+                    self.working_cache[layer_idx][1].current_length.fill_(n)
             self.last_load_metrics = metrics
 
     def context(self) -> DraftContext:
@@ -385,6 +389,22 @@ class QwenModelRuntime:
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
+        is_awq = bool(
+            getattr(getattr(self.tokenizer, "config", None), "quantization_config", None)
+            and self.tokenizer.config.quantization_config.get("quant_method") == "awq"
+        )
+        # Fallback: check model config if tokenizer config didn't have it
+        if not is_awq:
+            try:
+                from transformers import AutoConfig
+                mcfg = AutoConfig.from_pretrained(self.model_path, trust_remote_code=config.trust_remote_code)
+                is_awq = bool(
+                    getattr(mcfg, "quantization_config", None)
+                    and mcfg.quantization_config.get("quant_method") == "awq"
+                )
+            except Exception:
+                pass
+
         if use_custom_kv_model:
             self.model = Qwen3ForCausalLM.from_pretrained(
                 self.model_path,
@@ -392,12 +412,21 @@ class QwenModelRuntime:
             ).to(self.device)
             self.model.config._attn_implementation = config.attn_implementation
         else:
+            load_kwargs = {
+                "trust_remote_code": config.trust_remote_code,
+                "attn_implementation": config.attn_implementation,
+            }
+            if is_awq:
+                # AWQ models must use device_map="auto" and should not specify torch_dtype or call .to()
+                load_kwargs["device_map"] = "auto"
+            else:
+                load_kwargs["torch_dtype"] = config.dtype
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_path,
-                torch_dtype=config.dtype,
-                trust_remote_code=config.trust_remote_code,
-                attn_implementation=config.attn_implementation,
-            ).to(self.device)
+                **load_kwargs,
+            )
+            if not is_awq:
+                self.model = self.model.to(self.device)
         self.model.eval()
         self._cache_token_ids: List[int] = []
         self._cache = None
@@ -525,7 +554,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             device=self.runtime.device,
         )
 
-    def build_draft_tree(
+    def build_draft(
         self,
         verified_prefix: List[int],
         correction_token_id: Optional[int],
@@ -533,7 +562,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         threshold: float,
         max_depth: int,
         retrieval_chunk_ids: Optional[List[int]] = None,
-    ) -> DraftTreeResult:
+    ) -> DraftResult:
         start = time.perf_counter()
         if correction_token_id is not None and (
             not verified_prefix or verified_prefix[-1] != correction_token_id
@@ -544,26 +573,26 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         appended = self.cache.append_prefix(self.runtime, verified_prefix)
         draft_context = self.cache.context()
 
-        tree = self._grow_linear_tree(
+        draft_seq = self._generate_draft_sequence(
             draft_context,
             nodes=max(1, nodes),
             max_depth=max(1, max_depth),
             position_start=len(verified_prefix),
         )
-        return DraftTreeResult(
-            tree=tree,
+        return DraftResult(
+            draft=draft_seq,
             draft_time_ms=(time.perf_counter() - start) * 1000,
             appended_kv_tokens=appended,
             kv_load_metrics=self.cache.last_load_metrics,
         )
 
-    def _grow_linear_tree(
+    def _generate_draft_sequence(
         self,
         prefix: DraftContext,
         nodes: int,
         max_depth: int,
         position_start: int,
-    ) -> DraftTree:
+    ) -> DraftSequence:
         length = max(1, min(nodes, max_depth))
         if prefix.past_key_values is None:
             raise ValueError("Draft generation requires the explicit SpecExtend working KV cache.")
@@ -572,13 +601,9 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             max_new_tokens=length,
         )
         position_ids = list(range(position_start, position_start + len(input_ids)))
-        parent_indices = [idx - 1 for idx in range(len(input_ids))]
-        attention_mask = self._tree_attention_mask(parent_indices)
-        return DraftTree(
+        return DraftSequence(
             input_ids=input_ids,
             position_ids=position_ids,
-            parent_indices=parent_indices,
-            attention_mask=attention_mask,
         )
 
     def _snapshot_working_lengths(self) -> List[int]:
@@ -592,10 +617,11 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
     def _restore_working_lengths(self, snapshot: List[int]) -> None:
         """Restore current_length from a snapshot (no data copy needed)."""
         idx = 0
-        for i in range(len(self.cache.working_cache)):
-            for j in range(2):
-                self.cache.working_cache[i][j].current_length.fill_(snapshot[idx])
-                idx += 1
+        with torch.inference_mode(False):
+            for i in range(len(self.cache.working_cache)):
+                for j in range(2):
+                    self.cache.working_cache[i][j].current_length.fill_(snapshot[idx])
+                    idx += 1
 
     def _generate_linear_from_working_cache(self, next_position_id: int, max_new_tokens: int) -> List[int]:
         generated: List[int] = []
@@ -617,16 +643,16 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         return generated
 
     @torch.inference_mode()
-    def build_draft_candidate(
+    def build_prefetch_draft(
         self,
         verified_prefix: List[int],
         nodes: int,
         max_depth: int,
         retrieval_chunk_ids: Optional[List[int]] = None,
-    ) -> "DraftTreeResult":
+    ) -> "DraftResult":
         """Build a pipeline-prefetch draft without committing to the main cache.
 
-        Runs under _cache_lock so it cannot race with build_draft_tree.
+        Runs under _cache_lock so it cannot race with build_draft.
         Works on the fixed-size chunk-only working cache: forward any candidate
         tokens beyond full_token_ids temporarily, generate the draft, then
         restore current_length.  Does NOT write to full_draft_kv or
@@ -668,30 +694,15 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             self.cache.last_prefix_logits = last_prefix_logits
 
         position_ids = list(range(position_start, position_start + len(input_ids)))
-        parent_indices = [idx - 1 for idx in range(len(input_ids))]
-        attention_mask = self._tree_attention_mask(parent_indices)
-        tree = DraftTree(
+        draft_seq = DraftSequence(
             input_ids=input_ids,
             position_ids=position_ids,
-            parent_indices=parent_indices,
-            attention_mask=attention_mask,
         )
-        return DraftTreeResult(
-            tree=tree,
+        return DraftResult(
+            draft=draft_seq,
             draft_time_ms=(time.perf_counter() - start) * 1000,
             appended_kv_tokens=0,
         )
-
-    @staticmethod
-    def _tree_attention_mask(parent_indices: Sequence[int]) -> List[List[int]]:
-        size = len(parent_indices)
-        mask = [[0 for _ in range(size)] for _ in range(size)]
-        for row in range(size):
-            idx = row
-            while idx >= 0:
-                mask[row][idx] = 1
-                idx = parent_indices[idx]
-        return mask
 
 
 class QwenSpecExtendTargetBackend:
@@ -702,11 +713,9 @@ class QwenSpecExtendTargetBackend:
     def runtime_debug_info(self) -> Dict[str, object]:
         return {
             "backend": "custom_qwen3",
-            "specextend_tree_verify": True,
+            "draft_mode": "linear",
             "attention_scores": True,
-            "tree_attention": False,
             "kv_cache": "transformers_dynamic_cache_plus_visible_token_cache",
-            "draft_tree_default": "linear",
             "draft_cache": "explicit_full_kv_plus_retrieval_working_kv",
         }
 
@@ -720,11 +729,11 @@ class QwenSpecExtendTargetBackend:
         }
 
     @torch.inference_mode()
-    def verify_tree(self, request: SpecExtendTreeRequest) -> SpecExtendTreeResponse:
+    def verify(self, request: SpecExtendRequest) -> SpecExtendResponse:
         start = time.perf_counter()
         accepted_len, correction_token_id = self._verify_linear_path(
             request.prefix_ids,
-            list(request.tree_input_ids),
+            list(request.draft_ids),
         )
         accepted_indices = list(range(accepted_len))
 
@@ -732,9 +741,9 @@ class QwenSpecExtendTargetBackend:
         selected_chunk_ids = None
         if request.retrieve_attn_scores:
             accepted_tokens = [
-                request.tree_input_ids[idx]
+                request.draft_ids[idx]
                 for idx in accepted_indices
-                if 0 <= idx < len(request.tree_input_ids)
+                if 0 <= idx < len(request.draft_ids)
             ]
             scoring_ids = list(request.prefix_ids) + accepted_tokens
             if correction_token_id is not None:
@@ -756,11 +765,11 @@ class QwenSpecExtendTargetBackend:
                 selected_chunk_ids = [chunk.chunk_id for chunk in selected]
 
         elapsed_ms = (time.perf_counter() - start) * 1000
-        return SpecExtendTreeResponse(
+        return SpecExtendResponse(
             request_id=request.request_id,
             accepted_len=max(0, accepted_len),
             correction_token_id=correction_token_id,
-            accepted_tree_indices=accepted_indices,
+            accepted_indices=accepted_indices,
             server_verify_time_ms=elapsed_ms,
             target_attn_scores=target_attn_scores,
             selected_chunk_ids=selected_chunk_ids,

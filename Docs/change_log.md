@@ -497,3 +497,92 @@ working cache，而不管 cloud 有没有在旧的 top-k 里选到它们。
   的 `end` 边界，两者互补：`select_chunks` 保证 tail chunk 被选中，
   `_refresh_selected_tail` 保证它的边界是最新的。
 - `reset()` 已清零 `_retrieval_base_seq_len`，cache 不连续时不会残留旧基线。
+
+## 2026-06-07 — Complete Naming Cleanup: Tree → Linear
+
+### Motivation
+The draft generation and target verification had already been linear-only for
+several iterations, but the codebase still used tree-flavored names everywhere
+(`DraftTree`, `build_draft_tree`, `verify_tree`, `SpecExtendTreeRequest`, etc.).
+This caused ongoing confusion and made the wire protocol carry unnecessary
+tree-specific fields (`tree_position_ids`, `parent_indices`, `tree_attention_mask`).
+
+### Changes made
+
+- **`scripts/core/protocol.py`**
+  - `SpecExtendTreeRequest` → `SpecExtendRequest`
+  - `SpecExtendTreeResponse` → `SpecExtendResponse`
+  - `accepted_tree_indices` → `accepted_indices`
+
+- **`scripts/core/specextend_backend.py`**
+  - `DraftTree` → `DraftSequence` (dropped `parent_indices` and `attention_mask`)
+  - `DraftTreeResult` → `DraftResult`
+  - `build_draft_tree` → `build_draft`
+  - `verify_tree` → `verify`
+
+- **`scripts/core/qwen_specextend_backend.py`**
+  - `build_draft_tree` → `build_draft`
+  - `build_draft_candidate` → `build_prefetch_draft`
+  - `_grow_linear_tree` → `_generate_draft_sequence`
+  - `verify_tree` → `verify`
+  - Removed unused `_tree_attention_mask` static method
+  - Updated `runtime_debug_info` to show `draft_mode: "linear"` instead of
+    `specextend_tree_verify: True`
+
+- **`scripts/client/specextend_edge_client.py`**
+  - Updated all imports, method calls, and pipeline helpers to use new names.
+  - `cloud_verify_tree` → `cloud_verify`
+  - `DraftTree`/`DraftTreeResult` → `DraftSequence`/`DraftResult`
+
+- **`scripts/client/http_cloud_client.py`**
+  - `verify_specextend_tree` → `verify_specextend`
+
+- **`scripts/experiments/network_conditions.py`**
+  - `verify_specextend_tree` → `verify_specextend`
+
+- **`scripts/server/verify_server.py`**
+  - `verify_specextend_tree` → `verify_specextend`
+  - `accepted_tree_indices` → `accepted_indices` in Pydantic response model
+
+- **`scripts/experiments/quick_test.py`**
+  - Fixed `warmup()` to construct `SpecExtendRequest` with only `draft_ids`.
+  - Updated `cloud_verify` wiring.
+
+## 2026-06-07 — Bug Fix: "Inplace update to inference tensor" Crash
+
+### Problem
+After the first successful prompt, subsequent prompts crashed with:
+`Inplace update to inference tensor outside InferenceMode is not allowed`.
+
+### Root cause
+`SpecExtendDraftKVCache.reset()` calls `_allocate_kv_cache()` to create fresh
+KVCache buffers. When `reset()` is triggered from inside `@torch.inference_mode()`
+(via `append_prefix` → common-prefix mismatch), all tensors allocated in that
+context — including GPU KV data buffers and CPU `current_length` scalars — become
+**inference tensors**. Any later in-place mutation (`fill_`, `add_`, `copy_`)
+outside inference mode then raises.
+
+### Fix
+- `_allocate_kv_cache()` now allocates every tensor inside
+  `with torch.inference_mode(False):`
+- `KVCache.copy()` and `KVCache.cat()` wrap `current_length` writes with
+  `torch.inference_mode(False)`
+- `_rebuild_working_cache()` and `_restore_working_lengths()` wrap all
+  `current_length.fill_()` calls with `torch.inference_mode(False)`
+
+## 2026-06-07 — Bug Fix: AWQ Model Loading Memory & Speed
+
+### Problem
+`QwenModelRuntime` loaded the AWQ verify model with `.to(self.device)`, which
+first loads weights on CPU (de-quantized) then copies to GPU. Result: 16 GB VRAM
+and much slower inference.
+
+### Fix
+Detect AWQ models via `quantization_config.quant_method == "awq"` and load with
+`device_map="auto"` instead of `torch_dtype` + `.to()`. Memory dropped from
+~16 GB to ~10 GB.
+
+Also changed `start_verify.sh` default from `eager` to `flash_attention_2`.
+(Note: Qwen3 in the current Transformers version silently falls back to
+`Qwen3Attention` for both `flash_attention_2` and `sdpa`; `eager` remains the
+effective implementation until upstream support is added.)

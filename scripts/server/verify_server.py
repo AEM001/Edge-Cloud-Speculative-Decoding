@@ -10,7 +10,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from core.protocol import SpecExtendTreeRequest
+from core.protocol import SpecExtendRequest
 from core.qwen_specextend_backend import (
     QwenBackendConfig,
     QwenSpecExtendTargetBackend,
@@ -24,7 +24,7 @@ def _env(name: str, default: str) -> str:
     return os.getenv(name, default)
 
 
-_DEFAULT_MODEL_PATH = os.getenv("VERIFY_MODEL_PATH", "/root/code/models/Qwen3-14B-AWQ")
+_DEFAULT_MODEL_PATH = os.getenv("VERIFY_MODEL_PATH", "/root/autodl-tmp/Qwen3-14B-AWQ")
 
 
 class VerifyRequest(BaseModel):
@@ -45,10 +45,7 @@ class VerifyResponse(BaseModel):
 class SpecExtendVerifyRequest(BaseModel):
     request_id: str
     prefix_ids: List[int]
-    tree_input_ids: List[int]
-    tree_position_ids: List[int]
-    parent_indices: List[int]
-    tree_attention_mask: List[List[int]]
+    draft_ids: List[int]
     retrieve_attn_scores: bool = False
     retrieval_chunk_size: int = 32
     retrieve_top_k: int = 32
@@ -59,7 +56,7 @@ class SpecExtendVerifyResponse(BaseModel):
     request_id: str
     accepted_len: int
     correction_token_id: Optional[int]
-    accepted_tree_indices: List[int]
+    accepted_indices: List[int]
     server_verify_time_ms: float
     target_attn_scores: Optional[List[float]] = None
     selected_chunk_ids: Optional[List[int]] = None
@@ -122,29 +119,19 @@ async def health():
 
 @app.post("/verify", response_model=VerifyResponse)
 async def verify_draft(req: VerifyRequest):
-    """Compatibility endpoint for linear speculative verification.
-
-    The implementation still uses the custom Qwen target backend and verifies a
-    degenerate one-path tree. New experiments should call /specextend/verify.
-    """
+    """Compatibility endpoint for linear speculative verification."""
     if _verifier is None:
         raise HTTPException(503, "Not ready")
 
     start = time.perf_counter()
     try:
-        tree_request = SpecExtendTreeRequest(
+        request = SpecExtendRequest(
             request_id=req.request_id,
             prefix_ids=req.prefix_ids,
-            tree_input_ids=req.draft_ids,
-            tree_position_ids=list(range(len(req.prefix_ids), len(req.prefix_ids) + len(req.draft_ids))),
-            parent_indices=[idx - 1 for idx in range(len(req.draft_ids))],
-            tree_attention_mask=[
-                [1 if col <= row else 0 for col in range(len(req.draft_ids))]
-                for row in range(len(req.draft_ids))
-            ],
+            draft_ids=req.draft_ids,
             retrieve_attn_scores=False,
         )
-        response = _verifier.verify_tree(tree_request)
+        response = _verifier.verify(request)
     except Exception as exc:
         logger.error("VERIFY ERROR: id=%s, error=%s", req.request_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Verification failed: {exc}") from exc
@@ -161,12 +148,12 @@ async def verify_draft(req: VerifyRequest):
 
 
 @app.post("/specextend/verify", response_model=SpecExtendVerifyResponse)
-async def verify_specextend_tree(req: SpecExtendVerifyRequest):
+async def verify_specextend(req: SpecExtendVerifyRequest):
     if _verifier is None:
         raise HTTPException(503, "Not ready")
 
     try:
-        response = _verifier.verify_tree(SpecExtendTreeRequest.from_dict(req.model_dump()))
+        response = _verifier.verify(SpecExtendRequest.from_dict(req.model_dump()))
     except Exception as exc:
         logger.error("SPECEXTEND VERIFY ERROR: id=%s, error=%s", req.request_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail=f"SpecExtend verification failed: {exc}") from exc

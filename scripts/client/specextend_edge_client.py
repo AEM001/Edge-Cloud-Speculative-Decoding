@@ -1,7 +1,7 @@
-"""Edge client for the full SpecExtend protocol.
+"""Edge client for the SpecExtend protocol.
 
-This client is backend-agnostic. It coordinates draft-tree construction,
-cloud tree verification, and target-attention driven retrieval selection. A
+This client is backend-agnostic. It coordinates linear draft construction,
+cloud verification, and target-attention driven retrieval selection. A
 real SpecExtend backend must implement ``SpecExtendDraftBackend``.
 """
 
@@ -15,8 +15,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
-from core.protocol import SpecExtendTreeRequest, SpecExtendTreeResponse
-from core.specextend_backend import DraftTree, DraftTreeResult, SpecExtendDraftBackend
+from core.protocol import SpecExtendRequest, SpecExtendResponse
+from core.specextend_backend import DraftSequence, DraftResult, SpecExtendDraftBackend
 from core.specextend_retrieval import SpecExtendRetrievalState
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class SpecExtendEdgeClient:
     def __init__(
         self,
         draft_backend: SpecExtendDraftBackend,
-        cloud_verify_tree: Callable[[SpecExtendTreeRequest], SpecExtendTreeResponse],
+        cloud_verify: Callable[[SpecExtendRequest], SpecExtendResponse],
         max_new_tokens: int = 128,
         nodes: int = 50,
         threshold: float = 0.7,
@@ -53,7 +53,7 @@ class SpecExtendEdgeClient:
         eos_token_id: Optional[int] = None,
     ):
         self.draft_backend = draft_backend
-        self.cloud_verify_tree = cloud_verify_tree
+        self.cloud_verify = cloud_verify
         self.max_new_tokens = max_new_tokens
         self.nodes = nodes
         self.threshold = threshold
@@ -83,7 +83,7 @@ class SpecExtendEdgeClient:
         use_pipeline = (
             self.pipeline_enabled
             and getattr(self.draft_backend, "supports_pipeline_candidates", False)
-            and hasattr(self.draft_backend, "build_draft_candidate")
+            and hasattr(self.draft_backend, "build_prefetch_draft")
         )
         with ThreadPoolExecutor(max_workers=1) as verify_executor:
             while len(verified_prefix) - len(prompt_ids) < self.max_new_tokens:
@@ -110,7 +110,7 @@ class SpecExtendEdgeClient:
                     correction_token_id = None
                     pipeline_hit = True
                 else:
-                    draft_result = self.draft_backend.build_draft_tree(
+                    draft_result = self.draft_backend.build_draft(
                         verified_prefix=list(verified_prefix),
                         correction_token_id=correction_token_id,
                         nodes=self.nodes,
@@ -120,13 +120,10 @@ class SpecExtendEdgeClient:
                     )
                 prefetched = None
 
-                request = SpecExtendTreeRequest(
+                request = SpecExtendRequest(
                     request_id=request_id,
                     prefix_ids=list(verified_prefix),
-                    tree_input_ids=draft_result.tree.input_ids,
-                    tree_position_ids=draft_result.tree.position_ids,
-                    parent_indices=draft_result.tree.parent_indices,
-                    tree_attention_mask=draft_result.tree.attention_mask,
+                    draft_ids=draft_result.draft.input_ids,
                     retrieve_attn_scores=retrieve_this_round,
                     retrieval_chunk_size=self.retrieval.chunk_size,
                     retrieve_top_k=self.retrieval.top_k_chunks,
@@ -135,7 +132,7 @@ class SpecExtendEdgeClient:
 
                 verify_start = time.perf_counter()
                 if use_pipeline:
-                    verify_future = verify_executor.submit(self.cloud_verify_tree, request)
+                    verify_future = verify_executor.submit(self.cloud_verify, request)
                     candidates, pipeline_built = self._build_pipeline_candidates(
                         verify_future=verify_future,
                         base_prefix=verified_prefix,
@@ -147,13 +144,13 @@ class SpecExtendEdgeClient:
                     pipeline_wait_ms = (time.perf_counter() - wait_start) * 1000
                 else:
                     candidates = []
-                    response = self.cloud_verify_tree(request)
+                    response = self.cloud_verify(request)
                 verify_elapsed_ms = (time.perf_counter() - verify_start) * 1000
 
                 accepted_tokens = [
-                    draft_result.tree.input_ids[idx]
-                    for idx in response.accepted_tree_indices
-                    if 0 <= idx < len(draft_result.tree.input_ids)
+                    draft_result.draft.input_ids[idx]
+                    for idx in response.accepted_indices
+                    if 0 <= idx < len(draft_result.draft.input_ids)
                 ]
                 previous_prefix = list(verified_prefix)
                 verified_prefix.extend(accepted_tokens)
@@ -190,7 +187,7 @@ class SpecExtendEdgeClient:
                 metrics.round_details.append(
                     {
                         "round": metrics.total_rounds - 1,
-                        "tree_nodes": len(draft_result.tree.input_ids),
+                        "draft_tokens": len(draft_result.draft.input_ids),
                         "accepted_len": response.accepted_len,
                         "retrieval": retrieve_this_round,
                         "selected_chunk_ids": list(metrics.selected_chunk_ids),
@@ -239,7 +236,7 @@ class SpecExtendEdgeClient:
         self,
         verify_future,
         base_prefix: List[int],
-        draft_result: DraftTreeResult,
+        draft_result: DraftResult,
         retrieval_chunk_ids: List[int],
     ):
         """Build pipeline candidates synchronously while verify is in-flight.
@@ -248,12 +245,12 @@ class SpecExtendEdgeClient:
         Candidates run here on the main thread and get full GPU bandwidth.
         """
         candidates = []
-        for offset in self._candidate_offsets(len(draft_result.tree.input_ids)):
+        for offset in self._candidate_offsets(len(draft_result.draft.input_ids)):
             if verify_future.done():
                 break
-            candidate_prefix = list(base_prefix) + draft_result.tree.input_ids[:offset]
+            candidate_prefix = list(base_prefix) + draft_result.draft.input_ids[:offset]
             try:
-                candidate = self.draft_backend.build_draft_candidate(
+                candidate = self.draft_backend.build_prefetch_draft(
                     verified_prefix=candidate_prefix,
                     nodes=self.nodes,
                     max_depth=self.max_depth,
@@ -277,7 +274,7 @@ class SpecExtendEdgeClient:
             if candidate["offset"] != accepted_len:
                 continue
             candidate_draft = candidate["draft"]
-            input_ids = list(candidate_draft.tree.input_ids)
+            input_ids = list(candidate_draft.draft.input_ids)
             if correction_token_id is None:
                 return {"prefix": list(verified_prefix), "draft": candidate_draft}
             if not input_ids or input_ids[0] != correction_token_id:
@@ -285,17 +282,14 @@ class SpecExtendEdgeClient:
             adjusted_ids = input_ids[1:]
             if not adjusted_ids:
                 continue
-            parent_indices = [idx - 1 for idx in range(len(adjusted_ids))]
-            adjusted_tree = DraftTree(
+            adjusted_seq = DraftSequence(
                 input_ids=adjusted_ids,
                 position_ids=list(range(len(verified_prefix), len(verified_prefix) + len(adjusted_ids))),
-                parent_indices=parent_indices,
-                attention_mask=self.draft_backend._tree_attention_mask(parent_indices),
             )
             return {
                 "prefix": list(verified_prefix),
-                "draft": DraftTreeResult(
-                    tree=adjusted_tree,
+                "draft": DraftResult(
+                    draft=adjusted_seq,
                     draft_time_ms=0.0,
                     appended_kv_tokens=0,
                 ),

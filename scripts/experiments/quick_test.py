@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from client.http_cloud_client import create_http_cloud_client
 from client.specextend_edge_client import SpecExtendEdgeClient
+from core.protocol import SpecExtendRequest
 from core.qwen_specextend_backend import (
     QwenBackendConfig,
     QwenSpecExtendDraftBackend,
@@ -28,7 +29,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 SERVER_URL = os.getenv("VERIFY_SERVER_URL", "http://localhost:6007")
-DRAFT_MODEL_PATH = Path(os.getenv("DRAFT_MODEL_PATH", "/root/code/models/Qwen3-1.7B"))
+DRAFT_MODEL_PATH = Path(os.getenv("DRAFT_MODEL_PATH", "/root/autodl-tmp/Qwen3-1.7B"))
 DRAFT_GPU_ID = os.getenv("DRAFT_GPU_ID", "1")
 DRAFT_DEVICE = os.getenv("DRAFT_DEVICE", f"cuda:{DRAFT_GPU_ID}")
 DRAFT_DTYPE = dtype_from_env(os.getenv("DRAFT_DTYPE", "fp16"))
@@ -253,7 +254,7 @@ def run_specextend_case(
         ),
         verify_runtime=VerifyRuntimeMetrics(
             backend="custom_qwen3",
-            specextend_tree_verify=True,
+            specextend_tree_verify=False,
             attention_scores=metrics.retrieval_updates > 0,
         ),
         raw={
@@ -267,7 +268,7 @@ def run_specextend_case(
 def warmup(draft_backend: QwenSpecExtendDraftBackend, cloud_client, prompt: str) -> None:
     logger.info("Warming up custom draft and target backends ...")
     prompt_ids = list(draft_backend.tokenizer.encode(prompt))
-    draft = draft_backend.build_draft_tree(
+    draft = draft_backend.build_draft(
         verified_prefix=prompt_ids,
         correction_token_id=None,
         nodes=4,
@@ -275,17 +276,12 @@ def warmup(draft_backend: QwenSpecExtendDraftBackend, cloud_client, prompt: str)
         max_depth=2,
         retrieval_chunk_ids=None,
     )
-    from core.protocol import SpecExtendTreeRequest
-
     try:
-        cloud_client.verify_specextend_tree(
-            SpecExtendTreeRequest(
+        cloud_client.verify_specextend(
+            SpecExtendRequest(
                 request_id="warmup",
                 prefix_ids=prompt_ids,
-                tree_input_ids=draft.tree.input_ids,
-                tree_position_ids=draft.tree.position_ids,
-                parent_indices=draft.tree.parent_indices,
-                tree_attention_mask=draft.tree.attention_mask,
+                draft_ids=draft.draft.input_ids,
             )
         )
     except Exception:
@@ -323,21 +319,21 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
     prompts = truncate_prompts_to_tokens(prompts, draft_backend.tokenizer, config["prompt_input_tokens"])
     specextend_client = SpecExtendEdgeClient(
         draft_backend=draft_backend,
-        cloud_verify_tree=base_client.verify_specextend_tree,
+        cloud_verify=base_client.verify_specextend,
         max_new_tokens=config["max_tokens"],
         nodes=config["nodes"],
         threshold=config["threshold"],
         max_depth=config["max_depth"],
         retrieval_chunk_size=config["retrieval_chunk_size"],
         retrieve_top_k=config["retrieve_top_k"],
-            retrieve_every_n_steps=config["retrieve_every_n_steps"],
+        retrieve_every_n_steps=config["retrieve_every_n_steps"],
     )
 
     warmup(draft_backend, base_client, prompts[0][0]["text"])
 
     condition = NetworkCondition.good()
     throttled = ThrottledCloudClient(base_client, condition)
-    specextend_client.cloud_verify_tree = throttled.verify_specextend_tree
+    specextend_client.cloud_verify = throttled.verify_specextend
 
     results: List[ExperimentResult] = []
     for prompt_data, prompt_type in prompts:

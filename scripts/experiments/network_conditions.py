@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable, List, Tuple
 
-from core.protocol import CloudResponse, EdgeRequest, SpecExtendTreeRequest, SpecExtendTreeResponse
+from core.protocol import CloudResponse, EdgeRequest, SpecExtendRequest, SpecExtendResponse
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +188,7 @@ class ThrottledCloudClient:
 
         return response
 
-    def verify_specextend_tree(self, request: SpecExtendTreeRequest) -> SpecExtendTreeResponse:
+    def verify_specextend(self, request: SpecExtendRequest) -> SpecExtendResponse:
         cond = self.condition
         now = time.perf_counter() - self._start_wall
 
@@ -199,7 +199,7 @@ class ThrottledCloudClient:
         _sleep_ms(uplink_delay)
 
         t0 = time.perf_counter()
-        response: SpecExtendTreeResponse = self.base_client.verify_specextend_tree(request)
+        response: SpecExtendResponse = self.base_client.verify_specextend(request)
         actual_server_ms = (time.perf_counter() - t0) * 1000
 
         downlink_payload = json.dumps(response.to_dict()).encode("utf-8")
