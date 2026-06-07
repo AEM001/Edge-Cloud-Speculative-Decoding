@@ -61,3 +61,16 @@
 - To close the gap, `max_depth` should be raised significantly (e.g., 32–64)
   so fewer rounds are needed, or batched draft generation should be used to
   amortize the working-cache attention cost across multiple draft positions.
+
+---
+
+## 2026-06-07 — 4K & 8K Quick Test (max_tokens=512, retrieve_every_n_steps=0)
+
+| Config | Method | Tokens | Total (ms) | Throughput (t/s) | Acceptance |
+|--------|--------|--------|------------|------------------|------------|
+| pg19_4K | direct | 512 | 35,471 | **14.43** | — |
+| pg19_4K | specextend_n32 | 512 | 125,316 | 4.09 | 0.77 |
+| pg19_8K | direct | 512 | 35,482 | **14.43** | — |
+| pg19_8K | specextend_n32 | 513 | 120,782 | 4.25 | 0.80 |
+
+Settings: nodes=32, max_depth=8, threshold=0.7, retrieval_chunk_size=32, retrieve_top_k=32, retrieve_every_n_steps=0.
