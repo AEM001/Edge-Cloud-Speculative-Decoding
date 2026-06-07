@@ -1,5 +1,21 @@
 # Performance Change Log
 
+## 2026-06-07 — Configurable Tree Draft Recovery
+
+- Restored optional branching-tree draft construction and target-side tree
+  verification on top of the current explicit full-KV plus retrieval-working-KV
+  path. Linear draft mode remains supported.
+- Added `draft_mode`, `draft_tree_nodes`, and `draft_tree_max_depth` to
+  `quick_benchmark_config.json` and the quick-test config flow. Defaults are
+  `branching`, `32`, and `8`, matching the prior strong tree setup.
+- The edge request now carries optional tree metadata (`parent_indices`,
+  `draft_position_ids`, `draft_attention_mask`) while preserving linear
+  `draft_ids` compatibility.
+- Avoided a duplicate working-KV rebuild in ordinary non-retrieval rounds when
+  the selected chunks and working indices are unchanged.
+- Validation: `python -m compileall scripts/core scripts/client scripts/server scripts/experiments`,
+  protocol round-trip smoke test, tree helper smoke test.
+
 ## 2026-05-29
 
 - Added PG-19 support with `load_prompts(source="pg19")` and fixed 2048 input tokens via `--prompt-input-tokens`.

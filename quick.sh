@@ -8,7 +8,7 @@
 # Common one-off overrides:
 #   MAX_TOKENS=256 DATASET_SPLIT=pg19_4K bash quick.sh
 #   METHODS="direct specextend_gpu" PROMPT_COUNT=3 bash quick.sh
-#   DRAFT_LENGTH=16 bash quick.sh
+#   DRAFT_MODE=branching DRAFT_TREE_NODES=32 DRAFT_TREE_MAX_DEPTH=8 bash quick.sh
 
 set -euo pipefail
 
@@ -42,7 +42,10 @@ CMD=(
 [[ -n "${PROMPT_TYPES:-}" ]] && CMD+=(--prompt-types ${PROMPT_TYPES})
 [[ -n "${DATASET_SPLIT:-}" ]] && CMD+=(--dataset-split "$DATASET_SPLIT")
 [[ -n "${PROMPT_INPUT_TOKENS:-}" ]] && CMD+=(--prompt-input-tokens "$PROMPT_INPUT_TOKENS")
+[[ -n "${DRAFT_MODE:-}" ]] && CMD+=(--draft-mode "$DRAFT_MODE")
 [[ -n "${DRAFT_LENGTH:-}" ]] && CMD+=(--draft-length "$DRAFT_LENGTH")
+[[ -n "${DRAFT_TREE_NODES:-}" ]] && CMD+=(--draft-tree-nodes "$DRAFT_TREE_NODES")
+[[ -n "${DRAFT_TREE_MAX_DEPTH:-}" ]] && CMD+=(--draft-tree-max-depth "$DRAFT_TREE_MAX_DEPTH")
 [[ -n "${RETRIEVAL_CHUNK_SIZE:-}" ]] && CMD+=(--retrieval-chunk-size "$RETRIEVAL_CHUNK_SIZE")
 [[ -n "${RETRIEVE_TOP_K:-}" ]] && CMD+=(--retrieve-top-k "$RETRIEVE_TOP_K")
 [[ -n "${RETRIEVE_EVERY_N_STEPS:-}" ]] && CMD+=(--retrieve-every-n-steps "$RETRIEVE_EVERY_N_STEPS")

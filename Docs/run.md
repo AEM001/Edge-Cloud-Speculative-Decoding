@@ -25,7 +25,10 @@ The main parameters to change are:
   "prompt_count": 3,
   "dataset_split": "pg19_4K",
   "prompt_input_tokens": 2048,
+  "draft_mode": "branching",
   "draft_length": 8,
+  "draft_tree_nodes": 32,
+  "draft_tree_max_depth": 8,
   "retrieval_chunk_size": 64,
   "retrieve_top_k": 16,
   "retrieve_every_n_steps": 16
@@ -41,7 +44,8 @@ bash quick.sh
 Common one-command overrides:
 
 ```bash
-DRAFT_LENGTH=16 bash quick.sh
+DRAFT_MODE=linear bash quick.sh
+DRAFT_TREE_NODES=32 DRAFT_TREE_MAX_DEPTH=8 bash quick.sh
 MAX_TOKENS=256 PROMPT_COUNT=1 bash quick.sh
 DATASET_SPLIT=pg19_8K PROMPT_INPUT_TOKENS=8192 bash quick.sh
 METHODS="direct specextend_gpu" bash quick.sh
@@ -52,7 +56,7 @@ Method names:
 
 ```text
 direct                 target model direct generation baseline
-specextend_gpu         linear SpecExtend with sparse draft KV, selected KV on GPU
+specextend_gpu         SpecExtend with sparse draft KV, selected KV on GPU
 specextend_kvload_cpu  same sparse KV selection, plus CPU KV loading cost on retrieval updates
 ```
 

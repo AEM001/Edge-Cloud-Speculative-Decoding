@@ -102,11 +102,18 @@ class CloudResponse:
 
 @dataclass
 class SpecExtendRequest:
-    """Wire request for SpecExtend linear draft verification."""
+    """Wire request for SpecExtend draft verification.
+
+    Linear drafts only need ``draft_ids``. Tree-shaped drafts additionally set
+    position, parent, and attention-mask fields.
+    """
 
     request_id: str
     prefix_ids: List[int]
     draft_ids: List[int]
+    draft_position_ids: Optional[List[int]] = None
+    parent_indices: Optional[List[int]] = None
+    draft_attention_mask: Optional[List[List[int]]] = None
     retrieve_attn_scores: bool = False
     retrieval_chunk_size: int = 32
     retrieve_top_k: int = 32
@@ -117,6 +124,9 @@ class SpecExtendRequest:
             "request_id": self.request_id,
             "prefix_ids": self.prefix_ids,
             "draft_ids": self.draft_ids,
+            "draft_position_ids": self.draft_position_ids,
+            "parent_indices": self.parent_indices,
+            "draft_attention_mask": self.draft_attention_mask,
             "retrieve_attn_scores": self.retrieve_attn_scores,
             "retrieval_chunk_size": self.retrieval_chunk_size,
             "retrieve_top_k": self.retrieve_top_k,
@@ -129,6 +139,9 @@ class SpecExtendRequest:
             request_id=data["request_id"],
             prefix_ids=data["prefix_ids"],
             draft_ids=data["draft_ids"],
+            draft_position_ids=data.get("draft_position_ids"),
+            parent_indices=data.get("parent_indices"),
+            draft_attention_mask=data.get("draft_attention_mask"),
             retrieve_attn_scores=bool(data.get("retrieve_attn_scores", False)),
             retrieval_chunk_size=int(data.get("retrieval_chunk_size", 32)),
             retrieve_top_k=int(data.get("retrieve_top_k", 32)),

@@ -53,7 +53,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "prompt_input_tokens": 2048,
     "async_pipeline": os.getenv("SPECEXTEND_ASYNC_PIPELINE", "1"),
     "pipeline_offsets": os.getenv("SPECEXTEND_PIPELINE_OFFSETS", "full,half"),
+    "draft_mode": "branching",
     "draft_length": 8,
+    "draft_tree_nodes": 32,
+    "draft_tree_max_depth": 8,
     "retrieval_chunk_size": 64,
     "retrieve_top_k": 16,
     "retrieve_every_n_steps": 16,
@@ -152,13 +155,19 @@ def load_config_file(path: Optional[Path]) -> Dict[str, Any]:
     config.update(loaded)
     if "spec_profiles" not in loaded:
         config["spec_profiles"] = DEFAULT_CONFIG["spec_profiles"]
-    normalize_linear_config(config)
+    normalize_spec_config(config)
     return config
 
 
-def normalize_linear_config(config: Dict[str, Any]) -> None:
+def normalize_spec_config(config: Dict[str, Any]) -> None:
+    if "draft_mode" not in config:
+        config["draft_mode"] = DEFAULT_CONFIG["draft_mode"]
     if "draft_length" not in config:
         config["draft_length"] = DEFAULT_CONFIG["draft_length"]
+    if "draft_tree_nodes" not in config:
+        config["draft_tree_nodes"] = DEFAULT_CONFIG["draft_tree_nodes"]
+    if "draft_tree_max_depth" not in config:
+        config["draft_tree_max_depth"] = DEFAULT_CONFIG["draft_tree_max_depth"]
 
 
 def apply_cli_overrides(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str, Any]:
@@ -168,7 +177,10 @@ def apply_cli_overrides(config: Dict[str, Any], args: argparse.Namespace) -> Dic
         "prompt_types": args.prompt_types,
         "dataset_split": args.dataset_split,
         "prompt_input_tokens": args.prompt_input_tokens,
+        "draft_mode": args.draft_mode,
         "draft_length": args.draft_length,
+        "draft_tree_nodes": args.draft_tree_nodes,
+        "draft_tree_max_depth": args.draft_tree_max_depth,
         "retrieval_chunk_size": args.retrieval_chunk_size,
         "retrieve_top_k": args.retrieve_top_k,
         "retrieve_every_n_steps": args.retrieve_every_n_steps,
@@ -177,8 +189,21 @@ def apply_cli_overrides(config: Dict[str, Any], args: argparse.Namespace) -> Dic
     for key, value in overrides.items():
         if value is not None:
             config[key] = value
-    normalize_linear_config(config)
+    normalize_spec_config(config)
     return config
+
+
+def apply_draft_mode_config(config: Dict[str, Any], profile: Optional[Dict[str, Any]] = None) -> None:
+    source = config if profile is None else {**config, **profile}
+    draft_mode = str(source.get("draft_mode", DEFAULT_CONFIG["draft_mode"])).strip().lower()
+    if draft_mode not in {"linear", "branching"}:
+        raise ValueError(f"Unsupported draft_mode: {draft_mode}")
+
+    os.environ["DRAFT_TREE_MODE"] = draft_mode
+    os.environ["DRAFT_TREE_NODES"] = str(int(source.get("draft_tree_nodes", DEFAULT_CONFIG["draft_tree_nodes"])))
+    os.environ["DRAFT_TREE_MAX_DEPTH"] = str(
+        int(source.get("draft_tree_max_depth", DEFAULT_CONFIG["draft_tree_max_depth"]))
+    )
 
 
 def load_prompt_set(prompt_types: List[str], prompt_count: int, split: str = "test"):
@@ -333,7 +358,7 @@ def run_specextend_case(
         ),
         verify_runtime=VerifyRuntimeMetrics(
             backend="custom_qwen3",
-            specextend_tree_verify=False,
+            specextend_tree_verify=str(profile.get("draft_mode", "")).lower() == "branching",
             attention_scores=metrics.retrieval_updates > 0,
         ),
         raw={
@@ -389,6 +414,9 @@ def warmup(draft_backend: QwenSpecExtendDraftBackend, cloud_client, prompt: str)
                 request_id="warmup",
                 prefix_ids=prompt_ids,
                 draft_ids=draft.draft.input_ids,
+                draft_position_ids=draft.draft.position_ids,
+                parent_indices=draft.draft.parent_indices,
+                draft_attention_mask=draft.draft.attention_mask,
             )
         )
     except Exception:
@@ -409,7 +437,14 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
     logger.info("=" * 70)
     logger.info("QUICK TEST - direct vs SpecExtend benchmark profiles")
     logger.info("Draft model: %s on %s", DRAFT_MODEL_PATH, DRAFT_DEVICE)
+    logger.info(
+        "Draft mode: %s nodes=%s depth=%s",
+        config["draft_mode"],
+        config["draft_tree_nodes"],
+        config["draft_tree_max_depth"],
+    )
     logger.info("=" * 70)
+    apply_draft_mode_config(config)
 
     prompts = load_prompt_set(config["prompt_types"], config["prompt_count"], config.get("dataset_split", "test"))
     base_client = create_http_cloud_client(SERVER_URL, timeout=REQUEST_TIMEOUT_SEC)
@@ -443,7 +478,16 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
                 results.append(direct_result)
 
         for profile in profiles:
-            logger.info("    profile=%s kv_tier=%s", profile["name"], profile.get("kv_tier_policy", "gpu"))
+            effective_profile = {**config, **profile}
+            apply_draft_mode_config(config, profile)
+            logger.info(
+                "    profile=%s kv_tier=%s draft_mode=%s nodes=%s depth=%s",
+                profile["name"],
+                profile.get("kv_tier_policy", "gpu"),
+                effective_profile["draft_mode"],
+                effective_profile["draft_tree_nodes"],
+                effective_profile["draft_tree_max_depth"],
+            )
             draft_backend.cache.reset()
             draft_backend.set_kv_tier_policy(
                 profile.get("kv_tier_policy", "gpu"),
@@ -461,7 +505,7 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
                 prompt_meta,
                 prompt,
                 int(profile.get("draft_length", config["draft_length"])),
-                profile,
+                effective_profile,
             )
             if spec_result:
                 results.append(spec_result)
@@ -483,7 +527,10 @@ def parse_args():
     parser.add_argument("--prompt-types", type=str, nargs="+", default=None)
     parser.add_argument("--dataset-split", type=str, default=None, help="Dataset file to use for pg19 (e.g. pg19_512, pg19_1K, pg19_2K, pg19_4K, pg19_8K, pg19_16K).")
     parser.add_argument("--prompt-input-tokens", type=int, default=None, help="Truncate prompts to this many input tokens.")
-    parser.add_argument("--draft-length", type=int, default=None, help="Linear draft tokens proposed per round.")
+    parser.add_argument("--draft-mode", choices=["linear", "branching"], default=None)
+    parser.add_argument("--draft-length", type=int, default=None, help="Draft tokens proposed per linear round.")
+    parser.add_argument("--draft-tree-nodes", type=int, default=None)
+    parser.add_argument("--draft-tree-max-depth", type=int, default=None)
     parser.add_argument("--retrieval-chunk-size", type=int, default=None)
     parser.add_argument("--retrieve-top-k", type=int, default=None)
     parser.add_argument("--retrieve-every-n-steps", type=int, default=None)

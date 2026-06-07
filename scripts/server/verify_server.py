@@ -46,6 +46,9 @@ class SpecExtendVerifyRequest(BaseModel):
     request_id: str
     prefix_ids: List[int]
     draft_ids: List[int]
+    draft_position_ids: Optional[List[int]] = None
+    parent_indices: Optional[List[int]] = None
+    draft_attention_mask: Optional[List[List[int]]] = None
     retrieve_attn_scores: bool = False
     retrieval_chunk_size: int = 32
     retrieve_top_k: int = 32

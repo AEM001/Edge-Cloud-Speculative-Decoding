@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any, List, Optional, Protocol
 class DraftSequence:
     input_ids: List[int]
     position_ids: List[int]
+    parent_indices: Optional[List[int]] = None
+    attention_mask: Optional[List[List[int]]] = None
 
 
 @dataclass

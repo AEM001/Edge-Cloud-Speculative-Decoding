@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 
 import torch
+import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from core.protocol import SpecExtendRequest, SpecExtendResponse
@@ -148,6 +149,9 @@ class SpecExtendDraftKVCache:
         generated since that cloud selection was made. At chunk granularity,
         include every chunk overlapping that suffix.
         """
+        previous_chunk_ids = [chunk.chunk_id for chunk in self.selected_chunks]
+        previous_indices = list(self.working_token_indices)
+
         if chunk_ids is None:
             self.selected_chunks = list(self.chunks)
             self._retrieval_base_seq_len = self.total_seq_len
@@ -169,6 +173,14 @@ class SpecExtendDraftKVCache:
                 self._retrieval_base_seq_len = base
 
         self._update_working_indices_from_chunks()
+        if (
+            not retrieval_selection_updated
+            and previous_chunk_ids == [chunk.chunk_id for chunk in self.selected_chunks]
+            and previous_indices == self.working_token_indices
+            and self._working_cache_seq_len() == len(self.working_token_indices)
+        ):
+            self.last_load_metrics = KVLoadMetrics()
+            return
         self._rebuild_working_cache()
 
     def _update_working_indices_from_chunks(self) -> None:
@@ -647,6 +659,16 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         draft_length: int,
         position_start: int,
     ) -> DraftSequence:
+        if os.getenv("DRAFT_TREE_MODE", "linear").strip().lower() == "branching":
+            nodes = int(os.getenv("DRAFT_TREE_NODES", os.getenv("NODES", str(max(32, draft_length)))))
+            max_depth = int(os.getenv("DRAFT_TREE_MAX_DEPTH", os.getenv("MAX_DEPTH", str(draft_length))))
+            return self._grow_branching_tree(
+                prefix,
+                nodes=max(1, nodes),
+                max_depth=max(1, max_depth),
+                position_start=position_start,
+            )
+
         length = max(1, draft_length)
         if prefix.past_key_values is None:
             raise ValueError("Draft generation requires the explicit SpecExtend working KV cache.")
@@ -659,6 +681,95 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             input_ids=input_ids,
             position_ids=position_ids,
         )
+
+    def _grow_branching_tree(
+        self,
+        prefix: DraftContext,
+        nodes: int,
+        max_depth: int,
+        position_start: int,
+    ) -> DraftSequence:
+        frontier = [([], -1, 0.0)]
+        records: List[Dict[str, object]] = []
+        branch_width = max(1, min(nodes, int(nodes**0.5) or 1))
+
+        for _depth in range(max_depth):
+            candidates = []
+            for path, _parent_idx, score in frontier:
+                context = prefix.with_path(path, position_start)
+                logits = self.runtime.next_logits_positioned(context.token_ids, context.position_ids)
+                logprobs = F.log_softmax(logits[0], dim=-1)
+                width = min(branch_width, nodes - len(records), logprobs.numel())
+                values, token_ids = torch.topk(logprobs, k=width)
+                for token_id, logprob in zip(token_ids.tolist(), values.tolist()):
+                    candidates.append((path + [int(token_id)], score + float(logprob)))
+
+            if not candidates:
+                break
+
+            candidates.sort(key=lambda item: item[1], reverse=True)
+            chosen = candidates[: max(1, min(nodes - len(records), len(candidates)))]
+            next_frontier = []
+            for path, score in chosen:
+                parent_idx = self._find_parent_index(records, path[:-1])
+                node_idx = len(records)
+                records.append(
+                    {
+                        "token_id": path[-1],
+                        "position_id": position_start + len(path) - 1,
+                        "parent_idx": parent_idx,
+                        "path": path,
+                    }
+                )
+                next_frontier.append((path, node_idx, score))
+            frontier = next_frontier
+
+            if len(records) >= nodes:
+                break
+
+        if not records:
+            logits = self.runtime.next_logits_positioned(prefix.token_ids, prefix.position_ids)
+            token_id = int(torch.argmax(logits, dim=-1).item())
+            records.append(
+                {
+                    "token_id": token_id,
+                    "position_id": position_start,
+                    "parent_idx": -1,
+                    "path": [token_id],
+                }
+            )
+
+        records = records[:nodes]
+        input_ids = [int(record["token_id"]) for record in records]
+        position_ids = [int(record["position_id"]) for record in records]
+        parent_indices = [int(record["parent_idx"]) for record in records]
+        attention_mask = self._tree_attention_mask(parent_indices)
+        return DraftSequence(
+            input_ids=input_ids,
+            position_ids=position_ids,
+            parent_indices=parent_indices,
+            attention_mask=attention_mask,
+        )
+
+    @staticmethod
+    def _find_parent_index(records: List[Dict[str, object]], parent_path: List[int]) -> int:
+        if not parent_path:
+            return -1
+        for idx in range(len(records) - 1, -1, -1):
+            if records[idx]["path"] == parent_path:
+                return idx
+        return -1
+
+    @staticmethod
+    def _tree_attention_mask(parent_indices: Sequence[int]) -> List[List[int]]:
+        size = len(parent_indices)
+        mask = [[0 for _ in range(size)] for _ in range(size)]
+        for row in range(size):
+            idx = row
+            while idx >= 0:
+                mask[row][idx] = 1
+                idx = parent_indices[idx]
+        return mask
 
     def _snapshot_working_lengths(self) -> List[int]:
         """Snapshot current_length for every KVCache slot in working_cache."""
@@ -766,8 +877,9 @@ class QwenSpecExtendTargetBackend:
     def runtime_debug_info(self) -> Dict[str, object]:
         return {
             "backend": "custom_qwen3",
-            "draft_mode": "linear",
+            "draft_mode": os.getenv("DRAFT_TREE_MODE", "linear").strip().lower(),
             "attention_scores": True,
+            "tree_attention": True,
             "kv_cache": "transformers_dynamic_cache_plus_visible_token_cache",
             "draft_cache": "explicit_full_kv_plus_retrieval_working_kv",
         }
@@ -784,11 +896,32 @@ class QwenSpecExtendTargetBackend:
     @torch.inference_mode()
     def verify(self, request: SpecExtendRequest) -> SpecExtendResponse:
         start = time.perf_counter()
-        accepted_len, correction_token_id = self._verify_linear_path(
-            request.prefix_ids,
-            list(request.draft_ids),
-        )
-        accepted_indices = list(range(accepted_len))
+        parent_indices = request.parent_indices or []
+        if parent_indices and not self._is_linear_tree(parent_indices):
+            paths = self._paths_from_tree(request.draft_ids, parent_indices)
+            accepted_indices: List[int] = []
+            correction_token_id: Optional[int] = None
+            accepted_len = -1
+            max_path_len = max((len(path) for path in paths), default=0)
+            if max_path_len > 0:
+                target_tokens = self.runtime.generate_token_ids_cached(request.prefix_ids, max_path_len + 1)
+                for node_idx, path in enumerate(paths):
+                    path_accept_len, correction = self._verify_path_against_tokens(path, target_tokens)
+                    if path_accept_len > accepted_len:
+                        accepted_len = path_accept_len
+                        accepted_indices = self._indices_for_path(node_idx, parent_indices)[:path_accept_len]
+                        correction_token_id = correction
+            else:
+                target_tokens = self.runtime.generate_token_ids_cached(request.prefix_ids, 1)
+                correction_token_id = target_tokens[0] if target_tokens else None
+                accepted_len = 0
+            accepted_len = max(0, accepted_len)
+        else:
+            accepted_len, correction_token_id = self._verify_linear_path(
+                request.prefix_ids,
+                list(request.draft_ids),
+            )
+            accepted_indices = list(range(accepted_len))
 
         target_attn_scores = None
         selected_chunk_ids = None
@@ -877,6 +1010,51 @@ class QwenSpecExtendTargetBackend:
         if accepted == len(path):
             correction = int(torch.argmax(path_logits[:, -1, :], dim=-1).item())
         return accepted, correction
+
+    @staticmethod
+    def _is_linear_tree(parent_indices: Sequence[int]) -> bool:
+        return all(parent_idx == idx - 1 for idx, parent_idx in enumerate(parent_indices))
+
+    @staticmethod
+    def _verify_path_against_tokens(path: List[int], target_tokens: List[int]) -> tuple[int, Optional[int]]:
+        accepted = 0
+        correction = None
+        for idx, draft_token in enumerate(path):
+            if idx >= len(target_tokens):
+                break
+            target_token = int(target_tokens[idx])
+            if target_token != draft_token:
+                correction = target_token
+                break
+            accepted += 1
+        if accepted == len(path) and accepted < len(target_tokens):
+            correction = int(target_tokens[accepted])
+        return accepted, correction
+
+    @staticmethod
+    def _paths_from_tree(draft_ids: Sequence[int], parent_indices: Sequence[int]) -> List[List[int]]:
+        paths: List[List[int]] = []
+        for idx in range(len(draft_ids)):
+            reverse_path = []
+            current = idx
+            seen = set()
+            while current >= 0 and current not in seen:
+                seen.add(current)
+                reverse_path.append(int(draft_ids[current]))
+                current = int(parent_indices[current])
+            paths.append(list(reversed(reverse_path)))
+        return paths
+
+    @staticmethod
+    def _indices_for_path(node_idx: int, parent_indices: Sequence[int]) -> List[int]:
+        indices = []
+        current = node_idx
+        seen = set()
+        while current >= 0 and current not in seen:
+            seen.add(current)
+            indices.append(current)
+            current = int(parent_indices[current])
+        return list(reversed(indices))
 
     @torch.inference_mode()
     def _last_query_attention_scores_cached(self, token_ids: Sequence[int]) -> List[float]:
