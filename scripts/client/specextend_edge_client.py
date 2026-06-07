@@ -78,6 +78,7 @@ class SpecExtendEdgeClient:
         correction_token_id: Optional[int] = None
         prefetched = None
         retrieval_recorded_len = 0
+        retrieval_selection_updated = False
         wall_start = time.perf_counter()
 
         use_pipeline = (
@@ -117,7 +118,9 @@ class SpecExtendEdgeClient:
                         threshold=self.threshold,
                         max_depth=self.max_depth,
                         retrieval_chunk_ids=retrieval_chunk_ids,
+                        retrieval_selection_updated=retrieval_selection_updated,
                     )
+                    retrieval_selection_updated = False
                 prefetched = None
 
                 request = SpecExtendRequest(
@@ -175,9 +178,11 @@ class SpecExtendEdgeClient:
                     selected = self.retrieval.select_by_attention(response.target_attn_scores)
                     metrics.retrieval_updates += 1
                     metrics.selected_chunk_ids = [chunk.chunk_id for chunk in selected]
+                    retrieval_selection_updated = True
                 elif response.selected_chunk_ids is not None:
                     self.retrieval.set_selected_chunk_ids(response.selected_chunk_ids)
                     metrics.selected_chunk_ids = self.retrieval.selected_chunk_ids()
+                    retrieval_selection_updated = True
 
                 metrics.total_rounds += 1
                 metrics.total_edge_draft_time_ms += draft_result.draft_time_ms

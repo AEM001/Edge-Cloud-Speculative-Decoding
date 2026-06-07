@@ -136,29 +136,32 @@ class SpecExtendDraftKVCache:
             value.zero_()
         self.working_cache = self._allocate_kv_cache(self.max_length)
 
-    def select_chunks(self, chunk_ids: Optional[List[int]] = None) -> None:
+    def select_chunks(
+        self,
+        chunk_ids: Optional[List[int]] = None,
+        retrieval_selection_updated: bool = False,
+    ) -> None:
         """Select working cache by chunk IDs, mirroring sparse-kv's chunk-level retrieval.
 
-        When ``chunk_ids`` is provided (cloud-driven selection), any chunk whose
-        token range starts at or after ``_retrieval_base_seq_len`` is a *tail*
-        chunk generated since the last cloud retrieval update.  These tail chunks
-        are always force-included so that newly generated tokens are always
-        visible to the draft model between retrieval refreshes.
+        The working cache is the cloud-selected sparse chunks plus the suffix
+        generated since that cloud selection was made. At chunk granularity,
+        include every chunk overlapping that suffix.
         """
         if chunk_ids is None:
             self.selected_chunks = list(self.chunks)
             self._retrieval_base_seq_len = self.total_seq_len
         else:
             wanted = set(chunk_ids)
+            if retrieval_selection_updated:
+                self._retrieval_base_seq_len = self.total_seq_len
             base = self._retrieval_base_seq_len
             selected = [
                 chunk for chunk in self.chunks
-                if chunk.chunk_id in wanted or chunk.start >= base
+                if chunk.chunk_id in wanted or chunk.end > base
             ]
             if not selected:
                 selected = list(self.chunks)
             self.selected_chunks = selected
-            self._retrieval_base_seq_len = self.total_seq_len
 
         self._update_working_indices_from_chunks()
         self._rebuild_working_cache()
@@ -562,6 +565,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         threshold: float,
         max_depth: int,
         retrieval_chunk_ids: Optional[List[int]] = None,
+        retrieval_selection_updated: bool = False,
     ) -> DraftResult:
         start = time.perf_counter()
         if correction_token_id is not None and (
@@ -569,8 +573,11 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         ):
             verified_prefix = list(verified_prefix) + [correction_token_id]
 
-        self.cache.select_chunks(retrieval_chunk_ids)
         appended = self.cache.append_prefix(self.runtime, verified_prefix)
+        self.cache.select_chunks(
+            retrieval_chunk_ids,
+            retrieval_selection_updated=retrieval_selection_updated,
+        )
         draft_context = self.cache.context()
 
         draft_seq = self._generate_draft_sequence(

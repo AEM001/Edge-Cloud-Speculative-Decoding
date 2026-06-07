@@ -35,6 +35,7 @@ class SpecExtendDraftBackend(Protocol):
         threshold: float,
         max_depth: int,
         retrieval_chunk_ids: Optional[List[int]] = None,
+        retrieval_selection_updated: bool = False,
     ) -> DraftResult:
         """Build a linear draft sequence for the current verified prefix."""
 

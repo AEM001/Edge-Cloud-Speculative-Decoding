@@ -586,3 +586,22 @@ Also changed `start_verify.sh` default from `eager` to `flash_attention_2`.
 (Note: Qwen3 in the current Transformers version silently falls back to
 `Qwen3Attention` for both `flash_attention_2` and `sdpa`; `eager` remains the
 effective implementation until upstream support is added.)
+
+## 2026-06-07 — Retrieval-Epoch KV Suffix Fix
+
+Replaced the fixed recent-token fallback with retrieval-epoch semantics for
+draft working KV selection:
+
+- `SpecExtendEdgeClient` now marks when the cloud returns a fresh KV selection
+  (`target_attn_scores` or `selected_chunk_ids`).
+- `SpecExtendDraftKVCache.select_chunks()` advances `_retrieval_base_seq_len`
+  only on those fresh selection updates, not every draft round.
+- Working KV is now:
+  `cloud-selected sparse chunks ∪ chunks overlapping tokens generated since the last cloud selection`.
+- `build_draft()` appends the verified prefix before applying chunk selection so
+  newly verified tokens are present in the backend chunk table.
+- Added a unit test covering the invariant that chunks generated between two
+  cloud selection updates remain in the working KV.
+
+Validation: `py_compile` passes and `tests/test_specextend_core.py` reports
+5 tests OK.
