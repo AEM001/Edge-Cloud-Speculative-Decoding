@@ -225,7 +225,7 @@ class Qwen3Attention(nn.Module):
 class Qwen3SdpaAttention(Qwen3Attention):
     def forward(self, hidden_states, attention_mask=None, position_ids=None, past_key_value=None,
                 output_attentions=False, use_cache=False, cache_position=None, position_embeddings=None):
-        if output_attentions:
+        if output_attentions and hidden_states.shape[1] != 1:
             return super().forward(
                 hidden_states=hidden_states, attention_mask=attention_mask, position_ids=position_ids,
                 past_key_value=past_key_value, output_attentions=output_attentions, use_cache=use_cache)
@@ -269,7 +269,16 @@ class Qwen3SdpaAttention(Qwen3Attention):
         attn_output = attn_output.transpose(1, 2).contiguous()
         attn_output = attn_output.view(bsz, q_len, self.hidden_size)
         attn_output = self.o_proj(attn_output)
-        return attn_output, None, past_key_value
+        if output_attentions:
+            # q_len==1: compute attention weights via explicit softmax for the retrieval scoring path.
+            # key_states shape: (bsz, num_heads, kv_len, head_dim) after repeat_kv.
+            attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
+            if causal_mask is not None:
+                attn_weights = attn_weights + causal_mask[:, :, :, : key_states.shape[-2]]
+            attn_weights = torch.nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
+        else:
+            attn_weights = None
+        return attn_output, attn_weights, past_key_value
 
 
 QWEN3_ATTENTION_CLASSES = {

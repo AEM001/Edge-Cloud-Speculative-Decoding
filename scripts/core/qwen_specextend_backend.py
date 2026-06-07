@@ -267,8 +267,22 @@ class SpecExtendDraftKVCache:
                 if last_chunk.chunk_id not in selected_ids:
                     self.selected_chunks.append(last_chunk)
             self._refresh_selected_tail()
+            prev_len = len(self.working_token_indices)
             self._update_working_indices_from_chunks()
-            self._rebuild_working_cache()
+            new_len = len(self.working_token_indices)
+            # The model forward already appended the new token KVs into working_cache
+            # incrementally (via KVCache.cat). Just update current_length to match
+            # the new working_token_indices length — no full rebuild needed.
+            actual_cache_len = self._working_cache_seq_len()
+            if actual_cache_len == new_len:
+                pass  # already in sync
+            elif actual_cache_len >= new_len and actual_cache_len == prev_len + (new_len - prev_len):
+                with torch.inference_mode(False):
+                    for layer_idx in range(len(self.full_draft_kv)):
+                        self.working_cache[layer_idx][0].current_length.fill_(new_len)
+                        self.working_cache[layer_idx][1].current_length.fill_(new_len)
+            else:
+                self._rebuild_working_cache()
 
         return len(new_tokens)
 
@@ -871,7 +885,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
 
 class QwenSpecExtendTargetBackend:
     def __init__(self, config: QwenBackendConfig):
-        self.runtime = QwenModelRuntime(config)
+        self.runtime = QwenModelRuntime(config, use_custom_kv_model=True)
         self.tokenizer = self.runtime.tokenizer
 
     def runtime_debug_info(self) -> Dict[str, object]:
