@@ -38,8 +38,39 @@ DRAFT_ATTN_IMPLEMENTATION = os.getenv("DRAFT_ATTN_IMPLEMENTATION", "sdpa")
 REQUEST_TIMEOUT_SEC = float(os.getenv("QUICK_TEST_TIMEOUT_SEC", "600"))
 
 OUTPUT_DIR = Path(__file__).parent / "outputs_quick"
+DEFAULT_CONFIG_PATH = Path(__file__).parent.parent.parent / "quick_benchmark_config.json"
 DIRECT_SESSION = requests.Session()
 DIRECT_SESSION.trust_env = False
+
+
+DEFAULT_CONFIG: Dict[str, Any] = {
+    "network": "good",
+    "methods": ["direct", "specextend_gpu", "specextend_kvload_cpu"],
+    "max_tokens": 256,
+    "prompt_count": 1,
+    "prompt_types": ["pg19"],
+    "dataset_split": "pg19_512",
+    "prompt_input_tokens": 2048,
+    "async_pipeline": os.getenv("SPECEXTEND_ASYNC_PIPELINE", "1"),
+    "pipeline_offsets": os.getenv("SPECEXTEND_PIPELINE_OFFSETS", "full,half"),
+    "draft_length": 8,
+    "retrieval_chunk_size": 64,
+    "retrieve_top_k": 16,
+    "retrieve_every_n_steps": 16,
+    "spec_profiles": [
+        {
+            "name": "specextend_gpu",
+            "label": "SpecExtend sparse KV, all KV in GPU",
+            "kv_tier_policy": "gpu",
+        },
+        {
+            "name": "specextend_kvload_cpu",
+            "label": "SpecExtend sparse KV with CPU KV loading cost",
+            "kv_tier_policy": "cpu",
+            "kv_tier_keep_recent_chunks": 0,
+        },
+    ],
+}
 
 
 @dataclass
@@ -53,6 +84,10 @@ class OutputMetrics:
 class TimingMetrics:
     client_wall_ms: float = 0.0
     local_draft_ms: float = 0.0
+    kv_load_ms: float = 0.0
+    kv_gpu_load_ms: float = 0.0
+    kv_cpu_load_ms: float = 0.0
+    kv_ssd_load_ms: float = 0.0
     server_model_ms: float = 0.0
     server_total_ms: float = 0.0
     http_rpc_ms: float = 0.0
@@ -65,7 +100,7 @@ class TimingMetrics:
 @dataclass
 class SpeculativeMetrics:
     rounds: int = 0
-    nodes: int = 0
+    draft_length: int = 0
     accepted_draft_tokens: int = 0
     correction_tokens: int = 0
     generated_per_round: float = 0.0
@@ -105,6 +140,45 @@ class DirectTiming:
 
 def get_results_path() -> Path:
     return OUTPUT_DIR / f"quick_test_results_{time.strftime('%Y%m%d_%H%M%S')}.json"
+
+
+def load_config_file(path: Optional[Path]) -> Dict[str, Any]:
+    if path is None:
+        return dict(DEFAULT_CONFIG)
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
+    loaded = json.loads(path.read_text())
+    config = dict(DEFAULT_CONFIG)
+    config.update(loaded)
+    if "spec_profiles" not in loaded:
+        config["spec_profiles"] = DEFAULT_CONFIG["spec_profiles"]
+    normalize_linear_config(config)
+    return config
+
+
+def normalize_linear_config(config: Dict[str, Any]) -> None:
+    if "draft_length" not in config:
+        config["draft_length"] = DEFAULT_CONFIG["draft_length"]
+
+
+def apply_cli_overrides(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str, Any]:
+    overrides = {
+        "max_tokens": args.max_tokens,
+        "prompt_count": args.prompt_count,
+        "prompt_types": args.prompt_types,
+        "dataset_split": args.dataset_split,
+        "prompt_input_tokens": args.prompt_input_tokens,
+        "draft_length": args.draft_length,
+        "retrieval_chunk_size": args.retrieval_chunk_size,
+        "retrieve_top_k": args.retrieve_top_k,
+        "retrieve_every_n_steps": args.retrieve_every_n_steps,
+        "methods": args.methods,
+    }
+    for key, value in overrides.items():
+        if value is not None:
+            config[key] = value
+    normalize_linear_config(config)
+    return config
 
 
 def load_prompt_set(prompt_types: List[str], prompt_count: int, split: str = "test"):
@@ -210,7 +284,8 @@ def run_specextend_case(
     throttled: ThrottledCloudClient,
     prompt_meta: Dict[str, Any],
     prompt: str,
-    nodes: int,
+    draft_length: int,
+    profile: Dict[str, Any],
 ):
     throttled.reset_stats()
     try:
@@ -228,7 +303,7 @@ def run_specextend_case(
     acceptance_length = metrics.total_accepted_tokens / metrics.total_rounds if metrics.total_rounds else 0.0
 
     return ExperimentResult(
-        method=f"specextend_n{nodes}",
+        method=profile["name"],
         method_family="specextend",
         network=throttled.condition.name,
         prompt_type=prompt_meta["type"],
@@ -237,6 +312,10 @@ def run_specextend_case(
         timing=TimingMetrics(
             client_wall_ms=total_ms,
             local_draft_ms=metrics.total_edge_draft_time_ms,
+            kv_load_ms=metrics.total_kv_load_time_ms,
+            kv_gpu_load_ms=metrics.total_kv_gpu_load_ms,
+            kv_cpu_load_ms=metrics.total_kv_cpu_load_ms,
+            kv_ssd_load_ms=metrics.total_kv_ssd_load_ms,
             server_model_ms=metrics.total_server_verify_time_ms,
             server_total_ms=metrics.total_server_verify_time_ms,
             simulated_ul_ms=net_stats["total_simulated_uplink_delay_ms"],
@@ -246,7 +325,7 @@ def run_specextend_case(
         ),
         speculative=SpeculativeMetrics(
             rounds=metrics.total_rounds,
-            nodes=nodes,
+            draft_length=draft_length,
             accepted_draft_tokens=metrics.total_accepted_tokens,
             correction_tokens=correction_tokens,
             generated_per_round=metrics.generated_tokens / metrics.total_rounds if metrics.total_rounds else 0.0,
@@ -258,11 +337,41 @@ def run_specextend_case(
             attention_scores=metrics.retrieval_updates > 0,
         ),
         raw={
+            "profile": profile,
             "network": net_stats,
             "selected_chunk_ids": metrics.selected_chunk_ids,
             "round_details": metrics.round_details,
         },
     )
+
+
+def build_specextend_client(
+    draft_backend: QwenSpecExtendDraftBackend,
+    cloud_verify,
+    config: Dict[str, Any],
+    profile: Dict[str, Any],
+) -> SpecExtendEdgeClient:
+    draft_length = int(profile.get("draft_length", config["draft_length"]))
+    return SpecExtendEdgeClient(
+        draft_backend=draft_backend,
+        cloud_verify=cloud_verify,
+        max_new_tokens=int(profile.get("max_tokens", config["max_tokens"])),
+        draft_length=draft_length,
+        retrieval_chunk_size=int(profile.get("retrieval_chunk_size", config["retrieval_chunk_size"])),
+        retrieve_top_k=int(profile.get("retrieve_top_k", config["retrieve_top_k"])),
+        retrieve_every_n_steps=int(
+            profile.get("retrieve_every_n_steps", config["retrieve_every_n_steps"])
+        ),
+    )
+
+
+def selected_spec_profiles(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    requested = set(config.get("methods") or [])
+    profiles = []
+    for profile in config.get("spec_profiles", []):
+        if not requested or profile["name"] in requested:
+            profiles.append(profile)
+    return profiles
 
 
 def warmup(draft_backend: QwenSpecExtendDraftBackend, cloud_client, prompt: str) -> None:
@@ -271,9 +380,7 @@ def warmup(draft_backend: QwenSpecExtendDraftBackend, cloud_client, prompt: str)
     draft = draft_backend.build_draft(
         verified_prefix=prompt_ids,
         correction_token_id=None,
-        nodes=4,
-        threshold=0.7,
-        max_depth=2,
+        draft_length=2,
         retrieval_chunk_ids=None,
     )
     try:
@@ -300,7 +407,7 @@ def save_results(results: List[ExperimentResult], config: Dict[str, Any]) -> Non
 
 def run_quick_test(config: Dict[str, Any]) -> bool:
     logger.info("=" * 70)
-    logger.info("QUICK TEST - direct vs real SpecExtend on good network")
+    logger.info("QUICK TEST - direct vs SpecExtend benchmark profiles")
     logger.info("Draft model: %s on %s", DRAFT_MODEL_PATH, DRAFT_DEVICE)
     logger.info("=" * 70)
 
@@ -317,23 +424,12 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
         )
     )
     prompts = truncate_prompts_to_tokens(prompts, draft_backend.tokenizer, config["prompt_input_tokens"])
-    specextend_client = SpecExtendEdgeClient(
-        draft_backend=draft_backend,
-        cloud_verify=base_client.verify_specextend,
-        max_new_tokens=config["max_tokens"],
-        nodes=config["nodes"],
-        threshold=config["threshold"],
-        max_depth=config["max_depth"],
-        retrieval_chunk_size=config["retrieval_chunk_size"],
-        retrieve_top_k=config["retrieve_top_k"],
-        retrieve_every_n_steps=config["retrieve_every_n_steps"],
-    )
 
     warmup(draft_backend, base_client, prompts[0][0]["text"])
 
     condition = NetworkCondition.good()
     throttled = ThrottledCloudClient(base_client, condition)
-    specextend_client.cloud_verify = throttled.verify_specextend
+    profiles = selected_spec_profiles(config)
 
     results: List[ExperimentResult] = []
     for prompt_data, prompt_type in prompts:
@@ -341,19 +437,38 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
         prompt = prompt_data["text"]
         logger.info("  [%s | prompt %d]", prompt_type, prompt_data["id"])
 
-        direct_result = run_direct_case(prompt_meta, prompt, throttled, config["max_tokens"])
-        if direct_result:
-            results.append(direct_result)
+        if "direct" in set(config.get("methods") or ["direct"]):
+            direct_result = run_direct_case(prompt_meta, prompt, throttled, config["max_tokens"])
+            if direct_result:
+                results.append(direct_result)
 
-        spec_result = run_specextend_case(
-            specextend_client,
-            throttled,
-            prompt_meta,
-            prompt,
-            config["nodes"],
-        )
-        if spec_result:
-            results.append(spec_result)
+        for profile in profiles:
+            logger.info("    profile=%s kv_tier=%s", profile["name"], profile.get("kv_tier_policy", "gpu"))
+            draft_backend.cache.reset()
+            draft_backend.set_kv_tier_policy(
+                profile.get("kv_tier_policy", "gpu"),
+                keep_recent_chunks=int(profile.get("kv_tier_keep_recent_chunks", 0)),
+            )
+            specextend_client = build_specextend_client(
+                draft_backend,
+                throttled.verify_specextend,
+                config,
+                profile,
+            )
+            spec_result = run_specextend_case(
+                specextend_client,
+                throttled,
+                prompt_meta,
+                prompt,
+                int(profile.get("draft_length", config["draft_length"])),
+                profile,
+            )
+            if spec_result:
+                results.append(spec_result)
+
+    if not results:
+        logger.error("No successful benchmark results were produced.")
+        return False
 
     save_results(results, config)
     return True
@@ -361,39 +476,22 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run direct and real SpecExtend quick tests.")
-    parser.add_argument("--max-tokens", type=int, default=512)
-    parser.add_argument("--prompt-count", type=int, default=1)
-    parser.add_argument("--prompt-types", type=str, nargs="+", default=["pg19"])
-    parser.add_argument("--dataset-split", type=str, default="pg19_512", help="Dataset file to use for pg19 (e.g. pg19_512, pg19_1K, pg19_2K, pg19_4K, pg19_8K, pg19_16K).")
-    parser.add_argument("--prompt-input-tokens", type=int, default=0, help="Truncate prompts to this many input tokens.")
-    parser.add_argument("--nodes", type=int, default=32, help="Maximum draft-tree nodes.")
-    parser.add_argument("--threshold", type=float, default=0.7)
-    parser.add_argument("--max-depth", type=int, default=8)
-    parser.add_argument("--retrieval-chunk-size", type=int, default=32)
-    parser.add_argument("--retrieve-top-k", type=int, default=32)
-    parser.add_argument("--retrieve-every-n-steps", type=int, default=0)
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    parser.add_argument("--methods", type=str, nargs="+", default=None)
+    parser.add_argument("--max-tokens", type=int, default=None)
+    parser.add_argument("--prompt-count", type=int, default=None)
+    parser.add_argument("--prompt-types", type=str, nargs="+", default=None)
+    parser.add_argument("--dataset-split", type=str, default=None, help="Dataset file to use for pg19 (e.g. pg19_512, pg19_1K, pg19_2K, pg19_4K, pg19_8K, pg19_16K).")
+    parser.add_argument("--prompt-input-tokens", type=int, default=None, help="Truncate prompts to this many input tokens.")
+    parser.add_argument("--draft-length", type=int, default=None, help="Linear draft tokens proposed per round.")
+    parser.add_argument("--retrieval-chunk-size", type=int, default=None)
+    parser.add_argument("--retrieve-top-k", type=int, default=None)
+    parser.add_argument("--retrieve-every-n-steps", type=int, default=None)
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    success = run_quick_test(
-        {
-            "network": "good",
-            "methods": ["direct", "specextend"],
-            "max_tokens": args.max_tokens,
-            "prompt_count": args.prompt_count,
-            "prompt_types": args.prompt_types,
-            "dataset_split": args.dataset_split,
-            "prompt_input_tokens": args.prompt_input_tokens,
-            "async_pipeline": os.getenv("SPECEXTEND_ASYNC_PIPELINE", "1"),
-            "pipeline_offsets": os.getenv("SPECEXTEND_PIPELINE_OFFSETS", "full,half"),
-            "nodes": args.nodes,
-            "threshold": args.threshold,
-            "max_depth": args.max_depth,
-            "retrieval_chunk_size": args.retrieval_chunk_size,
-            "retrieve_top_k": args.retrieve_top_k,
-            "retrieve_every_n_steps": args.retrieve_every_n_steps,
-        }
-    )
+    config = apply_cli_overrides(load_config_file(args.config), args)
+    success = run_quick_test(config)
     sys.exit(0 if success else 1)

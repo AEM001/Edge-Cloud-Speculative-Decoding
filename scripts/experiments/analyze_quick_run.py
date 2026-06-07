@@ -49,7 +49,7 @@ def load_result_file(path: Path) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
 
 def method_summary(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     direct_tps = avg(row["output"]["tokens_per_second"] for row in rows if row["method"] == "direct")
-    methods = sorted({row["method"] for row in rows})
+    methods = ordered_methods(rows)
     summary: Dict[str, Any] = {}
 
     for method in methods:
@@ -62,6 +62,10 @@ def method_summary(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
             "total_time_ms": avg(row["output"]["total_time_ms"] for row in method_rows),
             "tokens_generated": avg(row["output"]["tokens_generated"] for row in method_rows),
             "simulated_network_ms": avg(row["timing"]["simulated_network_ms"] for row in method_rows),
+            "kv_load_ms": avg(row["timing"].get("kv_load_ms", 0.0) for row in method_rows),
+            "kv_gpu_load_ms": avg(row["timing"].get("kv_gpu_load_ms", 0.0) for row in method_rows),
+            "kv_cpu_load_ms": avg(row["timing"].get("kv_cpu_load_ms", 0.0) for row in method_rows),
+            "kv_ssd_load_ms": avg(row["timing"].get("kv_ssd_load_ms", 0.0) for row in method_rows),
         }
         if method != "direct":
             summary[method].update(
@@ -77,6 +81,14 @@ def method_summary(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
                 }
             )
     return summary
+
+
+def ordered_methods(rows: List[Dict[str, Any]]) -> List[str]:
+    methods = {row["method"] for row in rows}
+    preferred = ["direct", "specextend_gpu", "specextend_kvload_cpu", "specextend_kvload_ssd"]
+    ordered = [method for method in preferred if method in methods]
+    ordered.extend(sorted(methods - set(ordered)))
+    return ordered
 
 
 def build_summary(config: Dict[str, Any], results: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -124,8 +136,9 @@ def print_summary(summary: Dict[str, Any]) -> None:
             print(f"{method:16} {row['tokens_per_second']:8.2f} tok/s")
         else:
             print(
-                f"{method:16} {row['tokens_per_second']:8.2f} tok/s  "
-                f"{row['speedup_vs_direct']:.3f}x vs direct ({direct_tps:.2f} tok/s)"
+                f"{method:24} {row['tokens_per_second']:8.2f} tok/s  "
+                f"{row['speedup_vs_direct']:.3f}x vs direct ({direct_tps:.2f} tok/s)  "
+                f"kv_load={row.get('kv_load_ms', 0.0):.1f} ms"
             )
 
 

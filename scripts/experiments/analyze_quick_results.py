@@ -24,16 +24,18 @@ RESULTS_PATH = OUTPUT_DIR / "quick_test_results.json"
 ROUNDS_PATH = OUTPUT_DIR / "quick_test_rounds.jsonl"
 ANALYSIS_DIR = OUTPUT_DIR / "analysis"
 
-METHOD_ORDER = ["direct", "sync_k8", "tree_k8_b3"]
+METHOD_ORDER = ["direct", "specextend_gpu", "specextend_kvload_cpu", "specextend_kvload_ssd"]
 METHOD_LABELS = {
     "direct": "Direct",
-    "sync_k8": "Sync K=8",
-    "tree_k8_b3": "Tree K=8 B=3",
+    "specextend_gpu": "SpecExtend GPU KV",
+    "specextend_kvload_cpu": "SpecExtend CPU KV load",
+    "specextend_kvload_ssd": "SpecExtend SSD KV load",
 }
 COLORS = {
     "direct": "#4C78A8",
-    "sync_k8": "#F58518",
-    "tree_k8_b3": "#54A24B",
+    "specextend_gpu": "#F58518",
+    "specextend_kvload_cpu": "#54A24B",
+    "specextend_kvload_ssd": "#B279A2",
 }
 
 
@@ -43,6 +45,7 @@ def load_results() -> pd.DataFrame:
     flat_rows = []
     for row in rows:
         speculative = row["speculative"]
+        timing = row["timing"]
         acceptance_length = speculative.get(
             "acceptance_length",
             speculative.get("accepted_draft_per_round", 0.0),
@@ -56,22 +59,22 @@ def load_results() -> pd.DataFrame:
                 "tokens": row["output"]["tokens_generated"],
                 "total_ms": row["output"]["total_time_ms"],
                 "tps": row["output"]["tokens_per_second"],
-                "server_model_ms": row["timing"]["server_model_ms"],
-                "http_rpc_ms": row["timing"]["http_rpc_ms"],
-                "local_draft_ms": row["timing"]["local_draft_ms"],
-                "sim_network_ms": row["timing"]["simulated_network_ms"],
-                "avg_rtt_ms": row["timing"]["avg_rtt_ms"],
+                "server_model_ms": timing.get("server_model_ms", 0.0),
+                "http_rpc_ms": timing.get("http_rpc_ms", 0.0),
+                "local_draft_ms": timing.get("local_draft_ms", 0.0),
+                "kv_load_ms": timing.get("kv_load_ms", 0.0),
+                "kv_gpu_load_ms": timing.get("kv_gpu_load_ms", 0.0),
+                "kv_cpu_load_ms": timing.get("kv_cpu_load_ms", 0.0),
+                "kv_ssd_load_ms": timing.get("kv_ssd_load_ms", 0.0),
+                "sim_network_ms": timing.get("simulated_network_ms", 0.0),
+                "avg_rtt_ms": timing.get("avg_rtt_ms", 0.0),
                 "rounds": row["speculative"]["rounds"],
                 "acceptance_length": acceptance_length,
-                "generated_per_round": row["speculative"]["generated_per_round"],
-                "branch_reused": row["async_detail"]["branch_reused"],
-                "reused_tokens": row["async_detail"]["reused_tokens"],
-                "predraft_window_ms": row["async_detail"]["predraft_window_ms"],
-                "reuse_prep_time_ms": row["async_detail"]["reuse_prep_time_ms"],
+                "generated_per_round": speculative.get("generated_per_round", 0.0),
             }
         )
     df = pd.DataFrame(flat_rows)
-    df["method_label"] = df["method"].map(METHOD_LABELS)
+    df["method_label"] = df["method"].map(METHOD_LABELS).fillna(df["method"])
     return df
 
 
@@ -119,10 +122,9 @@ def write_tables(df: pd.DataFrame, rounds: pd.DataFrame) -> None:
             ms_saved_vs_direct=("ms_saved_vs_direct", "mean"),
             rounds=("rounds", "mean"),
             acceptance_length=("acceptance_length", "mean"),
-            branch_reused=("branch_reused", "mean"),
-            reused_tokens=("reused_tokens", "mean"),
-            predraft_window_ms=("predraft_window_ms", "mean"),
-            reuse_prep_time_ms=("reuse_prep_time_ms", "mean"),
+            kv_load_ms=("kv_load_ms", "mean"),
+            kv_cpu_load_ms=("kv_cpu_load_ms", "mean"),
+            kv_ssd_load_ms=("kv_ssd_load_ms", "mean"),
         )
         .reset_index()
     )
@@ -137,17 +139,17 @@ def write_tables(df: pd.DataFrame, rounds: pd.DataFrame) -> None:
             speedup_vs_direct=("speedup_vs_direct", "mean"),
             rounds=("rounds", "mean"),
             acceptance_length=("acceptance_length", "mean"),
-            branch_reused=("branch_reused", "mean"),
-            reused_tokens=("reused_tokens", "mean"),
+            kv_load_ms=("kv_load_ms", "mean"),
         )
         .reset_index()
     )
     prompt_summary.to_csv(ANALYSIS_DIR / "table_prompt_type_summary.csv", index=False)
 
-    if "accepted" in rounds:
+    if "accepted_len" in rounds:
+        spec_methods = [method for method in METHOD_ORDER if method != "direct"]
         acceptance = (
-            rounds[rounds["method"].isin(["sync_k8", "tree_k8_b3"])]
-            .groupby(["network", "method", "accepted"], observed=True)
+            rounds[rounds["method"].isin(spec_methods)]
+            .groupby(["network", "method", "accepted_len"], observed=True)
             .size()
             .reset_index(name="rounds")
         )
@@ -159,7 +161,8 @@ def write_tables(df: pd.DataFrame, rounds: pd.DataFrame) -> None:
     # Tree offsets table removed - slot_details no longer tracked in simplified metrics
 
     if "verify_input_len" in rounds:
-        verify = rounds[rounds["method"].isin(["sync_k8", "tree_k8_b3"])].copy()
+        spec_methods = [method for method in METHOD_ORDER if method != "direct"]
+        verify = rounds[rounds["method"].isin(spec_methods)].copy()
         verify["verify_ms"] = verify.get("server_time_ms", verify.get("verify_ms"))
         verify[["network", "method", "prompt_type", "prompt_id", "verify_input_len", "verify_ms", "rtt_ms"]].to_csv(
             ANALYSIS_DIR / "table_verify_rounds.csv", index=False
@@ -172,10 +175,10 @@ def plot_tps(df: pd.DataFrame) -> None:
         df.groupby(["network", "method"], observed=True)["tps"]
         .mean()
         .unstack("method")
-        .reindex(columns=METHOD_ORDER)
+        .reindex(columns=[method for method in METHOD_ORDER if method in df["method"].unique()])
     )
     summary.rename(columns=METHOD_LABELS).plot(
-        kind="bar", ax=ax, color=[COLORS[m] for m in METHOD_ORDER], width=0.78
+        kind="bar", ax=ax, color=[COLORS.get(m, "#777777") for m in summary.columns], width=0.78
     )
     ax.set_ylabel("Tokens / second")
     ax.set_xlabel("Network")
@@ -189,7 +192,10 @@ def plot_tps(df: pd.DataFrame) -> None:
 
 def plot_speedup_by_prompt(df: pd.DataFrame) -> None:
     fig, ax = plt.subplots(figsize=(7.6, 4.4))
-    subset = df[df["method"].isin(["sync_k8", "tree_k8_b3"])].copy()
+    spec_methods = [method for method in METHOD_ORDER if method != "direct" and method in df["method"].unique()]
+    subset = df[df["method"].isin(spec_methods)].copy()
+    if subset.empty:
+        return
     grouped = (
         subset.groupby(["network", "prompt_type", "method"], observed=True)["speedup_vs_direct"]
         .mean()
@@ -197,9 +203,9 @@ def plot_speedup_by_prompt(df: pd.DataFrame) -> None:
     )
     grouped["bucket"] = grouped["network"] + " / " + grouped["prompt_type"]
     pivot = grouped.pivot(index="bucket", columns="method", values="speedup_vs_direct")
-    pivot = pivot[["sync_k8", "tree_k8_b3"]]
+    pivot = pivot[spec_methods]
     pivot.rename(columns=METHOD_LABELS).plot(
-        kind="bar", ax=ax, color=[COLORS["sync_k8"], COLORS["tree_k8_b3"]], width=0.75
+        kind="bar", ax=ax, color=[COLORS.get(m, "#777777") for m in spec_methods], width=0.75
     )
     ax.axhline(1.0, color="#333333", linewidth=1, linestyle="--")
     ax.set_ylabel("Speedup vs direct")
@@ -213,12 +219,15 @@ def plot_speedup_by_prompt(df: pd.DataFrame) -> None:
 
 
 def plot_acceptance(rounds: pd.DataFrame) -> None:
-    spec = rounds[rounds["method"].isin(["sync_k8", "tree_k8_b3"])].copy()
+    spec_methods = [method for method in METHOD_ORDER if method != "direct"]
+    spec = rounds[rounds["method"].isin(spec_methods)].copy()
+    if spec.empty or "accepted_len" not in spec:
+        return
     fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.8), sharey=True)
     for ax, network in zip(axes, sorted(spec["network"].unique())):
         sub = spec[spec["network"] == network]
         counts = (
-            sub.groupby(["accepted", "method"], observed=True)
+            sub.groupby(["accepted_len", "method"], observed=True)
             .size()
             .unstack("method", fill_value=0)
             .reindex(range(0, 9), fill_value=0)
@@ -243,19 +252,24 @@ def plot_acceptance(rounds: pd.DataFrame) -> None:
 
 
 def plot_verify_scaling(rounds: pd.DataFrame) -> None:
-    spec = rounds[rounds["method"].isin(["sync_k8", "tree_k8_b3"])].copy()
+    spec_methods = [method for method in METHOD_ORDER if method != "direct"]
+    spec = rounds[rounds["method"].isin(spec_methods)].copy()
+    if spec.empty or "verify_input_len" not in spec:
+        return
     if "server_time_ms" in spec:
         spec["verify_ms"] = spec["server_time_ms"].fillna(spec.get("verify_ms"))
     fig, ax = plt.subplots(figsize=(7.2, 4.2))
-    for method in ["sync_k8", "tree_k8_b3"]:
+    for method in spec_methods:
         sub = spec[spec["method"] == method]
+        if sub.empty:
+            continue
         ax.scatter(
             sub["verify_input_len"],
             sub["verify_ms"],
             s=14,
             alpha=0.45,
-            label=METHOD_LABELS[method],
-            color=COLORS[method],
+            label=METHOD_LABELS.get(method, method),
+            color=COLORS.get(method, "#777777"),
         )
     ax.set_xlabel("Verify input length (prefix + draft)")
     ax.set_ylabel("Verify model time (ms)")

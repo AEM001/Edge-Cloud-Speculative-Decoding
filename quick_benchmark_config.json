@@ -1,0 +1,33 @@
+{
+  "methods": [
+    "direct",
+    "specextend_gpu",
+    "specextend_kvload_cpu"
+  ],
+  "max_tokens": 512,
+  "prompt_count": 3,
+  "prompt_types": [
+    "pg19"
+  ],
+  "dataset_split": "pg19_4K",
+  "prompt_input_tokens": 2048,
+  "draft_length": 8,
+  "retrieval_chunk_size": 64,
+  "retrieve_top_k": 16,
+  "retrieve_every_n_steps": 16,
+  "async_pipeline": "1",
+  "pipeline_offsets": "full,half",
+  "spec_profiles": [
+    {
+      "name": "specextend_gpu",
+      "label": "SpecExtend sparse KV, all KV in GPU",
+      "kv_tier_policy": "gpu"
+    },
+    {
+      "name": "specextend_kvload_cpu",
+      "label": "SpecExtend sparse KV with CPU KV loading cost",
+      "kv_tier_policy": "cpu",
+      "kv_tier_keep_recent_chunks": 0
+    }
+  ]
+}

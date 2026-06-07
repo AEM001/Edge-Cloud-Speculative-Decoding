@@ -2,55 +2,18 @@
 
 ## 2026-05-29
 
-- Added PG-19 support to `load_prompts(source="pg19")` and populated
-  `data/pg19/test.jsonl`.
-- Added fixed input-token truncation with `--prompt-input-tokens`; PG-19 runs
-  now use exactly 2048 tokenizer input tokens when configured.
-- Replaced direct target generation's token-by-token full-prefix forwards with
-  `model.generate(..., use_cache=True)`.
-- Reworked linear target verification to score a whole draft chain with cached
-  KV state instead of recomputing the full prefix for every draft token.
-- Added cache rewind on rejection, preserving the shared prefix cache and
-  replaying only the last shared token when the speculative path diverges.
-- Switched normal model loading to SDPA attention by default. Eager attention is
-  no longer required for the fast verification path.
-- Replaced full-sequence retrieval attention with cached last-token attention,
-  avoiding large attention tensors during retrieval updates.
-- Made `start_verify.sh` default to `VERIFY_ATTN_IMPLEMENTATION=eager` so
-  target-attention retrieval is actually available. SDPA remains useful for
-  no-retrieval timing runs but does not return attentions in Transformers.
-- Added Qwen3-0.6B model alias and `fast-draft` preset.
-- Added retrieval-backed draft working context: selected retrieval chunks plus a
-  configurable recent suffix via `DRAFT_RECENT_TOKENS`.
-- Updated `quick.sh` defaults for PG-19, 2048 input tokens, 256 output tokens,
-  Qwen3-1.7B draft, SDPA attention, and retrieval every 8 rounds.
-- Added an asynchronous edge pipeline. Cloud verification runs in a background
-  worker while the draft backend builds candidate next drafts at configurable
-  accept offsets (`SPECEXTEND_PIPELINE_OFFSETS`, default `full,half`). Reuse is
-  exact only: accept length must match and the cloud correction token must equal
-  the first prefetched token.
+- Added PG-19 support with `load_prompts(source="pg19")` and fixed 2048 input tokens via `--prompt-input-tokens`.
+- Replaced token-by-token generation with `model.generate(..., use_cache=True)` and added cache rewind on rejection.
+- Switched to SDPA attention by default; eager attention used only for retrieval.
+- Added retrieval-backed draft context and async edge pipeline with configurable offsets.
 
 ## 2026-05-30 01:44
 
-- Switched runtime Python from `.venv` to system `miniconda3` base environment;
-  installed missing dependencies (`transformers`, `uvicorn`, `fastapi`,
-  `autoawq`, etc.) with network acceleration.
-- Changed verify server and quick-test scripts to use `python3` directly instead
-  of `.venv/bin/python3`.
-- Separated launch scripts: `start_verify.sh` starts the verify server,
-  `run_quick.sh` runs the experiment only (assumes server already up),
-  `run_2x3090.sh` orchestrates both. Default port changed to `6008` to avoid
-  conflicts.
+- Switched to system `miniconda3` base environment, installed missing dependencies.
+- Changed scripts to use `python3` directly, separated launch scripts (`start_verify.sh`, `run_quick.sh`, `run_2x3090.sh`), changed default port to `6008`.
 - Raised `RETRIEVE_EVERY_N_STEPS` default from `4` to `16`.
-- **Fixed sparse KV cache rebuild on every round** (`ensure_sparse_cache` +
-  `generate_token_ids_cached_sparse`): after each decode pass the draft tokens
-  appended to `_sparse_cache` are now cropped out, leaving only the context
-  prefill KV. On the next round only newly accepted recent-window tokens are
-  forwarded incrementally instead of the whole sparse sequence being re-prefilled
-  from scratch.
-- Added stale-tail crop in `ensure_sparse_cache`: when the retrieved-chunk set
-  changes, the common prefix of the sparse cache is preserved via `DynamicCache.crop`
-  instead of a full reset.
+- Fixed sparse KV cache rebuild: draft tokens are cropped out after each decode pass, only newly accepted tokens are forwarded incrementally.
+- Added stale-tail crop in `ensure_sparse_cache` when retrieved-chunk set changes.
 
 ## 2026-05-30 02:01 — Measurements (2× RTX 3090, Qwen3-14B-AWQ target @ GPU 0 / Qwen3-1.7B draft @ GPU 1)
 
@@ -64,7 +27,7 @@ tokens, nodes=32, depth=8, retrieve_every_n_steps=16.
   - server verify time: 5.1 s
   - rounds: 37, accepted draft tokens: 223/256, acceptance length: 6.03
 
-## Measurements
+### Measurements
 
 Environment: one Tesla V100-SXM2-32GB, Qwen3-8B target, PG-19 prompt,
 2048 tokenizer input tokens, 256 output tokens.
@@ -93,105 +56,36 @@ compaction before it can beat cached direct generation for this setup.
 
 ## 2026-05-31 20:33 — Code Change, Not Yet Benchmarked
 
-- Replaced the draft-side sparse replay cache with a SpecExtend-style tensor KV
-  cache implementation. The draft backend now owns a full draft KV cache and
-  rebuilds the active working KV cache by indexing selected retrieval chunks
-  from the retrieval state, matching the core `full_draft_kv -> draft_stable_kv`
-  pattern from the original SpecExtend implementation.
-- Added local Qwen3 KV model support inside this repo:
-  `scripts/core/modeling_qwen3_kv.py` and `scripts/core/qwen_kv_cache.py`.
-  The draft backend no longer imports custom model/cache code from sibling
-  repos.
-- Changed the Qwen draft backend to load the local custom `Qwen3ForCausalLM`
-  path for draft generation so the cache tensors are visible and mutable by the
-  SpecExtend cache manager. The target verifier path still uses the existing
-  verifier runtime.
-- Disabled async pipeline candidate prefetch for this draft backend because
-  speculative prefixes are not yet committed into the full draft KV cache; using
-  them would violate the exact cache ownership/update discipline.
-- Removed the prior `DRAFT_RECENT_TOKENS` recent-window union. The working cache
-  is now driven by the same chunk selection semantics as SpecExtend: initial
-  selected chunks are chosen by the retrieval state, later retrieval updates
-  replace that selected chunk set, and the draft cache does not independently
-  append a recent-token suffix.
-- Validation so far is code-level only: `py_compile` and
-  `tests/test_specextend_core.py` pass. No performance run has been executed for
-  this change yet.
+- Replaced draft-side sparse replay cache with SpecExtend-style tensor KV cache.
+- Added local Qwen3 KV model support (`modeling_qwen3_kv.py`, `qwen_kv_cache.py`).
+- Changed draft backend to use local custom Qwen3ForCausalLM for cache mutability.
+- Disabled async pipeline prefetch due to uncommitted speculative prefixes.
+- Removed DRAFT_RECENT_TOKENS; working cache now uses chunk selection semantics.
+- Validation: py_compile and tests pass. No performance benchmark yet.
 
 ## 2026-06-01 00:21 — Working Cache Rebuild Optimization + Pipeline Candidate Infrastructure
 
 ### Problem diagnosed
-After the 2026-05-31 refactor to the explicit full-draft-kv + retrieval working-cache
-architecture, benchmarks showed a severe regression:
+After the 2026-05-31 refactor to full-draft-kv + retrieval working-cache,
+benchmarks showed severe regression:
 
-- `local_draft_ms`: 18,092 ms (was 1,813 ms before refactor, ×10 slower)
-- Acceptance length: 2.51 / 8 (was 6.03 / 8)
+- `local_draft_ms`: 18,092 ms (was 1,813 ms, ×10 slower)
+- Acceptance length: 2.51/8 (was 6.03/8)
 - Throughput: 8.33 tok/s (was 24.42 tok/s)
-- Rounds: 73 (was 37)
 
-Root causes identified by comparing against the sparse-kv reference
-(`specextend/application/model_classic.py`):
-
-1. **`_rebuild_working_cache` re-allocated GPU tensors on every call** via
-   `_allocate_kv_cache()`, creating new `KVCache` objects and zeroing large
-   buffers each round. This is the single largest overhead.
-
-2. **`select_working_tokens` rebuilt the working cache every round** even when
-   the retrieval chunk selection had not changed. The comparison included newly
-   appended verified-token indices from `append_prefix`, which are always different
-   from the incoming retrieval chunk indices, triggering an unnecessary rebuild
-   after every verification step.
-
-3. **`build_draft_tree` called `append_prefix` before `select_working_tokens`**,
-   so the retrieval rebuild always happened after the new tokens were appended,
-   wasting the KV written by `append_prefix` into working cache.
-
-4. **`_generate_linear_from_working_cache` finally block called
-   `_rebuild_working_cache`** (expensive full index_select) just to undo the
-   draft token KV appended during generation.
+Root causes:
+1. `_rebuild_working_cache` re-allocated GPU tensors every round
+2. `select_working_tokens` rebuilt cache even when retrieval selection unchanged
+3. `build_draft_tree` called `append_prefix` before `select_working_tokens`
+4. `_generate_linear_from_working_cache` finally block called expensive rebuild
 
 ### Changes made
 
-- **`_rebuild_working_cache`: in-place reuse of existing buffer.** Removed the
-  `_allocate_kv_cache()` call inside `_rebuild_working_cache`. The method now
-  writes directly into the pre-allocated `working_cache` tensors via
-  `index_select + copy_` in-place, and updates `current_length` only. No GPU
-  memory is allocated on the hot path.
-
-- **`select_working_tokens`: skip rebuild when chunk selection is unchanged.**
-  Added a comparison that strips the newly-appended verified-token tail from
-  `working_token_indices` before comparing against incoming retrieval indices.
-  If the chunk portion is identical, only `working_token_indices` is reassigned;
-  no `_rebuild_working_cache` call is made.
-
-- **Reordered `build_draft_tree`: `select_working_tokens` before
-  `append_prefix`.** Mirrors the sparse-kv pattern
-  (`update_working_cache_retrieval_main` → incremental forward of new tokens).
-  Retrieval rebuild (if needed) happens on the old working cache, then
-  `append_prefix` does a single incremental forward of only the new verified
-  tokens on top of the correctly-selected working cache.
-
-- **`_generate_linear_from_working_cache` finally: snapshot/restore
-  `current_length` only.** Replaced the `working_token_indices` reset +
-  `_rebuild_working_cache` call with `_snapshot_working_lengths` /
-  `_restore_working_lengths`, which only fills scalar CPU tensors. The KV data
-  in the buffer is not touched; stale draft-token KV past the restored length
-  boundary is invisible to the model because `KVCache` uses `current_length` to
-  control the active window.
-
-- **`build_draft_candidate` implemented** (async pipeline prefetch). Snapshots
-  working cache lengths, temporarily forwards candidate prefix tokens onto the
-  working cache, generates a draft tree, then fully restores the cache state
-  (lengths, `full_token_ids`, `working_token_indices`, `last_prefix_logits`).
-  Does not write to `full_draft_kv`, so the main cache is unaffected.
-
-- **`supports_pipeline_candidates` kept `False`** for now. Benchmarking with
-  `True` showed the candidate forward runs on the same GPU (cuda:1) as the main
-  draft forward. Because `_build_pipeline_candidates` is called synchronously
-  on the main thread after submitting the verify future, the candidate and the
-  next-round draft are serialized on GPU1, adding latency instead of hiding it.
-  The implementation is in place for future evaluation on a setup where the
-  candidate can be offloaded to a separate thread/process.
+- **`_rebuild_working_cache`**: in-place reuse of existing buffer, no allocation
+- **`select_working_tokens`**: skip rebuild when chunk selection unchanged
+- **Reordered `build_draft_tree`**: `select_working_tokens` before `append_prefix`
+- **`_generate_linear_from_working_cache` finally**: snapshot/restore lengths only
+- **`build_draft_candidate`**: implemented for async pipeline (kept disabled)
 
 ### Measurements (2026-06-01, same hardware as 2026-05-30 02:01)
 
@@ -219,72 +113,31 @@ and matches the sparse-kv reference architecture's cost model.
 
 ### Attempts and findings
 
-**Attempt 1: Async pipeline with two-executor parallel execution.**
-Submitted verify to one `ThreadPoolExecutor` and candidate drafts to a second executor
-simultaneously. Result: 4.34 tps (worse than 12.84 tps baseline). Root cause: both
-executors mapped onto the same GPU (cuda:1). Python's GIL and CUDA stream serialization
-mean two threads issuing CUDA kernels on the same device do not run in parallel — the
-candidate forward runs after the main draft, adding latency instead of hiding it. The
-`threading.RLock` added to protect the shared working_cache also caused contention.
-Reverted to single-executor design where candidate runs synchronously on main thread
-while verify awaits network response.
+**Attempt 1: Async pipeline with parallel executors.**
+Failed due to GPU contention - both executors mapped to same device, causing serialization instead of parallelism. Reverted to single-executor design.
 
-**Attempt 2: Fixed-size working cache (trim verified-token tail after append_prefix).**
-After each `append_prefix`, reset `working_cache.current_length` back to `chunk_size`,
-keeping working cache at a constant ~1024-token size across rounds. Result: 6.15 tps,
-acceptance 1.44/8 (much worse). Root cause: standard causal attention requires continuous
-context. Trimming drops the recently-verified-token KV from the working cache, so the
-draft model cannot attend to the last few accepted tokens. In sparse-kv this works because
-their custom CUDA kernel supports non-contiguous position IDs (sparse attention); the
-standard `scaled_dot_product_attention` does not. Reverted.
+**Attempt 2: Fixed-size working cache.**
+Trimming verified-token tail broke causal attention, dropping acceptance to 1.44/8. Requires sparse attention kernel (unavailable with standard transformers).
 
-**Attempt 3: Replace KVCache with DynamicCache as working_cache.**
-Hypothesis: custom `KVCache` attention path in `modeling_qwen3_kv.py` is slower than
-the native SDPA path used with `DynamicCache`. Investigation showed:
-- `Qwen3SdpaAttention` already supports `DynamicCache` via `isinstance(past_key_value, Cache)` branch (line 245).
-- Both paths use `scaled_dot_product_attention`.
-- `DynamicCache.update()` does not re-apply RoPE; KV is stored post-RoPE in both cases.
-- Switching to `DynamicCache` required truncating the cache in `select_working_tokens`
-  early-return path (dropping verified-token tail), which reproduced the same context
-  loss as Attempt 2. Result: 8.96 tps, acceptance 2.50/8. Reverted to KVCache.
+**Attempt 3: Replace KVCache with DynamicCache.**
+No performance benefit - both use SDPA with same attention path. Required cache truncation that reproduced Attempt 2's context loss.
 
-### Root cause of the remaining gap vs 05-30 best
+### Root cause of remaining gap
 
-The 05-30 best (24.42 tps, 49 ms/round) used a sparse **replay** cache
-(`_sparse_cache`, `DynamicCache`): only accepted tokens were forwarded each round,
-so past_kv grew by ~5 tokens per round (accepted length). Working cache was tiny and
-grew linearly — still fast at 256 output tokens.
+Current architecture uses ~1024-token working cache + growing verified tokens, making each draft forward expensive (~200-250ms). The 05-30 best used sparse replay cache with only accepted tokens, keeping working cache tiny.
 
-Current architecture: working_cache = chunk_tokens (~1024) + verified_tokens (growing).
-Each draft forward does attention over ~1024+ tokens. At 234 ms/round this is unavoidable
-given that:
-- Qwen3-1.7B with 1024-token past_kv does ~200–250 ms/forward on one RTX 3090.
-- Verify server (14B AWQ) takes ~350 ms/round server-side.
-- Total latency per round ≈ draft_ms + verify_ms ≈ 234 + 350 = 584 ms (serialized).
-- Effective tps = (accepted_len * 1000) / round_ms ≈ (4.29 * 1000) / 584 ≈ 7.3 tok/s
-  ... but actual is 12.84 because pipeline partially hides verify latency.
+### Potential improvements
 
-### What would actually close the gap
+1. **Flash attention/sliding window**: Reduce attention cost in working cache
+2. **Batched draft forward**: Amortize attention over multiple tokens
+3. **Sparse attention**: Enable smaller working cache without context loss
+4. **Async pipeline**: Only beneficial if verify RTT >> draft time
 
-1. **Flash attention / sliding window on the draft model**: reduce per-token attention
-   cost in the 1024-token working cache. `flash_attn` is not installed in this env.
-2. **Batched draft forward (multiple candidate tokens at once)**: instead of token-by-token
-   draft generation, forward all 32 draft positions in one batched call (tree mask).
-   This amortizes the 1024-token attention over 32 tokens instead of 32 separate calls.
-3. **Reduce working cache size without hurting acceptance**: requires non-contiguous
-   position ID support (sparse attention kernel), which is what sparse-kv provides.
-   Not feasible with standard transformers without custom CUDA.
-4. **Async pipeline across requests**: only beneficial if verify RTT >> draft time.
-   Currently draft ≈ verify so pipeline provides minimal gain.
+### Current state
 
-### Current code state
-
-- `supports_pipeline_candidates = False` (pipeline implemented but disabled: overhead
-  exceeds benefit at current draft/verify latency ratio).
-- `build_draft_candidate` is implemented and correct; can be enabled when draft time
-  drops significantly (e.g. after flash attention or batched drafting).
-- Working cache remains KVCache (custom pre-allocated buffer, in-place index_select).
-- Best measured throughput: **12.84 tok/s** (06-01 00:19 run).
+- Pipeline candidates disabled (overhead exceeds benefit)
+- Working cache uses KVCache with in-place operations
+- Best throughput: **12.84 tok/s**
 
 ## 2026-06-01 00:05 — SpecExtend KV Semantics Cleanup, Not Yet Benchmarked
 
@@ -415,41 +268,29 @@ and experiment scripts that were never exercised and cluttered the linear path.
 ## 2026-06-05 23:57 — Tiered KV Store Abstraction (Research Infrastructure)
 
 ### Motivation
-
-研究"稀疏 KV 选取收益 vs. 跨层级加载延迟 overhead"的 trade-off。当前所有 KV
-均驻留在 GPU HBM，无法量化 CPU/SSD 加载对端到端延迟的影响。
+Research trade-offs between sparse KV selection benefits and cross-tier loading latency overhead. Current implementation keeps all KV in GPU HBM, unable to quantify CPU/SSD loading impact on end-to-end latency.
 
 ### Changes made
 
-- **新增 `scripts/core/tiered_kv_store.py`**
+- **Added `scripts/core/tiered_kv_store.py`**
   - `KVTier` enum: `GPU` / `CPU` / `SSD`
-  - `KVLoadMetrics` dataclass: 每次 working cache rebuild 的精确延迟分解
-    (`gpu/cpu/ssd_chunks`, `gpu/cpu/ssd_load_ms`, `total_load_ms`, `.as_dict()`)
-  - `TieredKVStore`: 管理每个 chunk 的层级标签；`evict_to_cpu` 将 chunk 数据
-    搬至 CPU pinned memory，`evict_to_ssd` 序列化至 SSD；`load_chunks` 在
-    `_rebuild_working_cache` 热路径上按层级搬运数据并计时（含 `cuda.synchronize()`）
+  - `KVLoadMetrics` dataclass: Precise latency breakdown per working cache rebuild (`gpu/cpu/ssd_chunks`, `gpu/cpu/ssd_load_ms`, `total_load_ms`, `.as_dict()`)
+  - `TieredKVStore`: Manages tier labels per chunk; `evict_to_cpu` moves data to CPU pinned memory, `evict_to_ssd` serializes to SSD; `load_chunks` handles tiered data movement with timing (incl. `cuda.synchronize()`)
 
-- **修改 `scripts/core/qwen_specextend_backend.py`**
-  - `SpecExtendDraftKVCache.__init__` 构造 `TieredKVStore`，新增
-    `last_load_metrics: Optional[KVLoadMetrics]`
-  - `_rebuild_working_cache` 改为双路：全 GPU chunk 走原 `index_select + copy_`
-    fast path 并整体计时；混合层级路由至 `tiered_store.load_chunks()` 逐 chunk
-    计时
-  - 新增公开接口 `evict_to_cpu(chunk_id)` / `evict_to_ssd(chunk_id)` /
-    `chunk_tier_summary()`
-  - `reset()` 同步调用 `tiered_store.reset()` 清理 SSD 文件和层级状态
-  - `build_draft_tree` 返回的 `DraftTreeResult` 现附带 `kv_load_metrics`
+- **Modified `scripts/core/qwen_specextend_backend.py`**
+  - `SpecExtendDraftKVCache.__init__` constructs `TieredKVStore`, added `last_load_metrics: Optional[KVLoadMetrics]`
+  - `_rebuild_working_cache` dual-path: pure GPU chunks use original fast path with timing; mixed tiers route through `tiered_store.load_chunks()` with per-chunk timing
+  - Added public APIs: `evict_to_cpu(chunk_id)` / `evict_to_ssd(chunk_id)` / `chunk_tier_summary()`
+  - `reset()` calls `tiered_store.reset()` to clean SSD files and tier state
+  - `DraftTreeResult` from `build_draft_tree` now includes `kv_load_metrics`
 
-- **修改 `scripts/core/specextend_backend.py`**
-  - `DraftTreeResult` 新增 `kv_load_metrics: Optional[Any] = None`（向后兼容）
+- **Modified `scripts/core/specextend_backend.py`**
+  - `DraftTreeResult` added `kv_load_metrics: Optional[Any] = None` (backward compatible)
 
-- **Bug 修复**: `verify_tree` 中 `best_accept_len`（未定义变量）改为 `accepted_len`
+- **Bug fix**: `verify_tree` undefined `best_accept_len` changed to `accepted_len`
 
-### 设计原则
-
-不改变推理引擎，不引入 paged attention。所有 KV 数据结构和 attention 计算不变；
-tiered store 仅在 `_rebuild_working_cache` 的数据搬运层插入一个可控延迟的测量点。
-代码无性能影响（全 GPU 时走原 fast path）。
+### Design principles
+No inference engine changes, no paged attention. All KV data structures and attention computation unchanged; tiered store inserts controllable latency measurement point only in `_rebuild_working_cache` data movement layer. No performance impact (pure GPU uses original fast path).
 
 ## 2026-06-07 — Tail Chunk Force-Include Fix in `select_chunks`
 

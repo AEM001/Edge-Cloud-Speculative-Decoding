@@ -31,11 +31,10 @@ class SpecExtendDraftBackend(Protocol):
         self,
         verified_prefix: List[int],
         correction_token_id: Optional[int],
-        nodes: int,
-        threshold: float,
-        max_depth: int,
+        draft_length: int,
         retrieval_chunk_ids: Optional[List[int]] = None,
         retrieval_selection_updated: bool = False,
+        retrieval_selection_base_len: Optional[int] = None,
     ) -> DraftResult:
         """Build a linear draft sequence for the current verified prefix."""
 

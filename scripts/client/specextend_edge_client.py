@@ -30,6 +30,10 @@ class SpecExtendRequestMetrics:
     generated_tokens: int = 0
     total_rounds: int = 0
     total_edge_draft_time_ms: float = 0.0
+    total_kv_load_time_ms: float = 0.0
+    total_kv_gpu_load_ms: float = 0.0
+    total_kv_cpu_load_ms: float = 0.0
+    total_kv_ssd_load_ms: float = 0.0
     total_server_verify_time_ms: float = 0.0
     total_network_time_ms: float = 0.0
     total_accepted_tokens: int = 0
@@ -44,9 +48,7 @@ class SpecExtendEdgeClient:
         draft_backend: SpecExtendDraftBackend,
         cloud_verify: Callable[[SpecExtendRequest], SpecExtendResponse],
         max_new_tokens: int = 128,
-        nodes: int = 50,
-        threshold: float = 0.7,
-        max_depth: int = 10,
+        draft_length: int = 8,
         retrieval_chunk_size: int = 32,
         retrieve_top_k: int = 32,
         retrieve_every_n_steps: int = 8,
@@ -55,9 +57,7 @@ class SpecExtendEdgeClient:
         self.draft_backend = draft_backend
         self.cloud_verify = cloud_verify
         self.max_new_tokens = max_new_tokens
-        self.nodes = nodes
-        self.threshold = threshold
-        self.max_depth = max_depth
+        self.draft_length = draft_length
         self.retrieve_every_n_steps = retrieve_every_n_steps
         self.retrieval = SpecExtendRetrievalState(
             chunk_size=retrieval_chunk_size,
@@ -79,6 +79,7 @@ class SpecExtendEdgeClient:
         prefetched = None
         retrieval_recorded_len = 0
         retrieval_selection_updated = False
+        retrieval_selection_base_len: Optional[int] = None
         wall_start = time.perf_counter()
 
         use_pipeline = (
@@ -114,13 +115,13 @@ class SpecExtendEdgeClient:
                     draft_result = self.draft_backend.build_draft(
                         verified_prefix=list(verified_prefix),
                         correction_token_id=correction_token_id,
-                        nodes=self.nodes,
-                        threshold=self.threshold,
-                        max_depth=self.max_depth,
+                        draft_length=self.draft_length,
                         retrieval_chunk_ids=retrieval_chunk_ids,
                         retrieval_selection_updated=retrieval_selection_updated,
+                        retrieval_selection_base_len=retrieval_selection_base_len,
                     )
                     retrieval_selection_updated = False
+                    retrieval_selection_base_len = None
                 prefetched = None
 
                 request = SpecExtendRequest(
@@ -179,13 +180,20 @@ class SpecExtendEdgeClient:
                     metrics.retrieval_updates += 1
                     metrics.selected_chunk_ids = [chunk.chunk_id for chunk in selected]
                     retrieval_selection_updated = True
+                    retrieval_selection_base_len = len(response.target_attn_scores)
                 elif response.selected_chunk_ids is not None:
                     self.retrieval.set_selected_chunk_ids(response.selected_chunk_ids)
                     metrics.selected_chunk_ids = self.retrieval.selected_chunk_ids()
                     retrieval_selection_updated = True
+                    retrieval_selection_base_len = len(previous_prefix)
 
                 metrics.total_rounds += 1
                 metrics.total_edge_draft_time_ms += draft_result.draft_time_ms
+                kv_load = self._kv_load_metrics_dict(draft_result.kv_load_metrics)
+                metrics.total_kv_load_time_ms += float(kv_load.get("total_load_ms", 0.0))
+                metrics.total_kv_gpu_load_ms += float(kv_load.get("gpu_load_ms", 0.0))
+                metrics.total_kv_cpu_load_ms += float(kv_load.get("cpu_load_ms", 0.0))
+                metrics.total_kv_ssd_load_ms += float(kv_load.get("ssd_load_ms", 0.0))
                 metrics.total_server_verify_time_ms += response.server_verify_time_ms
                 metrics.total_network_time_ms += max(0.0, verify_elapsed_ms - response.server_verify_time_ms)
                 metrics.total_accepted_tokens += response.accepted_len
@@ -200,6 +208,7 @@ class SpecExtendEdgeClient:
                         "pipeline_built": pipeline_built,
                         "pipeline_wait_ms": pipeline_wait_ms,
                         "pipeline_reuse": bool(prefetched),
+                        "kv_load": kv_load,
                     }
                 )
 
@@ -210,6 +219,16 @@ class SpecExtendEdgeClient:
         metrics.total_latency_ms = (time.perf_counter() - wall_start) * 1000
         metrics.generated_tokens = len(verified_prefix) - len(prompt_ids)
         return metrics
+
+    @staticmethod
+    def _kv_load_metrics_dict(value) -> Dict[str, object]:
+        if value is None:
+            return {}
+        if hasattr(value, "as_dict"):
+            return value.as_dict()
+        if isinstance(value, dict):
+            return value
+        return {}
 
     @staticmethod
     def _parse_pipeline_offsets(value: str) -> List[str]:
@@ -257,8 +276,7 @@ class SpecExtendEdgeClient:
             try:
                 candidate = self.draft_backend.build_prefetch_draft(
                     verified_prefix=candidate_prefix,
-                    nodes=self.nodes,
-                    max_depth=self.max_depth,
+                    draft_length=self.draft_length,
                     retrieval_chunk_ids=retrieval_chunk_ids,
                 )
             except Exception:

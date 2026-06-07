@@ -140,6 +140,7 @@ class SpecExtendDraftKVCache:
         self,
         chunk_ids: Optional[List[int]] = None,
         retrieval_selection_updated: bool = False,
+        retrieval_selection_base_len: Optional[int] = None,
     ) -> None:
         """Select working cache by chunk IDs, mirroring sparse-kv's chunk-level retrieval.
 
@@ -152,9 +153,11 @@ class SpecExtendDraftKVCache:
             self._retrieval_base_seq_len = self.total_seq_len
         else:
             wanted = set(chunk_ids)
-            if retrieval_selection_updated:
-                self._retrieval_base_seq_len = self.total_seq_len
-            base = self._retrieval_base_seq_len
+            base = (
+                retrieval_selection_base_len
+                if retrieval_selection_updated and retrieval_selection_base_len is not None
+                else self._retrieval_base_seq_len
+            )
             selected = [
                 chunk for chunk in self.chunks
                 if chunk.chunk_id in wanted or chunk.end > base
@@ -162,6 +165,8 @@ class SpecExtendDraftKVCache:
             if not selected:
                 selected = list(self.chunks)
             self.selected_chunks = selected
+            if retrieval_selection_updated:
+                self._retrieval_base_seq_len = base
 
         self._update_working_indices_from_chunks()
         self._rebuild_working_cache()
@@ -240,6 +245,7 @@ class SpecExtendDraftKVCache:
         if not self.selected_chunks:
             # First call: select all chunks
             self.selected_chunks = list(self.chunks)
+            self._retrieval_base_seq_len = self.total_seq_len
             self._update_working_indices_from_chunks()
             self._rebuild_working_cache()
         else:
@@ -556,16 +562,48 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             max_length=config.max_model_len,
             device=self.runtime.device,
         )
+        self.kv_tier_policy = "gpu"
+        self.kv_tier_keep_recent_chunks = 0
+
+    def set_kv_tier_policy(self, policy: str = "gpu", keep_recent_chunks: int = 0) -> None:
+        """Set a synthetic KV hierarchy policy for retrieval-update benchmarks.
+
+        ``gpu`` keeps the original all-HBM path. ``cpu`` and ``ssd`` are applied
+        only when target attention returns a new sparse chunk selection. This
+        measures the cost of selecting chunks that live outside GPU memory
+        without charging every ordinary tail refresh.
+        """
+        policy = (policy or "gpu").strip().lower()
+        if policy not in {"gpu", "cpu", "ssd"}:
+            raise ValueError(f"Unsupported KV tier policy: {policy}")
+        self.kv_tier_policy = policy
+        self.kv_tier_keep_recent_chunks = max(0, int(keep_recent_chunks))
+
+    def _apply_kv_tier_policy(self) -> None:
+        if self.kv_tier_policy == "gpu" or not self.cache.chunks:
+            return
+        protected = set()
+        if self.kv_tier_keep_recent_chunks:
+            protected = {
+                chunk.chunk_id
+                for chunk in self.cache.chunks[-self.kv_tier_keep_recent_chunks :]
+            }
+        for chunk in self.cache.chunks:
+            if chunk.chunk_id in protected:
+                continue
+            if self.kv_tier_policy == "cpu":
+                self.cache.evict_to_cpu(chunk.chunk_id)
+            elif self.kv_tier_policy == "ssd":
+                self.cache.evict_to_ssd(chunk.chunk_id)
 
     def build_draft(
         self,
         verified_prefix: List[int],
         correction_token_id: Optional[int],
-        nodes: int,
-        threshold: float,
-        max_depth: int,
+        draft_length: int,
         retrieval_chunk_ids: Optional[List[int]] = None,
         retrieval_selection_updated: bool = False,
+        retrieval_selection_base_len: Optional[int] = None,
     ) -> DraftResult:
         start = time.perf_counter()
         if correction_token_id is not None and (
@@ -574,33 +612,39 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             verified_prefix = list(verified_prefix) + [correction_token_id]
 
         appended = self.cache.append_prefix(self.runtime, verified_prefix)
+        if retrieval_selection_updated and retrieval_chunk_ids is not None:
+            self._apply_kv_tier_policy()
         self.cache.select_chunks(
             retrieval_chunk_ids,
             retrieval_selection_updated=retrieval_selection_updated,
+            retrieval_selection_base_len=retrieval_selection_base_len,
+        )
+        kv_load_metrics = (
+            self.cache.last_load_metrics
+            if retrieval_selection_updated and retrieval_chunk_ids is not None
+            else KVLoadMetrics()
         )
         draft_context = self.cache.context()
 
         draft_seq = self._generate_draft_sequence(
             draft_context,
-            nodes=max(1, nodes),
-            max_depth=max(1, max_depth),
+            draft_length=max(1, draft_length),
             position_start=len(verified_prefix),
         )
         return DraftResult(
             draft=draft_seq,
             draft_time_ms=(time.perf_counter() - start) * 1000,
             appended_kv_tokens=appended,
-            kv_load_metrics=self.cache.last_load_metrics,
+            kv_load_metrics=kv_load_metrics,
         )
 
     def _generate_draft_sequence(
         self,
         prefix: DraftContext,
-        nodes: int,
-        max_depth: int,
+        draft_length: int,
         position_start: int,
     ) -> DraftSequence:
-        length = max(1, min(nodes, max_depth))
+        length = max(1, draft_length)
         if prefix.past_key_values is None:
             raise ValueError("Draft generation requires the explicit SpecExtend working KV cache.")
         input_ids = self._generate_linear_from_working_cache(
@@ -653,8 +697,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
     def build_prefetch_draft(
         self,
         verified_prefix: List[int],
-        nodes: int,
-        max_depth: int,
+        draft_length: int,
         retrieval_chunk_ids: Optional[List[int]] = None,
     ) -> "DraftResult":
         """Build a pipeline-prefetch draft without committing to the main cache.
@@ -691,7 +734,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             self.cache.last_prefix_logits = logits
 
             position_start = len(verified_prefix)
-            length = max(1, min(nodes, max_depth))
+            length = max(1, draft_length)
             input_ids = self._generate_linear_from_working_cache(
                 next_position_id=position_start,
                 max_new_tokens=length,
