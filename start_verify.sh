@@ -4,14 +4,14 @@
 # to GPU 1, which matches a two-3090 local setup.
 #
 # Usage:
-#   bash start_verify.sh [--port 6007]
+#   bash start_verify.sh [--port 3471]
 #
 # Stop with: Ctrl+C
 
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-PORT=${PORT:-6007}
+PORT=${PORT:-3471}
 
 # ============================================
 # VERIFY SERVER CONFIGURATION

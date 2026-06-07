@@ -28,7 +28,7 @@ from experiments.prompt_loader import load_prompts
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-SERVER_URL = os.getenv("VERIFY_SERVER_URL", "http://localhost:6007")
+SERVER_URL = os.getenv("VERIFY_SERVER_URL", "http://localhost:3471")
 DRAFT_MODEL_PATH = Path(os.getenv("DRAFT_MODEL_PATH", "/root/autodl-tmp/Qwen3-1.7B"))
 DRAFT_GPU_ID = os.getenv("DRAFT_GPU_ID", "1")
 DRAFT_DEVICE = os.getenv("DRAFT_DEVICE", f"cuda:{DRAFT_GPU_ID}")

@@ -10,7 +10,7 @@
     "pg19"
   ],
   "dataset_split": "pg19_2K",
-  "prompt_input_tokens": 2048,
+  "prompt_input_tokens": 256,
   "draft_mode": "branching",
   "draft_length": 12,
   "draft_tree_nodes": 32,
