@@ -450,3 +450,50 @@ and experiment scripts that were never exercised and cluttered the linear path.
 不改变推理引擎，不引入 paged attention。所有 KV 数据结构和 attention 计算不变；
 tiered store 仅在 `_rebuild_working_cache` 的数据搬运层插入一个可控延迟的测量点。
 代码无性能影响（全 GPU 时走原 fast path）。
+
+## 2026-06-07 — Tail Chunk Force-Include Fix in `select_chunks`
+
+### 问题
+
+Cloud 每隔 `retrieve_every_n_steps` 步才触发一次 attention-based chunk 更新。
+在两次更新之间，edge 每轮都接受新 token 并通过 `append_prefix` 将其写入
+`full_draft_kv`，新 token 会逐渐填满当前 tail chunk 并可能创建新 chunk。
+但当下一轮 `build_draft_tree` 传入上一次 cloud 返回的旧 `retrieval_chunk_ids`
+时，`select_chunks(old_ids)` 仅保留 cloud 明确选中的 chunk，新生成的 tail
+chunks 会被丢弃。
+
+- **后果**：draft model 做 attention 时看不到两次 cloud 更新之间新增的 token
+  的 KV；间隔越长、每轮接受 token 越多，累积的"不可见 tail"就越长。
+- **极端情况**：默认 `retrieve_every_n_steps=16`，平均 acceptance length ≈ 4，
+  两次更新间最多积累 ~64 个新 token，约 2 个 chunk 始终缺失于 working cache。
+
+### 修复方案
+
+在 `SpecExtendDraftKVCache` 中新增字段 `_retrieval_base_seq_len: int`，记录
+**上次 cloud retrieval 生效时** `full_token_ids` 的长度。每次 `select_chunks`
+被调用时：
+
+- `chunk_ids is None`（全选初始化）：`_retrieval_base_seq_len = total_seq_len`
+- `chunk_ids` 为外部 cloud 选择列表：在 `wanted` 集合之外，强制包含所有
+  `chunk.start >= _retrieval_base_seq_len` 的 tail chunks，然后更新
+  `_retrieval_base_seq_len = total_seq_len`。
+
+这样，从上次 cloud 更新后产生的每一轮新 token 所在的 chunk，均会被加入
+working cache，而不管 cloud 有没有在旧的 top-k 里选到它们。
+
+### 受影响文件
+
+- **`scripts/core/qwen_specextend_backend.py`**
+  - `SpecExtendDraftKVCache.__init__`：新增 `self._retrieval_base_seq_len = 0`
+  - `reset()`：新增 `self._retrieval_base_seq_len = 0`
+  - `select_chunks()`：完整重写，加入 tail chunk force-include 逻辑和
+    `_retrieval_base_seq_len` 推进
+
+### 不变的行为
+
+- `chunk_ids is None` 时（第一次 prefix、或无 retrieval 模式）行为不变：
+  全选所有 chunks。
+- `_refresh_selected_tail()` 在 `append_prefix` 中仍然负责更新最后一个 chunk
+  的 `end` 边界，两者互补：`select_chunks` 保证 tail chunk 被选中，
+  `_refresh_selected_tail` 保证它的边界是最新的。
+- `reset()` 已清零 `_retrieval_base_seq_len`，cache 不连续时不会残留旧基线。

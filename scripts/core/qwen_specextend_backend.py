@@ -75,6 +75,7 @@ class SpecExtendDraftKVCache:
         self.selected_chunks: List[RetrievalChunk] = []
         self.tiered_store = TieredKVStore(self.full_draft_kv, chunk_size=self.chunk_size)
         self.last_load_metrics: Optional[KVLoadMetrics] = None
+        self._retrieval_base_seq_len: int = 0
 
     @property
     def total_seq_len(self) -> int:
@@ -127,6 +128,7 @@ class SpecExtendDraftKVCache:
         self.chunks = []
         self.selected_chunks = []
         self.last_load_metrics = None
+        self._retrieval_base_seq_len = 0
         self.tiered_store.reset()
         for key, value in self.full_draft_kv:
             key.zero_()
@@ -134,14 +136,28 @@ class SpecExtendDraftKVCache:
         self.working_cache = self._allocate_kv_cache(self.max_length)
 
     def select_chunks(self, chunk_ids: Optional[List[int]] = None) -> None:
-        """Select working cache by chunk IDs, mirroring sparse-kv's chunk-level retrieval."""
+        """Select working cache by chunk IDs, mirroring sparse-kv's chunk-level retrieval.
+
+        When ``chunk_ids`` is provided (cloud-driven selection), any chunk whose
+        token range starts at or after ``_retrieval_base_seq_len`` is a *tail*
+        chunk generated since the last cloud retrieval update.  These tail chunks
+        are always force-included so that newly generated tokens are always
+        visible to the draft model between retrieval refreshes.
+        """
         if chunk_ids is None:
             self.selected_chunks = list(self.chunks)
+            self._retrieval_base_seq_len = self.total_seq_len
         else:
             wanted = set(chunk_ids)
-            self.selected_chunks = [chunk for chunk in self.chunks if chunk.chunk_id in wanted]
-            if not self.selected_chunks:
-                self.selected_chunks = list(self.chunks)
+            base = self._retrieval_base_seq_len
+            selected = [
+                chunk for chunk in self.chunks
+                if chunk.chunk_id in wanted or chunk.start >= base
+            ]
+            if not selected:
+                selected = list(self.chunks)
+            self.selected_chunks = selected
+            self._retrieval_base_seq_len = self.total_seq_len
 
         self._update_working_indices_from_chunks()
         self._rebuild_working_cache()
