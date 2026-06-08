@@ -77,5 +77,5 @@ data/pg19
 # macOS
 .DS_Store
 
-outputs/
+# outputs/
 spec/

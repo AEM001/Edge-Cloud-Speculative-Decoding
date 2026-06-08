@@ -1,0 +1,23 @@
+{
+  "run_id": "guidance_reuse_20260608_170806",
+  "purpose": "Guidance reuse window sweep for cloud-guided sparse edge KV.",
+  "run_dir": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/guidance_reuse/guidance_reuse_20260608_170806",
+  "config": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/guidance_reuse/guidance_reuse_20260608_170806/configs/guidance_reuse_sweep.json",
+  "outputs": {
+    "raw_quick_result": "Filled by run_guidance_reuse_sweep.py",
+    "summary_csv": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/guidance_reuse/guidance_reuse_20260608_170806/analysis/guidance_reuse_summary.csv",
+    "per_round_csv": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/guidance_reuse/guidance_reuse_20260608_170806/analysis/guidance_reuse_rounds.csv",
+    "signal_correlations": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/guidance_reuse/guidance_reuse_20260608_170806/analysis/update_signal_correlations.csv",
+    "adaptive_policy": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/guidance_reuse/guidance_reuse_20260608_170806/analysis/adaptive_policy_simulation.csv"
+  },
+  "reuse_windows": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32
+  ],
+  "raw_quick_result": "outputs/guidance_reuse/guidance_reuse_20260608_170806/raw/quick_test_results_20260608_172151.json",
+  "source_quick_result": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/quick_test_results_20260608_172151.json"
+}
