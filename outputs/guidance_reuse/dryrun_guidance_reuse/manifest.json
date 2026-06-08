@@ -1,0 +1,17 @@
+{
+  "run_id": "dryrun_guidance_reuse",
+  "purpose": "Guidance reuse window sweep for cloud-guided sparse edge KV.",
+  "run_dir": "/Users/Mac/code/research/Infra/draft/outputs/guidance_reuse/dryrun_guidance_reuse",
+  "config": "/Users/Mac/code/research/Infra/draft/outputs/guidance_reuse/dryrun_guidance_reuse/configs/guidance_reuse_sweep.json",
+  "outputs": {
+    "raw_quick_result": "Filled by run_guidance_reuse_sweep.py",
+    "summary_csv": "/Users/Mac/code/research/Infra/draft/outputs/guidance_reuse/dryrun_guidance_reuse/analysis/guidance_reuse_summary.csv",
+    "per_round_csv": "/Users/Mac/code/research/Infra/draft/outputs/guidance_reuse/dryrun_guidance_reuse/analysis/guidance_reuse_rounds.csv",
+    "signal_correlations": "/Users/Mac/code/research/Infra/draft/outputs/guidance_reuse/dryrun_guidance_reuse/analysis/update_signal_correlations.csv",
+    "adaptive_policy": "/Users/Mac/code/research/Infra/draft/outputs/guidance_reuse/dryrun_guidance_reuse/analysis/adaptive_policy_simulation.csv"
+  },
+  "reuse_windows": [
+    1,
+    2
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "methods": [
+    "reuse_R1",
+    "reuse_R2",
+    "no_update"
+  ],
+  "max_tokens": 16,
+  "prompt_count": 1,
+  "prompt_types": [
+    "pg19"
+  ],
+  "dataset_split": "pg19_2K",
+  "prompt_input_tokens": 256,
+  "draft_mode": "branching",
+  "draft_length": 12,
+  "draft_tree_nodes": 32,
+  "draft_tree_max_depth": 4,
+  "retrieval_chunk_size": 64,
+  "retrieve_top_k": 16,
+  "retrieve_every_n_steps": 16,
+  "async_pipeline": "1",
+  "pipeline_offsets": "full,half",
+  "spec_profiles": [
+    {
+      "name": "reuse_R1",
+      "label": "Fixed-R cloud guidance update, R=1",
+      "retrieve_every_n_steps": 1,
+      "retrieve_on_first_round": true,
+      "retrieve_top_k": 16,
+      "retrieval_chunk_size": 64,
+      "draft_length": 12,
+      "draft_mode": "branching",
+      "draft_tree_nodes": 32,
+      "draft_tree_max_depth": 4
+    },
+    {
+      "name": "reuse_R2",
+      "label": "Fixed-R cloud guidance update, R=2",
+      "retrieve_every_n_steps": 2,
+      "retrieve_on_first_round": true,
+      "retrieve_top_k": 16,
+      "retrieval_chunk_size": 64,
+      "draft_length": 12,
+      "draft_mode": "branching",
+      "draft_tree_nodes": 32,
+      "draft_tree_max_depth": 4
+    },
+    {
+      "name": "no_update",
+      "label": "No cloud attention refresh after initialization",
+      "retrieve_every_n_steps": 0,
+      "retrieve_on_first_round": false,
+      "retrieve_top_k": 16,
+      "retrieval_chunk_size": 64,
+      "draft_length": 12,
+      "draft_mode": "branching",
+      "draft_tree_nodes": 32,
+      "draft_tree_max_depth": 4
+    }
+  ]
+}
