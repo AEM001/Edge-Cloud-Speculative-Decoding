@@ -48,6 +48,7 @@ class SpecExtendEdgeClient:
         retrieval_chunk_size: int = 32,
         retrieve_top_k: int = 32,
         retrieve_every_n_steps: int = 8,
+        retrieve_on_first_round: bool = False,
         eos_token_id: Optional[int] = None,
     ):
         self.draft_backend = draft_backend
@@ -55,6 +56,7 @@ class SpecExtendEdgeClient:
         self.max_new_tokens = max_new_tokens
         self.draft_length = draft_length
         self.retrieve_every_n_steps = retrieve_every_n_steps
+        self.retrieve_on_first_round = retrieve_on_first_round
         self.retrieval = SpecExtendRetrievalState(
             chunk_size=retrieval_chunk_size,
             top_k_chunks=retrieve_top_k,
@@ -96,7 +98,7 @@ class SpecExtendEdgeClient:
                 retrieve_this_round = (
                     self.retrieve_every_n_steps > 0
                     and metrics.total_rounds % self.retrieve_every_n_steps == 0
-                    and metrics.total_rounds > 0
+                    and (self.retrieve_on_first_round or metrics.total_rounds > 0)
                 )
                 retrieval_chunk_ids = self.retrieval.selected_chunk_ids()
                 pipeline_hit = False

@@ -371,6 +371,7 @@ def build_specextend_client(
         retrieval_chunk_size=int(profile.get("retrieval_chunk_size", config["retrieval_chunk_size"])),
         retrieve_top_k=int(profile.get("retrieve_top_k", config["retrieve_top_k"])),
         retrieve_every_n_steps=int(profile.get("retrieve_every_n_steps", config["retrieve_every_n_steps"])),
+        retrieve_on_first_round=bool(profile.get("retrieve_on_first_round", config.get("retrieve_on_first_round", False))),
     )
 
 

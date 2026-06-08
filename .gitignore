@@ -78,3 +78,4 @@ data/pg19
 .DS_Store
 
 outputs/
+spec/
