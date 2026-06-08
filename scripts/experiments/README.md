@@ -5,7 +5,7 @@
 - direct cloud generation through `/generate`
 - real SpecExtend through `/specextend/verify`
 - `good` network simulation
-- normalized result rows in `outputs_quick`
+- normalized result rows in `outputs/`
 
 Use:
 

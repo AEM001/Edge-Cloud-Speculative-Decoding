@@ -23,7 +23,6 @@ from core.modeling_qwen3_kv import Qwen3ForCausalLM
 from core.qwen_kv_cache import KVCache
 from core.specextend_backend import DraftSequence, DraftResult, SpecExtendDraftBackend
 from core.specextend_retrieval import RetrievalChunk, build_chunks, select_chunks_by_attention
-from core.tiered_kv_store import KVLoadMetrics, KVTier, TieredKVStore
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +73,6 @@ class SpecExtendDraftKVCache:
         self.chunk_size: int = 32
         self.chunks: List[RetrievalChunk] = []
         self.selected_chunks: List[RetrievalChunk] = []
-        self.tiered_store = TieredKVStore(self.full_draft_kv, chunk_size=self.chunk_size)
-        self.last_load_metrics: Optional[KVLoadMetrics] = None
         self._retrieval_base_seq_len: int = 0
 
     @property
@@ -129,9 +126,7 @@ class SpecExtendDraftKVCache:
         self.last_prefix_logits = None
         self.chunks = []
         self.selected_chunks = []
-        self.last_load_metrics = None
         self._retrieval_base_seq_len = 0
-        self.tiered_store.reset()
         for key, value in self.full_draft_kv:
             key.zero_()
             value.zero_()
@@ -179,7 +174,6 @@ class SpecExtendDraftKVCache:
             and previous_indices == self.working_token_indices
             and self._working_cache_seq_len() == len(self.working_token_indices)
         ):
-            self.last_load_metrics = KVLoadMetrics()
             return
         self._rebuild_working_cache()
 
@@ -314,59 +308,22 @@ class SpecExtendDraftKVCache:
                 kv_k.current_length.fill_(0)
                 kv_v.current_length.fill_(0)
         if n == 0:
-            self.last_load_metrics = KVLoadMetrics()
             return
 
-        all_gpu = all(
-            self.tiered_store.tier_of(chunk.chunk_id) == KVTier.GPU
-            for chunk in self.selected_chunks
-        )
-        if all_gpu:
-            metrics = KVLoadMetrics()
-            metrics.selected_chunk_ids = [chunk.chunk_id for chunk in self.selected_chunks]
-            t0 = time.perf_counter()
-            for layer_idx, (full_key, full_value) in enumerate(self.full_draft_kv):
-                kv_k = self.working_cache[layer_idx][0]
-                kv_v = self.working_cache[layer_idx][1]
-                index = torch.tensor(
-                    self.working_token_indices, dtype=torch.long, device=full_key.device
-                )
-                key_slice = full_key.index_select(dim=2, index=index)
-                value_slice = full_value.index_select(dim=2, index=index)
-                kv_k.data[:, :, :n, :].copy_(key_slice, non_blocking=True)
-                kv_v.data[:, :, :n, :].copy_(value_slice, non_blocking=True)
-                with torch.inference_mode(False):
-                    kv_k.current_length.fill_(n)
-                    kv_v.current_length.fill_(n)
-            torch.cuda.synchronize()
-            metrics.gpu_chunks = len(self.selected_chunks)
-            metrics.selected_chunk_tiers = {
-                KVTier.GPU.value: metrics.gpu_chunks,
-                KVTier.CPU.value: 0,
-                KVTier.SSD.value: 0,
-            }
-            metrics.store_tier_summary = self.chunk_tier_summary()
-            metrics.gpu_load_ms = (time.perf_counter() - t0) * 1000
-            self.last_load_metrics = metrics
-        else:
-            working_key_list = [self.working_cache[i][0].data for i in range(len(self.full_draft_kv))]
-            working_val_list = [self.working_cache[i][1].data for i in range(len(self.full_draft_kv))]
-            chunk_ids = [chunk.chunk_id for chunk in self.selected_chunks]
-            metrics = self.tiered_store.load_chunks(
-                chunk_ids=chunk_ids,
-                total_seq_len=self.total_seq_len,
-                token_indices=self.working_token_indices,
-                working_key_list=working_key_list,
-                working_val_list=working_val_list,
+        for layer_idx, (full_key, full_value) in enumerate(self.full_draft_kv):
+            kv_k = self.working_cache[layer_idx][0]
+            kv_v = self.working_cache[layer_idx][1]
+            index = torch.tensor(
+                self.working_token_indices, dtype=torch.long, device=full_key.device
             )
-            actual_n = metrics.tokens_written if metrics.tokens_written > 0 else n
-            if actual_n != n:
-                self.working_token_indices = self.working_token_indices[:actual_n]
-            for layer_idx in range(len(self.full_draft_kv)):
-                with torch.inference_mode(False):
-                    self.working_cache[layer_idx][0].current_length.fill_(actual_n)
-                    self.working_cache[layer_idx][1].current_length.fill_(actual_n)
-            self.last_load_metrics = metrics
+            key_slice = full_key.index_select(dim=2, index=index)
+            value_slice = full_value.index_select(dim=2, index=index)
+            kv_k.data[:, :, :n, :].copy_(key_slice, non_blocking=True)
+            kv_v.data[:, :, :n, :].copy_(value_slice, non_blocking=True)
+            with torch.inference_mode(False):
+                kv_k.current_length.fill_(n)
+                kv_v.current_length.fill_(n)
+        torch.cuda.synchronize()
 
     def context(self) -> DraftContext:
         return DraftContext(
@@ -374,18 +331,6 @@ class SpecExtendDraftKVCache:
             position_ids=list(self.working_token_indices),
             past_key_values=self.working_cache,
         )
-
-    def evict_to_cpu(self, chunk_id: int) -> None:
-        """Evict a chunk's KV data to CPU pinned memory (tier = CPU)."""
-        self.tiered_store.evict_to_cpu(chunk_id, self.total_seq_len)
-
-    def evict_to_ssd(self, chunk_id: int) -> None:
-        """Serialise a chunk's KV data to SSD (tier = SSD)."""
-        self.tiered_store.evict_to_ssd(chunk_id, self.total_seq_len)
-
-    def chunk_tier_summary(self) -> Dict[str, int]:
-        """Return {tier_name: chunk_count} across all known chunks."""
-        return self.tiered_store.tier_summary(len(self.chunks))
 
     def _working_cache_seq_len(self) -> int:
         """Current sequence length of working_cache (KVCache)."""
@@ -608,39 +553,6 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             max_length=config.max_model_len,
             device=self.runtime.device,
         )
-        self.kv_tier_policy = "gpu"
-        self.kv_tier_keep_recent_chunks = 0
-
-    def set_kv_tier_policy(self, policy: str = "gpu", keep_recent_chunks: int = 0) -> None:
-        """Set a synthetic KV hierarchy policy for retrieval-update benchmarks.
-
-        ``gpu`` keeps the original all-HBM path. ``cpu`` and ``ssd`` are applied
-        only when target attention returns a new sparse chunk selection. This
-        measures the cost of selecting chunks that live outside GPU memory
-        without charging every ordinary tail refresh.
-        """
-        policy = (policy or "gpu").strip().lower()
-        if policy not in {"gpu", "cpu", "ssd"}:
-            raise ValueError(f"Unsupported KV tier policy: {policy}")
-        self.kv_tier_policy = policy
-        self.kv_tier_keep_recent_chunks = max(0, int(keep_recent_chunks))
-
-    def _apply_kv_tier_policy(self) -> None:
-        if self.kv_tier_policy == "gpu" or not self.cache.chunks:
-            return
-        protected = set()
-        if self.kv_tier_keep_recent_chunks:
-            protected = {
-                chunk.chunk_id
-                for chunk in self.cache.chunks[-self.kv_tier_keep_recent_chunks :]
-            }
-        for chunk in self.cache.chunks:
-            if chunk.chunk_id in protected:
-                continue
-            if self.kv_tier_policy == "cpu":
-                self.cache.evict_to_cpu(chunk.chunk_id)
-            elif self.kv_tier_policy == "ssd":
-                self.cache.evict_to_ssd(chunk.chunk_id)
 
     def build_draft(
         self,
@@ -658,17 +570,10 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             verified_prefix = list(verified_prefix) + [correction_token_id]
 
         appended = self.cache.append_prefix(self.runtime, verified_prefix)
-        if retrieval_selection_updated and retrieval_chunk_ids is not None:
-            self._apply_kv_tier_policy()
         self.cache.select_chunks(
             retrieval_chunk_ids,
             retrieval_selection_updated=retrieval_selection_updated,
             retrieval_selection_base_len=retrieval_selection_base_len,
-        )
-        kv_load_metrics = (
-            self.cache.last_load_metrics
-            if retrieval_selection_updated and retrieval_chunk_ids is not None
-            else KVLoadMetrics()
         )
         draft_context = self.cache.context()
 
@@ -681,7 +586,6 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             draft=draft_seq,
             draft_time_ms=(time.perf_counter() - start) * 1000,
             appended_kv_tokens=appended,
-            kv_load_metrics=kv_load_metrics,
         )
 
     def _generate_draft_sequence(

@@ -30,7 +30,7 @@ Or launch both together:
 bash run_2x3090.sh
 ```
 
-Results: `scripts/experiments/outputs_quick/quick_test_results_*.json`
+Results: `outputs/quick_test_results_<timestamp>.json`  (summary: `outputs/quick_test_results_<timestamp>_summary.txt`)
 
 ## Latest Results (2026-05-30, 2× RTX 3090)
 

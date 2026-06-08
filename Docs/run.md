@@ -20,7 +20,7 @@ The main parameters to change are:
 
 ```json
 {
-  "methods": ["direct", "specextend_gpu", "specextend_kvload_cpu", "specextend_kvload_ssd"],
+  "methods": ["direct", "specextend"],
   "max_tokens": 512,
   "prompt_count": 3,
   "dataset_split": "pg19_4K",
@@ -48,30 +48,22 @@ DRAFT_MODE=linear bash quick.sh
 DRAFT_TREE_NODES=32 DRAFT_TREE_MAX_DEPTH=8 bash quick.sh
 MAX_TOKENS=256 PROMPT_COUNT=1 bash quick.sh
 DATASET_SPLIT=pg19_8K PROMPT_INPUT_TOKENS=8192 bash quick.sh
-METHODS="direct specextend_gpu" bash quick.sh
+METHODS="direct specextend" bash quick.sh
 VERIFY_SERVER_URL=http://localhost:6008 bash quick.sh
 ```
 
 Method names:
 
 ```text
-direct                 target model direct generation baseline
-specextend_gpu         SpecExtend with sparse draft KV, selected KV on GPU
-specextend_kvload_cpu  same sparse KV selection, plus CPU KV loading cost on retrieval updates
-specextend_kvload_ssd  same sparse KV selection, plus SSD KV loading cost on retrieval updates
+direct       target model direct generation baseline
+specextend   SpecExtend with sparse draft KV and target-attention retrieval
 ```
 
-Do not set `retrieve_every_n_steps` to `0` for sparse-KV experiments. That disables target-attention retrieval updates.
-
-For the CPU/SSD KV-load probe, inspect `raw.kv_tier_probe` in the result JSON.
-`updates_with_cpu_kv` / `updates_with_ssd_kv` tells whether retrieval updates
-selected blocks outside GPU memory; `cpu_load_ms` / `ssd_load_ms` tells how much
-KV loading cost was charged to the run.
+Do not set `retrieve_every_n_steps` to `0`. That disables target-attention retrieval updates.
 
 Results are written to:
 
 ```text
-scripts/experiments/outputs_quick/quick_test_results_*.json
-scripts/experiments/outputs_quick/quick_test_summary.json
-scripts/experiments/outputs_quick/quick_test_rounds.jsonl
+outputs/quick_test_results_<timestamp>.json
+outputs/quick_test_results_<timestamp>_summary.txt
 ```

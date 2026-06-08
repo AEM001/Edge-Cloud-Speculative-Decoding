@@ -30,15 +30,6 @@ class SpecExtendRequestMetrics:
     generated_tokens: int = 0
     total_rounds: int = 0
     total_edge_draft_time_ms: float = 0.0
-    total_kv_load_time_ms: float = 0.0
-    total_kv_gpu_load_ms: float = 0.0
-    total_kv_cpu_load_ms: float = 0.0
-    total_kv_ssd_load_ms: float = 0.0
-    total_kv_gpu_chunks: int = 0
-    total_kv_cpu_chunks: int = 0
-    total_kv_ssd_chunks: int = 0
-    retrieval_updates_with_cpu_kv: int = 0
-    retrieval_updates_with_ssd_kv: int = 0
     total_server_verify_time_ms: float = 0.0
     total_network_time_ms: float = 0.0
     total_accepted_tokens: int = 0
@@ -197,21 +188,6 @@ class SpecExtendEdgeClient:
 
                 metrics.total_rounds += 1
                 metrics.total_edge_draft_time_ms += draft_result.draft_time_ms
-                kv_load = self._kv_load_metrics_dict(draft_result.kv_load_metrics)
-                metrics.total_kv_load_time_ms += float(kv_load.get("total_load_ms", 0.0))
-                metrics.total_kv_gpu_load_ms += float(kv_load.get("gpu_load_ms", 0.0))
-                metrics.total_kv_cpu_load_ms += float(kv_load.get("cpu_load_ms", 0.0))
-                metrics.total_kv_ssd_load_ms += float(kv_load.get("ssd_load_ms", 0.0))
-                gpu_chunks = int(kv_load.get("gpu_chunks", 0) or 0)
-                cpu_chunks = int(kv_load.get("cpu_chunks", 0) or 0)
-                ssd_chunks = int(kv_load.get("ssd_chunks", 0) or 0)
-                metrics.total_kv_gpu_chunks += gpu_chunks
-                metrics.total_kv_cpu_chunks += cpu_chunks
-                metrics.total_kv_ssd_chunks += ssd_chunks
-                if cpu_chunks > 0:
-                    metrics.retrieval_updates_with_cpu_kv += 1
-                if ssd_chunks > 0:
-                    metrics.retrieval_updates_with_ssd_kv += 1
                 metrics.total_server_verify_time_ms += response.server_verify_time_ms
                 metrics.total_network_time_ms += max(0.0, verify_elapsed_ms - response.server_verify_time_ms)
                 metrics.total_accepted_tokens += response.accepted_len
@@ -226,7 +202,6 @@ class SpecExtendEdgeClient:
                         "pipeline_built": pipeline_built,
                         "pipeline_wait_ms": pipeline_wait_ms,
                         "pipeline_reuse": bool(prefetched),
-                        "kv_load": kv_load,
                     }
                 )
 
@@ -237,16 +212,6 @@ class SpecExtendEdgeClient:
         metrics.total_latency_ms = (time.perf_counter() - wall_start) * 1000
         metrics.generated_tokens = len(verified_prefix) - len(prompt_ids)
         return metrics
-
-    @staticmethod
-    def _kv_load_metrics_dict(value) -> Dict[str, object]:
-        if value is None:
-            return {}
-        if hasattr(value, "as_dict"):
-            return value.as_dict()
-        if isinstance(value, dict):
-            return value
-        return {}
 
     @staticmethod
     def _parse_pipeline_offsets(value: str) -> List[str]:

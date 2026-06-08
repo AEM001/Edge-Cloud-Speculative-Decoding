@@ -62,6 +62,16 @@ printf 'Command:'
 printf ' %q' "${CMD[@]}"
 printf '\n==========================================\n\n'
 
-"${CMD[@]}"
+RESULTS_LINE=$("${CMD[@]}" | tee /dev/stderr | grep '^RESULTS_PATH=' | tail -1)
+export RESULTS_PATH="${RESULTS_LINE#RESULTS_PATH=}"
+
+if [[ -z "${RESULTS_PATH}" ]]; then
+  echo "ERROR: quick_test.py did not produce a results file." >&2
+  exit 1
+fi
+
+echo "=========================================="
+echo "Results file: ${RESULTS_PATH}"
+echo "=========================================="
 
 "$PYTHON" scripts/experiments/analyze_quick_run.py

@@ -37,7 +37,7 @@ DRAFT_MAX_LEN = int(os.getenv("DRAFT_MAX_LEN", "32768"))
 DRAFT_ATTN_IMPLEMENTATION = os.getenv("DRAFT_ATTN_IMPLEMENTATION", "sdpa")
 REQUEST_TIMEOUT_SEC = float(os.getenv("QUICK_TEST_TIMEOUT_SEC", "600"))
 
-OUTPUT_DIR = Path(__file__).parent / "outputs_quick"
+OUTPUT_DIR = Path(__file__).parent.parent.parent / "outputs"
 DEFAULT_CONFIG_PATH = Path(__file__).parent.parent.parent / "quick_benchmark_config.json"
 DIRECT_SESSION = requests.Session()
 DIRECT_SESSION.trust_env = False
@@ -45,7 +45,7 @@ DIRECT_SESSION.trust_env = False
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "network": "good",
-    "methods": ["direct", "specextend_gpu", "specextend_kvload_cpu", "specextend_kvload_ssd"],
+    "methods": ["direct", "specextend"],
     "max_tokens": 256,
     "prompt_count": 1,
     "prompt_types": ["pg19"],
@@ -62,21 +62,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "retrieve_every_n_steps": 16,
     "spec_profiles": [
         {
-            "name": "specextend_gpu",
-            "label": "SpecExtend sparse KV, all KV in GPU",
-            "kv_tier_policy": "gpu",
-        },
-        {
-            "name": "specextend_kvload_cpu",
-            "label": "SpecExtend sparse KV with CPU KV loading cost",
-            "kv_tier_policy": "cpu",
-            "kv_tier_keep_recent_chunks": 0,
-        },
-        {
-            "name": "specextend_kvload_ssd",
-            "label": "SpecExtend sparse KV with SSD KV loading cost",
-            "kv_tier_policy": "ssd",
-            "kv_tier_keep_recent_chunks": 0,
+            "name": "specextend",
+            "label": "SpecExtend sparse KV",
         },
     ],
 }
@@ -93,15 +80,6 @@ class OutputMetrics:
 class TimingMetrics:
     client_wall_ms: float = 0.0
     local_draft_ms: float = 0.0
-    kv_load_ms: float = 0.0
-    kv_gpu_load_ms: float = 0.0
-    kv_cpu_load_ms: float = 0.0
-    kv_ssd_load_ms: float = 0.0
-    kv_gpu_chunks: int = 0
-    kv_cpu_chunks: int = 0
-    kv_ssd_chunks: int = 0
-    retrieval_updates_with_cpu_kv: int = 0
-    retrieval_updates_with_ssd_kv: int = 0
     server_model_ms: float = 0.0
     server_total_ms: float = 0.0
     http_rpc_ms: float = 0.0
@@ -348,15 +326,6 @@ def run_specextend_case(
         timing=TimingMetrics(
             client_wall_ms=total_ms,
             local_draft_ms=metrics.total_edge_draft_time_ms,
-            kv_load_ms=metrics.total_kv_load_time_ms,
-            kv_gpu_load_ms=metrics.total_kv_gpu_load_ms,
-            kv_cpu_load_ms=metrics.total_kv_cpu_load_ms,
-            kv_ssd_load_ms=metrics.total_kv_ssd_load_ms,
-            kv_gpu_chunks=metrics.total_kv_gpu_chunks,
-            kv_cpu_chunks=metrics.total_kv_cpu_chunks,
-            kv_ssd_chunks=metrics.total_kv_ssd_chunks,
-            retrieval_updates_with_cpu_kv=metrics.retrieval_updates_with_cpu_kv,
-            retrieval_updates_with_ssd_kv=metrics.retrieval_updates_with_ssd_kv,
             server_model_ms=metrics.total_server_verify_time_ms,
             server_total_ms=metrics.total_server_verify_time_ms,
             simulated_ul_ms=net_stats["total_simulated_uplink_delay_ms"],
@@ -381,18 +350,7 @@ def run_specextend_case(
             "profile": profile,
             "network": net_stats,
             "selected_chunk_ids": metrics.selected_chunk_ids,
-            "kv_tier_probe": {
-                "retrieval_updates": metrics.retrieval_updates,
-                "updates_with_cpu_kv": metrics.retrieval_updates_with_cpu_kv,
-                "updates_with_ssd_kv": metrics.retrieval_updates_with_ssd_kv,
-                "selected_gpu_chunks": metrics.total_kv_gpu_chunks,
-                "selected_cpu_chunks": metrics.total_kv_cpu_chunks,
-                "selected_ssd_chunks": metrics.total_kv_ssd_chunks,
-                "gpu_load_ms": metrics.total_kv_gpu_load_ms,
-                "cpu_load_ms": metrics.total_kv_cpu_load_ms,
-                "ssd_load_ms": metrics.total_kv_ssd_load_ms,
-                "total_load_ms": metrics.total_kv_load_time_ms,
-            },
+            "retrieval_updates": metrics.retrieval_updates,
             "round_details": metrics.round_details,
         },
     )
@@ -412,9 +370,7 @@ def build_specextend_client(
         draft_length=draft_length,
         retrieval_chunk_size=int(profile.get("retrieval_chunk_size", config["retrieval_chunk_size"])),
         retrieve_top_k=int(profile.get("retrieve_top_k", config["retrieve_top_k"])),
-        retrieve_every_n_steps=int(
-            profile.get("retrieve_every_n_steps", config["retrieve_every_n_steps"])
-        ),
+        retrieve_every_n_steps=int(profile.get("retrieve_every_n_steps", config["retrieve_every_n_steps"])),
     )
 
 
@@ -452,16 +408,17 @@ def warmup(draft_backend: QwenSpecExtendDraftBackend, cloud_client, prompt: str)
     logger.info("Warmup complete.")
 
 
-def save_results(results: List[ExperimentResult], config: Dict[str, Any]) -> None:
+def save_results(results: List[ExperimentResult], config: Dict[str, Any]) -> Path:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     results_path = get_results_path()
     results_path.write_text(
         json.dumps({"config": config, "results": [asdict(result) for result in results]}, indent=2)
     )
     logger.info("Results saved to: %s", results_path)
+    return results_path
 
 
-def run_quick_test(config: Dict[str, Any]) -> bool:
+def run_quick_test(config: Dict[str, Any]) -> Optional[Path]:
     logger.info("=" * 70)
     logger.info("QUICK TEST - direct vs SpecExtend benchmark profiles")
     logger.info("Draft model: %s on %s", DRAFT_MODEL_PATH, DRAFT_DEVICE)
@@ -509,18 +466,13 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
             effective_profile = {**config, **profile}
             apply_draft_mode_config(config, profile)
             logger.info(
-                "    profile=%s kv_tier=%s draft_mode=%s nodes=%s depth=%s",
+                "    profile=%s draft_mode=%s nodes=%s depth=%s",
                 profile["name"],
-                profile.get("kv_tier_policy", "gpu"),
                 effective_profile["draft_mode"],
                 effective_profile["draft_tree_nodes"],
                 effective_profile["draft_tree_max_depth"],
             )
             draft_backend.cache.reset()
-            draft_backend.set_kv_tier_policy(
-                profile.get("kv_tier_policy", "gpu"),
-                keep_recent_chunks=int(profile.get("kv_tier_keep_recent_chunks", 0)),
-            )
             specextend_client = build_specextend_client(
                 draft_backend,
                 throttled.verify_specextend,
@@ -540,10 +492,9 @@ def run_quick_test(config: Dict[str, Any]) -> bool:
 
     if not results:
         logger.error("No successful benchmark results were produced.")
-        return False
+        return None
 
-    save_results(results, config)
-    return True
+    return save_results(results, config)
 
 
 def parse_args():
@@ -568,5 +519,8 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     config = apply_cli_overrides(load_config_file(args.config), args)
-    success = run_quick_test(config)
-    sys.exit(0 if success else 1)
+    results_path = run_quick_test(config)
+    if results_path is None:
+        sys.exit(1)
+    print(f"RESULTS_PATH={results_path}")
+    sys.exit(0)
