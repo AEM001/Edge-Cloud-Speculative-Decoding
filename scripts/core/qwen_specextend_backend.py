@@ -323,6 +323,7 @@ class SpecExtendDraftKVCache:
         )
         if all_gpu:
             metrics = KVLoadMetrics()
+            metrics.selected_chunk_ids = [chunk.chunk_id for chunk in self.selected_chunks]
             t0 = time.perf_counter()
             for layer_idx, (full_key, full_value) in enumerate(self.full_draft_kv):
                 kv_k = self.working_cache[layer_idx][0]
@@ -339,6 +340,12 @@ class SpecExtendDraftKVCache:
                     kv_v.current_length.fill_(n)
             torch.cuda.synchronize()
             metrics.gpu_chunks = len(self.selected_chunks)
+            metrics.selected_chunk_tiers = {
+                KVTier.GPU.value: metrics.gpu_chunks,
+                KVTier.CPU.value: 0,
+                KVTier.SSD.value: 0,
+            }
+            metrics.store_tier_summary = self.chunk_tier_summary()
             metrics.gpu_load_ms = (time.perf_counter() - t0) * 1000
             self.last_load_metrics = metrics
         else:

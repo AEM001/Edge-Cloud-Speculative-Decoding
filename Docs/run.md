@@ -20,7 +20,7 @@ The main parameters to change are:
 
 ```json
 {
-  "methods": ["direct", "specextend_gpu", "specextend_kvload_cpu"],
+  "methods": ["direct", "specextend_gpu", "specextend_kvload_cpu", "specextend_kvload_ssd"],
   "max_tokens": 512,
   "prompt_count": 3,
   "dataset_split": "pg19_4K",
@@ -58,9 +58,15 @@ Method names:
 direct                 target model direct generation baseline
 specextend_gpu         SpecExtend with sparse draft KV, selected KV on GPU
 specextend_kvload_cpu  same sparse KV selection, plus CPU KV loading cost on retrieval updates
+specextend_kvload_ssd  same sparse KV selection, plus SSD KV loading cost on retrieval updates
 ```
 
 Do not set `retrieve_every_n_steps` to `0` for sparse-KV experiments. That disables target-attention retrieval updates.
+
+For the CPU/SSD KV-load probe, inspect `raw.kv_tier_probe` in the result JSON.
+`updates_with_cpu_kv` / `updates_with_ssd_kv` tells whether retrieval updates
+selected blocks outside GPU memory; `cpu_load_ms` / `ssd_load_ms` tells how much
+KV loading cost was charged to the run.
 
 Results are written to:
 

@@ -543,3 +543,17 @@ Conclusion: the minutes-scale regression is fixed, and target retrieval now
 returns real chunk selections, but this short 256-token setup still does not
 beat direct generation. Remaining bottlenecks are draft tree cost and acceptance
 rate.
+
+## 2026-06-08 — CPU/SSD KV-Load Probe Fields
+
+Added lightweight instrumentation for the sparse-selection research question:
+whether retrieval updates select KV blocks outside GPU memory, and whether
+loading those blocks affects total latency.
+
+- `KVLoadMetrics` now records selected chunk IDs, selected chunk tier counts,
+  and the current store tier summary.
+- Edge metrics now aggregate selected GPU/CPU/SSD chunk counts and the number
+  of update rounds that touched CPU or SSD KV.
+- Quick-test output now exposes `raw.kv_tier_probe` with update counts and
+  GPU/CPU/SSD load-time totals.
+- Added `specextend_kvload_ssd` to the default quick benchmark profiles.

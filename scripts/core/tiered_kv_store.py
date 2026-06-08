@@ -59,6 +59,11 @@ class KVLoadMetrics:
     ssd_load_ms: float = 0.0
 
     tokens_written: int = 0
+    selected_chunk_ids: List[int] = field(default_factory=list)
+    selected_chunk_tiers: Dict[str, int] = field(
+        default_factory=lambda: {KVTier.GPU.value: 0, KVTier.CPU.value: 0, KVTier.SSD.value: 0}
+    )
+    store_tier_summary: Dict[str, int] = field(default_factory=dict)
 
     @property
     def total_load_ms(self) -> float:
@@ -73,6 +78,9 @@ class KVLoadMetrics:
             "gpu_chunks": self.gpu_chunks,
             "cpu_chunks": self.cpu_chunks,
             "ssd_chunks": self.ssd_chunks,
+            "selected_chunk_ids": list(self.selected_chunk_ids),
+            "selected_chunk_tiers": dict(self.selected_chunk_tiers),
+            "store_tier_summary": dict(self.store_tier_summary),
             "gpu_load_ms": round(self.gpu_load_ms, 3),
             "cpu_load_ms": round(self.cpu_load_ms, 3),
             "ssd_load_ms": round(self.ssd_load_ms, 3),
@@ -269,6 +277,7 @@ class TieredKVStore:
         Returns a ``KVLoadMetrics`` summarising load times per tier.
         """
         metrics = KVLoadMetrics()
+        metrics.selected_chunk_ids = sorted(chunk_ids)
 
         target_pos = 0
         for chunk_id in sorted(chunk_ids):
@@ -292,6 +301,12 @@ class TieredKVStore:
             target_pos += actual_len
 
         metrics.tokens_written = target_pos
+        metrics.selected_chunk_tiers = {
+            KVTier.GPU.value: metrics.gpu_chunks,
+            KVTier.CPU.value: metrics.cpu_chunks,
+            KVTier.SSD.value: metrics.ssd_chunks,
+        }
+        metrics.store_tier_summary = self.tier_summary(total_chunks=(total_seq_len + self.chunk_size - 1) // self.chunk_size)
         return metrics
 
     def tier_summary(self, total_chunks: int) -> Dict[str, int]:

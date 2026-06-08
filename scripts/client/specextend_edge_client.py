@@ -34,6 +34,11 @@ class SpecExtendRequestMetrics:
     total_kv_gpu_load_ms: float = 0.0
     total_kv_cpu_load_ms: float = 0.0
     total_kv_ssd_load_ms: float = 0.0
+    total_kv_gpu_chunks: int = 0
+    total_kv_cpu_chunks: int = 0
+    total_kv_ssd_chunks: int = 0
+    retrieval_updates_with_cpu_kv: int = 0
+    retrieval_updates_with_ssd_kv: int = 0
     total_server_verify_time_ms: float = 0.0
     total_network_time_ms: float = 0.0
     total_accepted_tokens: int = 0
@@ -197,6 +202,16 @@ class SpecExtendEdgeClient:
                 metrics.total_kv_gpu_load_ms += float(kv_load.get("gpu_load_ms", 0.0))
                 metrics.total_kv_cpu_load_ms += float(kv_load.get("cpu_load_ms", 0.0))
                 metrics.total_kv_ssd_load_ms += float(kv_load.get("ssd_load_ms", 0.0))
+                gpu_chunks = int(kv_load.get("gpu_chunks", 0) or 0)
+                cpu_chunks = int(kv_load.get("cpu_chunks", 0) or 0)
+                ssd_chunks = int(kv_load.get("ssd_chunks", 0) or 0)
+                metrics.total_kv_gpu_chunks += gpu_chunks
+                metrics.total_kv_cpu_chunks += cpu_chunks
+                metrics.total_kv_ssd_chunks += ssd_chunks
+                if cpu_chunks > 0:
+                    metrics.retrieval_updates_with_cpu_kv += 1
+                if ssd_chunks > 0:
+                    metrics.retrieval_updates_with_ssd_kv += 1
                 metrics.total_server_verify_time_ms += response.server_verify_time_ms
                 metrics.total_network_time_ms += max(0.0, verify_elapsed_ms - response.server_verify_time_ms)
                 metrics.total_accepted_tokens += response.accepted_len

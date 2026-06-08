@@ -45,7 +45,7 @@ DIRECT_SESSION.trust_env = False
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "network": "good",
-    "methods": ["direct", "specextend_gpu", "specextend_kvload_cpu"],
+    "methods": ["direct", "specextend_gpu", "specextend_kvload_cpu", "specextend_kvload_ssd"],
     "max_tokens": 256,
     "prompt_count": 1,
     "prompt_types": ["pg19"],
@@ -72,6 +72,12 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "kv_tier_policy": "cpu",
             "kv_tier_keep_recent_chunks": 0,
         },
+        {
+            "name": "specextend_kvload_ssd",
+            "label": "SpecExtend sparse KV with SSD KV loading cost",
+            "kv_tier_policy": "ssd",
+            "kv_tier_keep_recent_chunks": 0,
+        },
     ],
 }
 
@@ -91,6 +97,11 @@ class TimingMetrics:
     kv_gpu_load_ms: float = 0.0
     kv_cpu_load_ms: float = 0.0
     kv_ssd_load_ms: float = 0.0
+    kv_gpu_chunks: int = 0
+    kv_cpu_chunks: int = 0
+    kv_ssd_chunks: int = 0
+    retrieval_updates_with_cpu_kv: int = 0
+    retrieval_updates_with_ssd_kv: int = 0
     server_model_ms: float = 0.0
     server_total_ms: float = 0.0
     http_rpc_ms: float = 0.0
@@ -341,6 +352,11 @@ def run_specextend_case(
             kv_gpu_load_ms=metrics.total_kv_gpu_load_ms,
             kv_cpu_load_ms=metrics.total_kv_cpu_load_ms,
             kv_ssd_load_ms=metrics.total_kv_ssd_load_ms,
+            kv_gpu_chunks=metrics.total_kv_gpu_chunks,
+            kv_cpu_chunks=metrics.total_kv_cpu_chunks,
+            kv_ssd_chunks=metrics.total_kv_ssd_chunks,
+            retrieval_updates_with_cpu_kv=metrics.retrieval_updates_with_cpu_kv,
+            retrieval_updates_with_ssd_kv=metrics.retrieval_updates_with_ssd_kv,
             server_model_ms=metrics.total_server_verify_time_ms,
             server_total_ms=metrics.total_server_verify_time_ms,
             simulated_ul_ms=net_stats["total_simulated_uplink_delay_ms"],
@@ -365,6 +381,18 @@ def run_specextend_case(
             "profile": profile,
             "network": net_stats,
             "selected_chunk_ids": metrics.selected_chunk_ids,
+            "kv_tier_probe": {
+                "retrieval_updates": metrics.retrieval_updates,
+                "updates_with_cpu_kv": metrics.retrieval_updates_with_cpu_kv,
+                "updates_with_ssd_kv": metrics.retrieval_updates_with_ssd_kv,
+                "selected_gpu_chunks": metrics.total_kv_gpu_chunks,
+                "selected_cpu_chunks": metrics.total_kv_cpu_chunks,
+                "selected_ssd_chunks": metrics.total_kv_ssd_chunks,
+                "gpu_load_ms": metrics.total_kv_gpu_load_ms,
+                "cpu_load_ms": metrics.total_kv_cpu_load_ms,
+                "ssd_load_ms": metrics.total_kv_ssd_load_ms,
+                "total_load_ms": metrics.total_kv_load_time_ms,
+            },
             "round_details": metrics.round_details,
         },
     )

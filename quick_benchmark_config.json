@@ -2,7 +2,8 @@
   "methods": [
     "direct",
     "specextend_gpu",
-    "specextend_kvload_cpu"
+    "specextend_kvload_cpu",
+    "specextend_kvload_ssd"
   ],
   "max_tokens": 256,
   "prompt_count": 1,
@@ -30,6 +31,12 @@
       "name": "specextend_kvload_cpu",
       "label": "SpecExtend sparse KV with CPU KV loading cost",
       "kv_tier_policy": "cpu",
+      "kv_tier_keep_recent_chunks": 0
+    },
+    {
+      "name": "specextend_kvload_ssd",
+      "label": "SpecExtend sparse KV with SSD KV loading cost",
+      "kv_tier_policy": "ssd",
       "kv_tier_keep_recent_chunks": 0
     }
   ]
