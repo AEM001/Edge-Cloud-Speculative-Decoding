@@ -1,0 +1,2 @@
+accepted_tokens,guidance_updates,latency_per_accepted_token_ms,mean_accept_ratio,mean_attention_mass_covered,mean_draft_entropy,mean_guidance_jaccard,mean_kv_select_ms,mean_selected_full_ratio,mean_top1_confidence,mean_tree_construct_ms,method,network,payload_bytes,rounds,tokens_per_update
+1947,42,66.26339240422077,0.09703947368421052,0.8968086086568379,1.3197977448476623,0.9498384134221898,0.8666347671430885,0.13606848083494844,0.6833303326850778,229.97762722011,observability_fixed_R16_k16,good,14439088,627,46.357142857142854
