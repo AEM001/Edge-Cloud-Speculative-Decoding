@@ -70,3 +70,12 @@ outputs/observability/<run_id>/analysis/rounds.csv
 outputs/observability/<run_id>/analysis/summary.csv
 outputs/observability/<run_id>/report.md
 ```
+
+The latest analyzed run is also copied to:
+
+```text
+Analysis/LATEST_RUN.txt
+Analysis/observability_latest_rounds.csv
+Analysis/observability_latest_summary.csv
+Analysis/observability_latest_report.md
+```

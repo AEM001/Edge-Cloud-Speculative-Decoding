@@ -46,9 +46,9 @@ class SpecExtendEdgeClient:
         cloud_verify: Callable[[SpecExtendRequest], SpecExtendResponse],
         max_new_tokens: int = 128,
         draft_length: int = 8,
-        retrieval_chunk_size: int = 32,
-        retrieve_top_k: int = 32,
-        retrieve_every_n_steps: int = 8,
+        retrieval_chunk_size: int = 64,
+        retrieve_top_k: int = 16,
+        retrieve_every_n_steps: int = 16,
         retrieve_on_first_round: bool = False,
         eos_token_id: Optional[int] = None,
     ):

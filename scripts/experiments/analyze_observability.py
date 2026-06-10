@@ -7,7 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List
 
-from observability_common import flatten_rounds, load_json, mean, write_csv, write_jsonl
+from observability_common import REPO_ROOT, flatten_rounds, load_json, mean, write_csv, write_jsonl
 
 
 def _num(value: Any) -> float | None:
@@ -73,6 +73,14 @@ def _write_report(path: Path, summaries: List[Dict[str, Any]]) -> None:
     path.write_text("\n".join(lines) + "\n")
 
 
+def _copy_latest_outputs(run_dir: Path, rows: List[Dict[str, Any]], summaries: List[Dict[str, Any]]) -> None:
+    latest_dir = REPO_ROOT / "Analysis"
+    write_csv(latest_dir / "observability_latest_rounds.csv", rows)
+    write_csv(latest_dir / "observability_latest_summary.csv", summaries)
+    _write_report(latest_dir / "observability_latest_report.md", summaries)
+    (latest_dir / "LATEST_RUN.txt").write_text(f"{run_dir.name}\n")
+
+
 def _fmt(value: Any) -> str:
     if value is None:
         return "n/a"
@@ -96,6 +104,7 @@ def main() -> None:
     write_csv(analysis_dir / "rounds.csv", rows)
     write_csv(analysis_dir / "summary.csv", summaries)
     _write_report(run_dir / "report.md", summaries)
+    _copy_latest_outputs(run_dir, rows, summaries)
 
     print(f"ROUNDS_CSV={analysis_dir / 'rounds.csv'}")
     print(f"SUMMARY_CSV={analysis_dir / 'summary.csv'}")

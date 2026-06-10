@@ -50,8 +50,8 @@ class SpecExtendVerifyRequest(BaseModel):
     parent_indices: Optional[List[int]] = None
     draft_attention_mask: Optional[List[List[int]]] = None
     retrieve_attn_scores: bool = False
-    retrieval_chunk_size: int = 32
-    retrieve_top_k: int = 32
+    retrieval_chunk_size: int = 64
+    retrieve_top_k: int = 16
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 

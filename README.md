@@ -13,6 +13,12 @@ Old guidance-reuse outputs and scripts were archived under `Achieve/`.
 
 ## Run
 
+Detailed run and metric documentation lives under `Docs/`:
+
+- `Docs/observability.md`
+- `Docs/run.md`
+- `Docs/metrics_system.md`
+
 Start the verify server:
 
 ```bash
@@ -61,3 +67,12 @@ outputs/observability/<run_id>/
 `round_observations.jsonl` and `analysis/rounds.csv` are the main observability artifacts.
 They contain edge draft uncertainty, KV working-set stats, tree stats, cloud verification results,
 attention mass covered by selected KV, guidance overlap, timestamps, and payload costs.
+
+The latest analyzed result is copied to `Analysis/` for cross-run reading:
+
+```text
+Analysis/LATEST_RUN.txt
+Analysis/observability_latest_rounds.csv
+Analysis/observability_latest_summary.csv
+Analysis/observability_latest_report.md
+```

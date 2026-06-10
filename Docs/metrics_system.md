@@ -11,6 +11,9 @@ outputs/observability/<run_id>/raw/round_observations.jsonl
 outputs/observability/<run_id>/analysis/rounds.csv
 outputs/observability/<run_id>/analysis/summary.csv
 outputs/observability/<run_id>/report.md
+Analysis/observability_latest_rounds.csv
+Analysis/observability_latest_summary.csv
+Analysis/observability_latest_report.md
 ```
 
 `quick_test_results.json` keeps the normalized benchmark payload. `round_observations.jsonl`
@@ -33,6 +36,7 @@ Cloud-side fields:
 
 - `cloud_target_verify_time_ms`
 - `cloud_guidance_generation_time_ms`
+- `cloud_receive_ts_ms`, `cloud_finish_ts_ms`
 - `top_attention_token_indices`
 - `cloud_selected_count`, `cloud_selected_token_count`
 - `attention_mass_covered`
@@ -43,6 +47,7 @@ System-cost fields:
 - `edge_start_ts_ms`, `edge_finish_ts_ms`
 - `request_payload_bytes`, `response_payload_bytes`
 - `verify_elapsed_ms`, `network_time_ms`
+- `pipeline_hit`, `pipeline_built`, `pipeline_wait_ms`, `pipeline_reuse`
 - `tokens_since_guidance_update`
 
 ## Defaults

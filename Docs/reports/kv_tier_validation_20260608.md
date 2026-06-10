@@ -1,5 +1,10 @@
 # KV Tier Validation Report - 2026-06-08
 
+Historical note: this report records an older KV-tier smoke run. It is not the
+current observability setup. The current fixed observability setup is documented
+in `Docs/observability.md` and uses `draft_tree_max_depth=6`, `retrieve_top_k=16`,
+and `retrieve_every_n_steps=16`.
+
 ## Goal
 
 This experiment validates whether the current sparse block selection setting

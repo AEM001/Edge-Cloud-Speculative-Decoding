@@ -23,7 +23,7 @@ class RetrievalChunk:
 
 
 class SpecExtendRetrievalState:
-    def __init__(self, chunk_size: int = 32, top_k_chunks: int = 32):
+    def __init__(self, chunk_size: int = 64, top_k_chunks: int = 16):
         if chunk_size <= 0:
             raise ValueError("chunk_size must be positive")
         if top_k_chunks <= 0:

@@ -115,8 +115,8 @@ class SpecExtendRequest:
     parent_indices: Optional[List[int]] = None
     draft_attention_mask: Optional[List[List[int]]] = None
     retrieve_attn_scores: bool = False
-    retrieval_chunk_size: int = 32
-    retrieve_top_k: int = 32
+    retrieval_chunk_size: int = 64
+    retrieve_top_k: int = 16
     metadata: Optional[Dict[str, Any]] = None
 
     def to_dict(self):
@@ -143,8 +143,8 @@ class SpecExtendRequest:
             parent_indices=data.get("parent_indices"),
             draft_attention_mask=data.get("draft_attention_mask"),
             retrieve_attn_scores=bool(data.get("retrieve_attn_scores", False)),
-            retrieval_chunk_size=int(data.get("retrieval_chunk_size", 32)),
-            retrieve_top_k=int(data.get("retrieve_top_k", 32)),
+            retrieval_chunk_size=int(data.get("retrieval_chunk_size", 64)),
+            retrieve_top_k=int(data.get("retrieve_top_k", 16)),
             metadata=data.get("metadata") or {},
         )
 
