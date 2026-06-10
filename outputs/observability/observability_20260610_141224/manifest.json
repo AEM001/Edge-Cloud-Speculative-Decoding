@@ -1,0 +1,20 @@
+{
+  "run_id": "observability_20260610_141224",
+  "purpose": "SpecExtend observability logging for fixed cloud guidance refresh R=16, top_k=16.",
+  "run_dir": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/observability/observability_20260610_141224",
+  "config": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/observability/observability_20260610_141224/configs/observability.json",
+  "fixed_parameters": {
+    "draft_tree_max_depth": 6,
+    "retrieve_top_k": 16,
+    "retrieve_every_n_steps": 16
+  },
+  "outputs": {
+    "raw_quick_result": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/observability/observability_20260610_141224/raw/quick_test_results.json",
+    "round_observations": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/observability/observability_20260610_141224/raw/round_observations.jsonl",
+    "summary_csv": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/observability/observability_20260610_141224/analysis/summary.csv",
+    "rounds_csv": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/observability/observability_20260610_141224/analysis/rounds.csv",
+    "report": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/observability/observability_20260610_141224/report.md"
+  },
+  "raw_source_result": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/quick_test_results_20260610_141738.json",
+  "raw_quick_result": "/root/code/Edge-Cloud-Speculative-Decoding/outputs/observability/observability_20260610_141224/raw/quick_test_results.json"
+}
