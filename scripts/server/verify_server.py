@@ -65,6 +65,7 @@ class SpecExtendVerifyResponse(BaseModel):
     selected_chunk_ids: Optional[List[int]] = None
     model_time_ms: Optional[float] = None
     http_overhead_ms: Optional[float] = None
+    cloud_observability: Optional[Dict[str, Any]] = None
 
 
 class GenerateRequest(BaseModel):

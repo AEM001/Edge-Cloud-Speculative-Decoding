@@ -163,6 +163,7 @@ class SpecExtendResponse:
     model_time_ms: Optional[float] = None
     http_overhead_ms: Optional[float] = None
     rtt_ms: Optional[float] = None
+    cloud_observability: Optional[Dict[str, Any]] = None
 
     def to_dict(self):
         return {
@@ -176,6 +177,7 @@ class SpecExtendResponse:
             "model_time_ms": self.model_time_ms,
             "http_overhead_ms": self.http_overhead_ms,
             "rtt_ms": self.rtt_ms,
+            "cloud_observability": self.cloud_observability,
         }
 
     @classmethod
@@ -191,4 +193,5 @@ class SpecExtendResponse:
             model_time_ms=data.get("model_time_ms"),
             http_overhead_ms=data.get("http_overhead_ms"),
             rtt_ms=data.get("rtt_ms"),
+            cloud_observability=data.get("cloud_observability"),
         )

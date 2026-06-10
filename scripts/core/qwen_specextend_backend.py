@@ -20,6 +20,15 @@ from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
 from core.protocol import SpecExtendRequest, SpecExtendResponse
 from core.modeling_qwen3_kv import Qwen3ForCausalLM
+from core.observability import (
+    CloudObservability,
+    EdgeObservability,
+    attention_mass_for_chunks,
+    logits_uncertainty_from_probs,
+    now_ms,
+    safe_div,
+    token_count_for_chunks,
+)
 from core.qwen_kv_cache import KVCache
 from core.specextend_backend import DraftSequence, DraftResult, SpecExtendDraftBackend
 from core.specextend_retrieval import RetrievalChunk, build_chunks, select_chunks_by_attention
@@ -548,6 +557,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
     def __init__(self, config: QwenBackendConfig):
         self.runtime = QwenModelRuntime(config, use_custom_kv_model=True)
         self.tokenizer = self.runtime.tokenizer
+        self._last_generation_observability: Dict[str, object] = {}
         self.cache = SpecExtendDraftKVCache(
             self.runtime.model,
             max_length=config.max_model_len,
@@ -569,23 +579,61 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         ):
             verified_prefix = list(verified_prefix) + [correction_token_id]
 
+        append_start = time.perf_counter()
         appended = self.cache.append_prefix(self.runtime, verified_prefix)
+        append_ms = (time.perf_counter() - append_start) * 1000
+        select_start = time.perf_counter()
         self.cache.select_chunks(
             retrieval_chunk_ids,
             retrieval_selection_updated=retrieval_selection_updated,
             retrieval_selection_base_len=retrieval_selection_base_len,
         )
+        select_ms = (time.perf_counter() - select_start) * 1000
         draft_context = self.cache.context()
 
+        generate_start = time.perf_counter()
         draft_seq = self._generate_draft_sequence(
             draft_context,
             draft_length=max(1, draft_length),
             position_start=len(verified_prefix),
         )
+        tree_construct_ms = (time.perf_counter() - generate_start) * 1000
+        draft_time_ms = (time.perf_counter() - start) * 1000
+        selected_ids = [chunk.chunk_id for chunk in self.cache.selected_chunks]
+        selected_tokens = len(self.cache.working_token_indices)
+        full_tokens = self.cache.total_seq_len
+        memory_allocated = None
+        memory_reserved = None
+        if torch.cuda.is_available() and self.runtime.device.type == "cuda":
+            memory_allocated = torch.cuda.memory_allocated(self.runtime.device) / (1024 * 1024)
+            memory_reserved = torch.cuda.memory_reserved(self.runtime.device) / (1024 * 1024)
+        generation_obs = dict(self._last_generation_observability)
+        edge_obs = EdgeObservability(
+            prefix_len=len(verified_prefix),
+            selected_chunk_ids=selected_ids,
+            selected_token_count=selected_tokens,
+            full_kv_tokens=full_tokens,
+            working_kv_tokens=len(self.cache.working_token_indices),
+            selected_full_ratio=safe_div(float(selected_tokens), float(full_tokens)),
+            appended_kv_tokens=appended,
+            draft_compute_ms=draft_time_ms,
+            kv_append_ms=append_ms,
+            kv_select_ms=select_ms,
+            tree_construct_ms=tree_construct_ms,
+            postprocess_ms=max(0.0, draft_time_ms - append_ms - select_ms - tree_construct_ms),
+            draft_entropy=generation_obs.get("draft_entropy"),
+            draft_top1_confidence=generation_obs.get("draft_top1_confidence"),
+            draft_top1_top2_margin=generation_obs.get("draft_top1_top2_margin"),
+            draft_tree_nodes=len(draft_seq.input_ids),
+            draft_tree_actual_depth=int(generation_obs.get("draft_tree_actual_depth") or 0),
+            cuda_memory_allocated_mb=memory_allocated,
+            cuda_memory_reserved_mb=memory_reserved,
+        )
         return DraftResult(
             draft=draft_seq,
-            draft_time_ms=(time.perf_counter() - start) * 1000,
+            draft_time_ms=draft_time_ms,
             appended_kv_tokens=appended,
+            observability=edge_obs.to_dict(),
         )
 
     def _generate_draft_sequence(
@@ -607,6 +655,11 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         length = max(1, draft_length)
         if prefix.past_key_values is None:
             raise ValueError("Draft generation requires the explicit SpecExtend working KV cache.")
+        probs = torch.softmax(self.cache.next_logits(self.runtime)[0], dim=-1, dtype=torch.float32)
+        self._last_generation_observability = {
+            **logits_uncertainty_from_probs(probs),
+            "draft_tree_actual_depth": length,
+        }
         input_ids = self._generate_linear_from_working_cache(
             next_position_id=position_start,
             max_new_tokens=length,
@@ -632,6 +685,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
         frontier: List[int] = []
         next_logits = self.cache.next_logits(self.runtime)
         probs = torch.softmax(next_logits[0], dim=-1, dtype=torch.float32)
+        generation_obs = logits_uncertainty_from_probs(probs)
         width = min(nodes, probs.numel())
         values, token_ids = torch.topk(probs, k=width)
         for token_id, logprob in zip(token_ids.tolist(), values.tolist()):
@@ -729,6 +783,11 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             )
 
         selected_records = self._select_branching_tree_records(records, nodes)
+        max_selected_depth = max((int(record.get("depth", 0)) for record in selected_records), default=0) + 1
+        self._last_generation_observability = {
+            **generation_obs,
+            "draft_tree_actual_depth": max_selected_depth,
+        }
         input_ids = [int(record["token_id"]) for record in selected_records]
         position_ids = [int(record["position_id"]) for record in selected_records]
         parent_indices = [int(record["parent_idx"]) for record in selected_records]
@@ -969,6 +1028,7 @@ class QwenSpecExtendDraftBackend(SpecExtendDraftBackend):
             draft=draft_seq,
             draft_time_ms=(time.perf_counter() - start) * 1000,
             appended_kv_tokens=0,
+            observability=None,
         )
 
 
@@ -999,6 +1059,7 @@ class QwenSpecExtendTargetBackend:
     @torch.inference_mode()
     def verify(self, request: SpecExtendRequest) -> SpecExtendResponse:
         start = time.perf_counter()
+        cloud_receive_ts = now_ms()
         parent_indices = request.parent_indices or []
         if parent_indices and not self._is_linear_tree(parent_indices):
             accepted_len, correction_token_id, accepted_indices = self._verify_branching_tree(
@@ -1017,7 +1078,13 @@ class QwenSpecExtendTargetBackend:
 
         target_attn_scores = None
         selected_chunk_ids = None
+        attention_mass = None
+        selected_token_count = 0
+        guidance_generation_ms = 0.0
+        total_attention_tokens = 0
+        top_attention_token_indices: List[int] = []
         if request.retrieve_attn_scores:
+            guidance_start = time.perf_counter()
             accepted_tokens = [
                 request.draft_ids[idx]
                 for idx in accepted_indices
@@ -1041,8 +1108,43 @@ class QwenSpecExtendTargetBackend:
                     top_k_chunks=request.retrieve_top_k,
                 )
                 selected_chunk_ids = [chunk.chunk_id for chunk in selected]
+                attention_mass = attention_mass_for_chunks(
+                    scores,
+                    selected_chunk_ids,
+                    request.retrieval_chunk_size,
+                )
+                selected_token_count = token_count_for_chunks(
+                    selected_chunk_ids,
+                    request.retrieval_chunk_size,
+                    len(scores),
+                )
+            top_attention_token_indices = sorted(
+                range(len(scores)),
+                key=lambda idx: float(scores[idx]),
+                reverse=True,
+            )[: request.retrieve_top_k]
+            total_attention_tokens = len(scores)
+            guidance_generation_ms = (time.perf_counter() - guidance_start) * 1000
 
         elapsed_ms = (time.perf_counter() - start) * 1000
+        cloud_obs = CloudObservability(
+            cloud_receive_ts_ms=cloud_receive_ts,
+            cloud_finish_ts_ms=now_ms(),
+            prefix_len=len(request.prefix_ids),
+            draft_tokens=len(request.draft_ids),
+            accepted_len=max(0, accepted_len),
+            rejected_position=max(0, accepted_len) if accepted_len < len(request.draft_ids) else None,
+            accepted_indices=accepted_indices,
+            correction_token_id=correction_token_id,
+            target_verify_time_ms=elapsed_ms,
+            guidance_generation_time_ms=guidance_generation_ms,
+            top_attention_token_indices=top_attention_token_indices,
+            selected_chunk_ids=list(selected_chunk_ids or []),
+            selected_count=len(selected_chunk_ids or []),
+            selected_token_count=selected_token_count,
+            total_attention_tokens=total_attention_tokens,
+            attention_mass_covered=attention_mass,
+        )
         return SpecExtendResponse(
             request_id=request.request_id,
             accepted_len=max(0, accepted_len),
@@ -1053,6 +1155,7 @@ class QwenSpecExtendTargetBackend:
             selected_chunk_ids=selected_chunk_ids,
             model_time_ms=elapsed_ms,
             http_overhead_ms=0.0,
+            cloud_observability=cloud_obs.to_dict(),
         )
 
     def generate_text(self, prompt: str, max_tokens: int, temperature: float = 0.0) -> Dict[str, object]:

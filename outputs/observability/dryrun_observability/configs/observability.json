@@ -1,15 +1,14 @@
 {
   "methods": [
-    "direct",
     "observability_fixed_R16_k16"
   ],
-  "max_tokens": 256,
+  "max_tokens": 4,
   "prompt_count": 1,
   "prompt_types": [
     "pg19"
   ],
-  "dataset_split": "pg19_2K",
-  "prompt_input_tokens": 2048,
+  "dataset_split": "pg19_512",
+  "prompt_input_tokens": 16,
   "draft_mode": "branching",
   "draft_length": 8,
   "draft_tree_nodes": 32,
@@ -26,6 +25,10 @@
       "retrieve_every_n_steps": 16,
       "retrieve_on_first_round": true,
       "retrieve_top_k": 16,
+      "retrieval_chunk_size": 64,
+      "draft_length": 8,
+      "draft_mode": "branching",
+      "draft_tree_nodes": 32,
       "draft_tree_max_depth": 6
     }
   ]

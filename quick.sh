@@ -7,8 +7,8 @@
 #
 # Common one-off overrides:
 #   MAX_TOKENS=256 DATASET_SPLIT=pg19_4K bash quick.sh
-#   METHODS="direct specextend_gpu" PROMPT_COUNT=3 bash quick.sh
-#   DRAFT_MODE=branching DRAFT_TREE_NODES=32 DRAFT_TREE_MAX_DEPTH=8 bash quick.sh
+#   METHODS="direct observability_fixed_R16_k16" PROMPT_COUNT=3 bash quick.sh
+#   DRAFT_MODE=branching DRAFT_TREE_NODES=32 DRAFT_TREE_MAX_DEPTH=6 bash quick.sh
 
 set -euo pipefail
 

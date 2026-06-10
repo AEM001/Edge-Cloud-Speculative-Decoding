@@ -7,7 +7,7 @@ target-attention-driven retrieval selection.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Protocol
+from typing import Dict, List, Optional, Protocol
 
 
 @dataclass
@@ -23,6 +23,7 @@ class DraftResult:
     draft: DraftSequence
     draft_time_ms: float
     appended_kv_tokens: int
+    observability: Optional[Dict[str, object]] = None
 
 
 class SpecExtendDraftBackend(Protocol):

@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
 from core.protocol import SpecExtendRequest, SpecExtendResponse
+from core.observability import jaccard, json_size_bytes, now_ms
 from core.specextend_backend import DraftSequence, DraftResult, SpecExtendDraftBackend
 from core.specextend_retrieval import SpecExtendRetrievalState
 
@@ -78,6 +79,7 @@ class SpecExtendEdgeClient:
         retrieval_recorded_len = 0
         retrieval_selection_updated = False
         retrieval_selection_base_len: Optional[int] = None
+        tokens_since_guidance_update = 0
         wall_start = time.perf_counter()
 
         use_pipeline = (
@@ -101,6 +103,7 @@ class SpecExtendEdgeClient:
                     and (self.retrieve_on_first_round or metrics.total_rounds > 0)
                 )
                 retrieval_chunk_ids = self.retrieval.selected_chunk_ids()
+                previous_selected_chunk_ids = list(retrieval_chunk_ids)
                 pipeline_hit = False
                 pipeline_built = 0
                 pipeline_wait_ms = 0.0
@@ -134,7 +137,9 @@ class SpecExtendEdgeClient:
                     retrieve_top_k=self.retrieval.top_k_chunks,
                     metadata={"round": metrics.total_rounds},
                 )
+                request_payload_bytes = json_size_bytes(request.to_dict())
 
+                edge_round_start_ts_ms = now_ms()
                 verify_start = time.perf_counter()
                 if use_pipeline:
                     verify_future = verify_executor.submit(self.cloud_verify, request)
@@ -151,6 +156,8 @@ class SpecExtendEdgeClient:
                     candidates = []
                     response = self.cloud_verify(request)
                 verify_elapsed_ms = (time.perf_counter() - verify_start) * 1000
+                edge_round_finish_ts_ms = now_ms()
+                response_payload_bytes = json_size_bytes(response.to_dict())
 
                 accepted_tokens = [
                     draft_result.draft.input_ids[idx]
@@ -162,6 +169,8 @@ class SpecExtendEdgeClient:
                 correction_token_id = response.correction_token_id
                 if correction_token_id is not None:
                     verified_prefix.append(correction_token_id)
+                tokens_since_guidance_update += len(accepted_tokens) + (1 if correction_token_id is not None else 0)
+                tokens_since_previous_guidance_update = tokens_since_guidance_update
 
                 new_prefix_tokens = len(verified_prefix) - retrieval_recorded_len
                 if new_prefix_tokens > 0:
@@ -182,28 +191,75 @@ class SpecExtendEdgeClient:
                     metrics.selected_chunk_ids = [chunk.chunk_id for chunk in selected]
                     retrieval_selection_updated = True
                     retrieval_selection_base_len = len(response.target_attn_scores)
+                    tokens_since_guidance_update = 0
                 elif response.selected_chunk_ids is not None:
                     self.retrieval.set_selected_chunk_ids(response.selected_chunk_ids)
                     metrics.selected_chunk_ids = self.retrieval.selected_chunk_ids()
                     retrieval_selection_updated = True
                     retrieval_selection_base_len = len(previous_prefix)
+                    metrics.retrieval_updates += 1
+                    tokens_since_guidance_update = 0
 
                 metrics.total_rounds += 1
                 metrics.total_edge_draft_time_ms += draft_result.draft_time_ms
                 metrics.total_server_verify_time_ms += response.server_verify_time_ms
                 metrics.total_network_time_ms += max(0.0, verify_elapsed_ms - response.server_verify_time_ms)
                 metrics.total_accepted_tokens += response.accepted_len
+                generated_offset = len(previous_prefix) - len(prompt_ids)
+                phase = self._generation_phase(generated_offset)
+                edge_observability = dict(draft_result.observability or {})
+                edge_observability.update(
+                    {
+                        "generated_token_offset": generated_offset,
+                        "generation_phase": phase,
+                        "selected_chunk_ids": previous_selected_chunk_ids,
+                    }
+                )
+                recent_accepts = [
+                    int(item.get("accepted_len", 0))
+                    for item in metrics.round_details[-4:]
+                ]
+                previous_mean = sum(recent_accepts) / len(recent_accepts) if recent_accepts else response.accepted_len
+                acceptance_trend_slope = float(response.accepted_len) - float(previous_mean)
+                guidance_jaccard = jaccard(previous_selected_chunk_ids, metrics.selected_chunk_ids)
                 metrics.round_details.append(
                     {
                         "round": metrics.total_rounds - 1,
+                        "request_id": request_id,
+                        "edge_start_ts_ms": edge_round_start_ts_ms,
+                        "edge_finish_ts_ms": edge_round_finish_ts_ms,
+                        "generated_token_offset": generated_offset,
+                        "generation_phase": phase,
                         "draft_tokens": len(draft_result.draft.input_ids),
                         "accepted_len": response.accepted_len,
+                        "accept_ratio": (
+                            response.accepted_len / len(draft_result.draft.input_ids)
+                            if draft_result.draft.input_ids
+                            else 0.0
+                        ),
+                        "rejected_position": (
+                            response.accepted_len
+                            if response.accepted_len < len(draft_result.draft.input_ids)
+                            else None
+                        ),
+                        "acceptance_trend_slope": acceptance_trend_slope,
                         "retrieval": retrieve_this_round,
+                        "tokens_since_guidance_update": tokens_since_previous_guidance_update,
+                        "previous_selected_chunk_ids": previous_selected_chunk_ids,
                         "selected_chunk_ids": list(metrics.selected_chunk_ids),
+                        "guidance_jaccard": guidance_jaccard,
+                        "request_payload_bytes": request_payload_bytes,
+                        "response_payload_bytes": response_payload_bytes,
+                        "verify_elapsed_ms": verify_elapsed_ms,
+                        "network_time_ms": max(0.0, verify_elapsed_ms - response.server_verify_time_ms),
                         "pipeline_hit": pipeline_hit,
                         "pipeline_built": pipeline_built,
                         "pipeline_wait_ms": pipeline_wait_ms,
                         "pipeline_reuse": bool(prefetched),
+                        "accepted_indices": list(response.accepted_indices),
+                        "correction_token_id": correction_token_id,
+                        "edge_observability": edge_observability,
+                        "cloud_observability": dict(response.cloud_observability or {}),
                     }
                 )
 
@@ -240,6 +296,16 @@ class SpecExtendEdgeClient:
                     continue
             offsets.append(max(0, min(draft_len, offset)))
         return sorted(set(offsets), reverse=True)
+
+    def _generation_phase(self, generated_offset: int) -> str:
+        if self.max_new_tokens <= 0:
+            return "unknown"
+        fraction = generated_offset / self.max_new_tokens
+        if fraction < 1 / 3:
+            return "early"
+        if fraction < 2 / 3:
+            return "middle"
+        return "late"
 
     def _build_pipeline_candidates(
         self,

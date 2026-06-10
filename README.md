@@ -1,40 +1,63 @@
-for experiment
-已根据 `spec/experiment.md` 的研究目标补了一套“逐步准备实验”的脚本，产物统一规划到：
+# SpecExtend Observability Experiment
 
-`outputs/guidance_reuse/<run_id>/`
+This workspace is currently prepared for the next observability run, not a policy sweep.
+The goal is to log what each cloud guidance update changes, what it saves, and what it costs.
 
-新增/修改重点：
+Fixed parameters for this run:
 
-- [prepare_guidance_reuse_configs.py](/Users/Mac/code/research/Infra/draft/scripts/experiments/prepare_guidance_reuse_configs.py:1)：生成 `R=1,2,4,8,16,32` 的 sweep 配置和 `manifest.json`
-- [run_guidance_reuse_sweep.py](/Users/Mac/code/research/Infra/draft/scripts/experiments/run_guidance_reuse_sweep.py:1)：调用现有 `quick_test.py` 跑 sweep，并把 raw result 归档到 run 目录
-- [analyze_guidance_reuse.py](/Users/Mac/code/research/Infra/draft/scripts/experiments/analyze_guidance_reuse.py:1)：输出 `R vs accepted length / acceptance ratio / latency per accepted token / oracle overlap`
-- [analyze_update_signals.py](/Users/Mac/code/research/Infra/draft/scripts/experiments/analyze_update_signals.py:1)：做 edge-side signals 的相关性分析
-- [simulate_adaptive_update_policy.py](/Users/Mac/code/research/Infra/draft/scripts/experiments/simulate_adaptive_update_policy.py:1)：离线模拟简单 threshold adaptive update policy
-- [guidance_reuse_README.md](/Users/Mac/code/research/Infra/draft/scripts/experiments/guidance_reuse_README.md:1)：写了完整运行顺序和输出路径
-- [specextend_edge_client.py](/Users/Mac/code/research/Infra/draft/scripts/client/specextend_edge_client.py:48) 和 [quick_test.py](/Users/Mac/code/research/Infra/draft/scripts/experiments/quick_test.py:371)：加了 `retrieve_on_first_round` 可选开关，让 `reuse_R1` 更适合作为 every-step/oracle proxy；默认不变。
+- `draft_tree_max_depth=6`
+- `retrieve_top_k=16`
+- `retrieve_every_n_steps=16`
 
-推荐运行顺序：
+Old guidance-reuse outputs and scripts were archived under `Achieve/`.
+
+## Run
+
+Start the verify server:
 
 ```bash
-python3 scripts/experiments/prepare_guidance_reuse_configs.py \
-  --reuse-windows 1,2,4,8,16,32 \
-  --prompt-count 3 \
-  --max-tokens 256 \
-  --prompt-input-tokens 2048
-
 bash start_verify.sh
-
-python3 scripts/experiments/run_guidance_reuse_sweep.py \
-  outputs/guidance_reuse/<run_id>/configs/guidance_reuse_sweep.json
-
-python3 scripts/experiments/analyze_guidance_reuse.py \
-  outputs/guidance_reuse/<run_id>/raw/quick_test_results_<timestamp>.json
-
-python3 scripts/experiments/analyze_update_signals.py \
-  outputs/guidance_reuse/<run_id>/analysis/guidance_reuse_rounds.csv
-
-python3 scripts/experiments/simulate_adaptive_update_policy.py \
-  outputs/guidance_reuse/<run_id>/analysis/guidance_reuse_rounds.csv
 ```
 
-验证：已跑 `py_compile`，并用一个极小 fake quick result 顺序测试了三个分析脚本的 CSV 输出。没有启动实际模型/server。当前工作区还有一些和本次无关的已有改动/删除：`.gitignore`、`README.md`、`scripts/download_data.py` 等，我没有处理它们。
+Prepare a run directory and config:
+
+```bash
+python3 scripts/experiments/prepare_observability_config.py \
+  --prompt-count 3 \
+  --max-tokens 256 \
+  --prompt-input-tokens 2048 \
+  --dataset-split pg19_2K
+```
+
+Run the experiment:
+
+```bash
+python3 scripts/experiments/run_observability_experiment.py \
+  outputs/observability/<run_id>/configs/observability.json
+```
+
+Analyze an existing raw result:
+
+```bash
+python3 scripts/experiments/analyze_observability.py \
+  outputs/observability/<run_id>/raw/quick_test_results.json
+```
+
+## Outputs
+
+Each run writes:
+
+```text
+outputs/observability/<run_id>/
+  configs/observability.json
+  raw/quick_test_results.json
+  raw/round_observations.jsonl
+  analysis/rounds.csv
+  analysis/summary.csv
+  report.md
+  manifest.json
+```
+
+`round_observations.jsonl` and `analysis/rounds.csv` are the main observability artifacts.
+They contain edge draft uncertainty, KV working-set stats, tree stats, cloud verification results,
+attention mass covered by selected KV, guidance overlap, timestamps, and payload costs.

@@ -1,0 +1,18 @@
+{
+  "run_id": "dryrun_observability",
+  "purpose": "SpecExtend observability logging for fixed cloud guidance refresh R=16, top_k=16.",
+  "run_dir": "/Users/Mac/code/research/Infra/draft/outputs/observability/dryrun_observability",
+  "config": "/Users/Mac/code/research/Infra/draft/outputs/observability/dryrun_observability/configs/observability.json",
+  "fixed_parameters": {
+    "draft_tree_max_depth": 6,
+    "retrieve_top_k": 16,
+    "retrieve_every_n_steps": 16
+  },
+  "outputs": {
+    "raw_quick_result": "/Users/Mac/code/research/Infra/draft/outputs/observability/dryrun_observability/raw/quick_test_results.json",
+    "round_observations": "/Users/Mac/code/research/Infra/draft/outputs/observability/dryrun_observability/raw/round_observations.jsonl",
+    "summary_csv": "/Users/Mac/code/research/Infra/draft/outputs/observability/dryrun_observability/analysis/summary.csv",
+    "rounds_csv": "/Users/Mac/code/research/Infra/draft/outputs/observability/dryrun_observability/analysis/rounds.csv",
+    "report": "/Users/Mac/code/research/Infra/draft/outputs/observability/dryrun_observability/report.md"
+  }
+}

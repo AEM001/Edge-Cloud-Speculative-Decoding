@@ -1,52 +1,61 @@
 # Metrics System
 
-The quick experiment records direct generation and real SpecExtend rows in a
-single JSON payload.
+The current experiment records SpecExtend observability rows. The main question is:
+for each cloud guidance update, what changed, what was saved, and what did it cost?
 
 ## Output Files
 
 ```text
-outputs/quick_test_results_<timestamp>.json
-outputs/quick_test_results_<timestamp>_summary.txt
+outputs/observability/<run_id>/raw/quick_test_results.json
+outputs/observability/<run_id>/raw/round_observations.jsonl
+outputs/observability/<run_id>/analysis/rounds.csv
+outputs/observability/<run_id>/analysis/summary.csv
+outputs/observability/<run_id>/report.md
 ```
 
-Top-level shape of the JSON:
+`quick_test_results.json` keeps the normalized benchmark payload. `round_observations.jsonl`
+and `analysis/rounds.csv` flatten the per-round records for analysis.
 
-- `config`: run configuration, including prompt source, max tokens, tree nodes,
-  max depth, and retrieval settings.
-- `results`: list of normalized result rows.
+## Per-Round Signals
 
-## Result Row
+Edge-side fields:
 
-- `method`: `direct` or `specextend`.
-- `method_family`: `direct` or `specextend`.
-- `network`: simulated network profile name.
-- `prompt_type` / `prompt_id`: prompt source metadata.
-- `output`: generated token count, total wall time, and throughput.
-- `timing`: client wall time, edge draft time, cloud verify time, HTTP time,
-  simulated uplink/downlink/network time, and average round-trip time.
-- `speculative`: SpecExtend rounds, draft length, accepted draft tokens,
-  correction tokens, generated tokens per round, and acceptance length.
-- `verify_runtime`: backend metadata (`custom_qwen3`, tree-verify flag,
-  attention-score availability).
-- `raw`: network counters, selected retrieval chunk IDs, retrieval update
-  count, and per-round records.
+- `accepted_len`, `accept_ratio`, `rejected_position`
+- `round`, `generated_token_offset`, `generation_phase`
+- `acceptance_trend_slope`
+- `draft_entropy`, `draft_top1_confidence`, `draft_top1_top2_margin`
+- `draft_tree_nodes`, `draft_tree_actual_depth`, `accepted_indices`
+- `full_kv_tokens`, `working_kv_tokens`, `selected_full_ratio`
+- `kv_append_ms`, `kv_select_ms`, `tree_construct_ms`
+- `cuda_memory_allocated_mb`
 
-## SpecExtend Request Metrics
+Cloud-side fields:
 
-`scripts/client/specextend_edge_client.py` collects per-request:
+- `cloud_target_verify_time_ms`
+- `cloud_guidance_generation_time_ms`
+- `top_attention_token_indices`
+- `cloud_selected_count`, `cloud_selected_token_count`
+- `attention_mass_covered`
+- `guidance_jaccard`
 
-- `total_latency_ms`
-- `generated_tokens`
-- `total_rounds`
-- `total_edge_draft_time_ms`
-- `total_server_verify_time_ms`
-- `total_network_time_ms`
-- `total_accepted_tokens`
-- `retrieval_updates`
-- `selected_chunk_ids`
-- `round_details`
+System-cost fields:
 
-Each round detail includes: round index, draft token count, accepted length,
-whether retrieval was requested, selected chunk IDs, and pipeline hit/built/wait
-stats.
+- `edge_start_ts_ms`, `edge_finish_ts_ms`
+- `request_payload_bytes`, `response_payload_bytes`
+- `verify_elapsed_ms`, `network_time_ms`
+- `tokens_since_guidance_update`
+
+## Defaults
+
+The fixed run uses:
+
+```json
+{
+  "draft_tree_max_depth": 6,
+  "retrieve_top_k": 16,
+  "retrieve_every_n_steps": 16
+}
+```
+
+Full raw attention scores are not saved by default. The cloud returns derived metrics,
+including selected chunk IDs and attention mass covered by those chunks.

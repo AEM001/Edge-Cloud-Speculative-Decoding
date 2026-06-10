@@ -56,7 +56,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "draft_mode": "branching",
     "draft_length": 8,
     "draft_tree_nodes": 32,
-    "draft_tree_max_depth": 8,
+    "draft_tree_max_depth": 6,
     "retrieval_chunk_size": 64,
     "retrieve_top_k": 16,
     "retrieve_every_n_steps": 16,
